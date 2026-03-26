@@ -2153,7 +2153,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 6989355d443bc884486f90a6589fa9ff, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -3007,6 +3007,7 @@ MonoBehaviour:
   treePrefab: {fileID: 3656225094160004435, guid: aeac1a26589bcb04c92efc315bd5bbae, type: 3}
   rockPrefab: {fileID: 3405259022623784667, guid: 852eccd64e4ad4346b2488f794f86db3, type: 3}
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
+  navMeshSurface: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
