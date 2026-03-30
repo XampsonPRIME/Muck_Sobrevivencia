@@ -4,8 +4,8 @@ using Unity.AI.Navigation;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider))]
 public class ProceduralTerrain : MonoBehaviour
 {
-    public int width = 700;
-    public int depth = 700;
+    public int width = 200;
+    public int depth = 200;
 
     public float terrainScale = 40f;
     public float biomeScale = 50f;
@@ -27,30 +27,18 @@ public class ProceduralTerrain : MonoBehaviour
 
     void Start()
     {
+        GenerateTerrain();
 
         // 🔥 Gera o NavMesh DEPOIS do terreno
         if (navMeshSurface != null)
         {
-            GenerateTerrain();
-
-            StartCoroutine(BuildNavMeshDelayed());
+            navMeshSurface.BuildNavMesh();
         }
         else
         {
             Debug.LogWarning("NavMeshSurface não atribuída!");
         }
     }
-
-    System.Collections.IEnumerator BuildNavMeshDelayed()
-{
-    yield return new WaitForSeconds(0.5f);
-
-    if (navMeshSurface != null)
-    {
-        navMeshSurface.BuildNavMesh();
-        Debug.Log("🔥 NavMesh atualizado com terreno procedural!");
-    }
-}
 
     void GenerateTerrain()
     {
