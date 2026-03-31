@@ -4,10 +4,14 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
 {
-    public float speed = 6f;
-    public float mouseSensitivity = 3f;
+    [Header("Movimento")]
+    public float walkSpeed = 6f;
+    public float runSpeed = 10f;
+    public float jumpForce = 2f;
     public float gravity = -9.8f;
 
+    [Header("Mouse")]
+    public float mouseSensitivity = 3f;
     public Transform cameraHolder;
 
     CharacterController controller;
@@ -19,16 +23,28 @@ public class PlayerMovement : MonoBehaviour
     float yVelocity;
     float xRotation = 0f;
 
+    bool isRunning;
+    bool jumpPressed;
+
     void Awake()
     {
         controller = GetComponent<CharacterController>();
         controls = new PlayerControls();
 
+        // MOVIMENTO
         controls.Player.Move.performed += ctx => moveInput = ctx.ReadValue<Vector2>();
         controls.Player.Move.canceled += ctx => moveInput = Vector2.zero;
 
+        // OLHAR
         controls.Player.Look.performed += ctx => lookInput = ctx.ReadValue<Vector2>();
         controls.Player.Look.canceled += ctx => lookInput = Vector2.zero;
+
+        // CORRER (Shift)
+        controls.Player.Run.performed += ctx => isRunning = true;
+        controls.Player.Run.canceled += ctx => isRunning = false;
+
+        // PULAR (Space)
+        controls.Player.Jump.performed += ctx => jumpPressed = true;
     }
 
     void OnEnable()
@@ -46,7 +62,6 @@ public class PlayerMovement : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        // 🔥 Segurança: evita erro se esquecer de setar no Inspector
         if (cameraHolder == null)
         {
             Debug.LogError("CameraHolder não foi atribuído!");
@@ -61,17 +76,31 @@ public class PlayerMovement : MonoBehaviour
 
     void Move()
     {
-        Vector3 move = transform.right * moveInput.x + transform.forward * moveInput.y;
+        bool isGrounded = controller.isGrounded;
 
-        if (controller.isGrounded && yVelocity < 0)
+        if (isGrounded && yVelocity < 0)
         {
-            yVelocity = -2f; // mantém grudado no chão
+            yVelocity = -2f;
         }
 
+        // PULO
+        if (jumpPressed && isGrounded)
+        {
+            yVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
+            jumpPressed = false;
+        }
+
+        // GRAVIDADE
         yVelocity += gravity * Time.deltaTime;
         yVelocity = Mathf.Clamp(yVelocity, -50f, 50f);
 
-        Vector3 velocity = move * speed;
+        // DIREÇÃO
+        Vector3 move = transform.right * moveInput.x + transform.forward * moveInput.y;
+
+        // VELOCIDADE (andar/correr)
+        float currentSpeed = isRunning ? runSpeed : walkSpeed;
+
+        Vector3 velocity = move * currentSpeed;
         velocity.y = yVelocity;
 
         controller.Move(velocity * Time.deltaTime);
