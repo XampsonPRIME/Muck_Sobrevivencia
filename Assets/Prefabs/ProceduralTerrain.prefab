@@ -147,6 +147,9 @@ MonoBehaviour:
   mountainHeight: 25
   treePrefab: {fileID: 3656225094160004435, guid: aeac1a26589bcb04c92efc315bd5bbae, type: 3}
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
+  gravetoPrefab: {fileID: 5972306984636934937, guid: 540c6c32b899547499773e634b96388a, type: 3}
+  gravetoDensity: 0.04
+  gravetoRespawnTime: 20
   treeDensity: 0.4
   mushroomDensity: 0.2
   treeStep: 10

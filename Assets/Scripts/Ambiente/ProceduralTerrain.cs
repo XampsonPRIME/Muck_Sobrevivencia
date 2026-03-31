@@ -14,14 +14,14 @@ public class ProceduralTerrain : MonoBehaviour
 
     // 🌍 BIOMAS
     [Header("🌍 Biomas")]
-    [Range(0f,1f)] public float desertX = 0.2f;
-    [Range(0f,1f)] public float desertZ = 0.3f;
-    [Range(0f,1f)] public float forestX = 0.7f;
-    [Range(0f,1f)] public float forestZ = 0.3f;
-    [Range(0f,1f)] public float denseForestX = 0.4f;
-    [Range(0f,1f)] public float denseForestZ = 0.75f;
-    [Range(0f,1f)] public float snowX = 0.85f;
-    [Range(0f,1f)] public float snowZ = 0.4f;
+    [Range(0f, 1f)] public float desertX = 0.2f;
+    [Range(0f, 1f)] public float desertZ = 0.3f;
+    [Range(0f, 1f)] public float forestX = 0.7f;
+    [Range(0f, 1f)] public float forestZ = 0.3f;
+    [Range(0f, 1f)] public float denseForestX = 0.4f;
+    [Range(0f, 1f)] public float denseForestZ = 0.75f;
+    [Range(0f, 1f)] public float snowX = 0.85f;
+    [Range(0f, 1f)] public float snowZ = 0.4f;
 
     public float forestSize = 0.6f;
     public float desertSize = 1.2f;
@@ -39,6 +39,11 @@ public class ProceduralTerrain : MonoBehaviour
     [Header("🌲 Vegetação")]
     public GameObject treePrefab;
     public GameObject mushroomPrefab;
+
+    [Header("🪵 Gravetos")]
+    public GameObject gravetoPrefab;
+    public float gravetoDensity = 0.04f;
+    public float gravetoRespawnTime = 20f;
 
     public float treeDensity = 0.02f;
     public float mushroomDensity = 0.03f;
@@ -212,7 +217,9 @@ public class ProceduralTerrain : MonoBehaviour
                 bool ehNeve = dSnow < snowRadius;
                 bool ehDeserto = dDesert < dForest && dDesert < dDense;
 
-                if (!ehNeve && !ehDeserto && slope > 0.7f)
+                bool ehFloresta = !ehNeve && !ehDeserto;
+
+                if (ehFloresta && slope > 0.7f)
                 {
                     if (Random.value < treeDensity)
                         Instantiate(treePrefab, pos, Quaternion.identity, transform);
@@ -222,9 +229,51 @@ public class ProceduralTerrain : MonoBehaviour
 
                     if (Random.value < chance)
                         Instantiate(mushroomPrefab, pos + Vector3.up * 0.2f, Quaternion.identity, transform);
+
+                    // 🪵 GRAVETO NA FLORESTA
+                    if (Random.value < gravetoDensity)
+                        SpawnGraveto(pos);
+                }
+
+                // 🏜️ GRAVETO NO DESERTO (menos frequência)
+                if (ehDeserto && slope > 0.8f)
+                {
+                    if (Random.value < gravetoDensity * 0.3f)
+                        SpawnGraveto(pos);
                 }
             }
         }
+    }
+    void SpawnGraveto(Vector3 pos)
+    {
+        RaycastHit hit;
+
+        // joga um raio pra baixo pra encontrar o chão
+        if (Physics.Raycast(pos + Vector3.up * 5f, Vector3.down, out hit, 10f))
+        {
+            Quaternion rot = Quaternion.FromToRotation(Vector3.up, hit.normal) *
+                             Quaternion.Euler(90f, Random.Range(0f, 360f), 0f);
+
+            Instantiate(gravetoPrefab, hit.point, rot, transform);
+        }
+
+        StartCoroutine(RespawnGraveto(pos));
+    }
+
+    IEnumerator RespawnGraveto(Vector3 pos)
+    {
+        yield return new WaitForSeconds(gravetoRespawnTime);
+
+        // checa se já não tem outro graveto perto
+        Collider[] cols = Physics.OverlapSphere(pos, 1f);
+
+        foreach (var col in cols)
+        {
+            if (col.CompareTag("Graveto"))
+                yield break;
+        }
+
+        Instantiate(gravetoPrefab, pos + Vector3.up * 0.2f, Quaternion.identity, transform);
     }
 
     void SpawnRockClusters()
