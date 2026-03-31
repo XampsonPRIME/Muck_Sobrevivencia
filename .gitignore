@@ -32,6 +32,7 @@ Cache/
 *.mdb
 *.opendb
 *.VC.db
+*.slnx
 
 # =========================
 # UNITY META (IMPORTANTE)
@@ -88,6 +89,7 @@ desktop.ini
 *.tmp
 *.bak
 *.old
+Assets/_Recovery/
 
 # =========================
 # CRASH / DEBUG

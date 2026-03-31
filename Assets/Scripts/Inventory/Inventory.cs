@@ -19,6 +19,5 @@ public class Inventory : MonoBehaviour
     public void AddItem(string itemName)
     {
         items.Add(itemName);
-        Debug.Log("Pegou: " + itemName);
     }
 }

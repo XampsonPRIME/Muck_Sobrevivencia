@@ -127,6 +127,34 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 695384276088008089, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 695384276088008089, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 695384276088008089, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4252190915010664961, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+      propertyPath: axePrefab
+      value: 
+      objectReference: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
+    - target: {fileID: 4252190915010664961, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+      propertyPath: handPoint
+      value: 
+      objectReference: {fileID: 1544345967}
+    - target: {fileID: 4252190915010664961, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+      propertyPath: pickaxePrefab
+      value: 
+      objectReference: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
+    - target: {fileID: 4252190915010664961, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+      propertyPath: currentToolObject
+      value: 
+      objectReference: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
     - target: {fileID: 4448913397103007168, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 100
@@ -290,6 +318,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &1544345967 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 695384276088008089, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+  m_PrefabInstance: {fileID: 887082127}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
