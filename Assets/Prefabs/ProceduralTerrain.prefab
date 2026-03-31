@@ -126,12 +126,32 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b0c114da242416e4cbfdad34617c3c65, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralTerrain
-  width: 200
-  depth: 200
+  width: 500
+  depth: 500
   terrainScale: 40
-  biomeScale: 50
   heightMultiplier: 8
+  desertX: 0.2
+  desertZ: 0.3
+  forestX: 0.7
+  forestZ: 0.3
+  denseForestX: 0.4
+  denseForestZ: 0.75
+  snowX: 0.645
+  snowZ: 0.752
+  forestSize: 0.504
+  desertSize: 1.032
+  denseForestSize: 0.623
+  snowRadius: 88
+  mountainCount: 5
+  mountainRadius: 60
+  mountainHeight: 25
   treePrefab: {fileID: 3656225094160004435, guid: aeac1a26589bcb04c92efc315bd5bbae, type: 3}
-  rockPrefab: {fileID: 3405259022623784667, guid: 852eccd64e4ad4346b2488f794f86db3, type: 3}
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
+  treeDensity: 0.4
+  mushroomDensity: 0.2
+  treeStep: 10
+  rockSmallPrefab: {fileID: 3405259022623784667, guid: 852eccd64e4ad4346b2488f794f86db3, type: 3}
+  rockMediumPrefab: {fileID: 3405259022623784667, guid: cba36c3ea0c294b4a869ac9fdb883aff, type: 3}
+  rockLargePrefab: {fileID: 3405259022623784667, guid: 03bba6ec90c414698987408ab359341f, type: 3}
+  rockClusterCount: 25
   navMeshSurface: {fileID: 0}
