@@ -20,7 +20,6 @@ public class DayNightCycle : MonoBehaviour
     public float overlaySpeed = 1f;
 
     int currentDay = 1;
-    float warningTimer = 0f;
     float timeOfDay;
 
     float fadeDuration = 1f;
