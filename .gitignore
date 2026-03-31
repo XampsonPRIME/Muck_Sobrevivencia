@@ -10,31 +10,64 @@
 UserSettings/
 MemoryCaptures/
 
+# Cache do Shader Graph / GI
+ShaderCache/
+GI/
+Cache/
+
 # =========================
-# UNITY META (IMPORTANT)
+# UNITY AUTO GENERATED FILES
 # =========================
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# =========================
+# UNITY META (IMPORTANTE)
+# =========================
+# Mantém .meta versionado (ESSENCIAL)
 !/[Aa]ssets/**/*.meta
 !/[Pp]ackages/**/*.meta
 !/[Pp]rojectSettings/**/*.meta
+
+# =========================
+# UNITY ADDRESSABLES / CACHE
+# =========================
+ServerData/
+StreamingAssets/aa/
+StreamingAssets/aa.meta
 
 # =========================
 # IDE / EDITORS
 # =========================
 .vs/
 .idea/
-*.csproj
-*.sln
-*.user
-*.userprefs
-*.pidb
-*.booproj
-*.svd
+.vscode/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# Visual Studio Code settings (opcional)
+.vscode/*
 
 # =========================
 # OS FILES
 # =========================
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # =========================
 # BUILD FILES
@@ -45,6 +78,8 @@ Thumbs.db
 *.app
 *.exe
 *.ipa
+*.xcodeproj
+*.xcworkspace
 
 # =========================
 # LOGS / TEMP
@@ -52,24 +87,46 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+*.old
 
 # =========================
-# PRIVATE / KEYS
+# CRASH / DEBUG
+# =========================
+sysinfo.txt
+crashlytics-build.properties
+
+# =========================
+# PRIVATE / KEYS (SEGURANÇA)
 # =========================
 *.pem
 *.key
 *.pub
+*.p12
+*.keystore
+*.mobileprovision
 id_rsa*
 id_ed25519*
 
 # =========================
-# OPTIONAL (CACHE / ADDRESSABLES)
+# DOTS / ECS (se usar no futuro)
 # =========================
-ServerData/
-StreamingAssets/aa.meta
-StreamingAssets/aa/
+*.entities
+*.entitycache
 
 # =========================
-# UNITY CRASH
+# IL2CPP / BUILD CACHE
 # =========================
-sysinfo.txt
+il2cppOutput/
+UnityCache/
+
+# =========================
+# TESTES / COVERAGE
+# =========================
+TestResults/
+Coverage/
+
+# =========================
+# IGNORAR BACKUPS DO UNITY
+# =========================
+*.backup
+*.orig
