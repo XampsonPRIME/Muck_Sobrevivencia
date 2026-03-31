@@ -11,8 +11,14 @@ public class PlayerMovement : MonoBehaviour
     public float gravity = -9.8f;
 
     [Header("Mouse")]
-    public float mouseSensitivity = 3f;
+    public float mouseSensitivity = 0.44f;
     public Transform cameraHolder;
+
+    [Header("Stamina")]
+    public float maxStamina = 100f;
+    public float currentStamina;
+    public float staminaDrain = 20f;
+    public float staminaRecovery = 15f;
 
     CharacterController controller;
     PlayerControls controls;
@@ -31,6 +37,8 @@ public class PlayerMovement : MonoBehaviour
         controller = GetComponent<CharacterController>();
         controls = new PlayerControls();
 
+        currentStamina = maxStamina;
+
         // MOVIMENTO
         controls.Player.Move.performed += ctx => moveInput = ctx.ReadValue<Vector2>();
         controls.Player.Move.canceled += ctx => moveInput = Vector2.zero;
@@ -39,23 +47,16 @@ public class PlayerMovement : MonoBehaviour
         controls.Player.Look.performed += ctx => lookInput = ctx.ReadValue<Vector2>();
         controls.Player.Look.canceled += ctx => lookInput = Vector2.zero;
 
-        // CORRER (Shift)
+        // CORRER
         controls.Player.Run.performed += ctx => isRunning = true;
         controls.Player.Run.canceled += ctx => isRunning = false;
 
-        // PULAR (Space)
+        // PULAR
         controls.Player.Jump.performed += ctx => jumpPressed = true;
     }
 
-    void OnEnable()
-    {
-        controls.Enable();
-    }
-
-    void OnDisable()
-    {
-        controls.Disable();
-    }
+    void OnEnable() => controls.Enable();
+    void OnDisable() => controls.Disable();
 
     void Start()
     {
@@ -70,8 +71,37 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        HandleStamina();
         Move();
         Look();
+    }
+
+    void HandleStamina()
+    {
+        bool isMoving = moveInput.magnitude > 0.1f;
+
+        // Só corre se tiver stamina
+        bool canRun = currentStamina > 0;
+
+        if (isRunning && isMoving && canRun)
+        {
+            currentStamina -= staminaDrain * Time.deltaTime;
+
+            if (currentStamina <= 0)
+            {
+                currentStamina = 0;
+                isRunning = false;
+            }
+        }
+        else
+        {
+            if (currentStamina < maxStamina)
+            {
+                currentStamina += staminaRecovery * Time.deltaTime;
+            }
+        }
+
+        currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
     }
 
     void Move()
@@ -97,8 +127,11 @@ public class PlayerMovement : MonoBehaviour
         // DIREÇÃO
         Vector3 move = transform.right * moveInput.x + transform.forward * moveInput.y;
 
-        // VELOCIDADE (andar/correr)
-        float currentSpeed = isRunning ? runSpeed : walkSpeed;
+        bool isMoving = moveInput.magnitude > 0.1f;
+        bool canRun = currentStamina > 0;
+
+        // VELOCIDADE FINAL
+        float currentSpeed = (isRunning && isMoving && canRun) ? runSpeed : walkSpeed;
 
         Vector3 velocity = move * currentSpeed;
         velocity.y = yVelocity;
