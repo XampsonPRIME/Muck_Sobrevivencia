@@ -243,8 +243,7 @@ PrefabInstance:
       value: EcoSystem
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects:
-    - {fileID: 7919603770615034856, guid: ac85a8379b706b344857c1add26265ae, type: 3}
+    m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ac85a8379b706b344857c1add26265ae, type: 3}
@@ -277,12 +276,8 @@ PrefabInstance:
       value: 500
       objectReference: {fileID: 0}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
-      propertyPath: treeStep
-      value: 10
-      objectReference: {fileID: 0}
-    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: caveCount
-      value: 0
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: caveChance
@@ -306,36 +301,24 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: rockDensity
-      value: 0.3
+      value: 0.0035
       objectReference: {fileID: 0}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: treeDensity
-      value: 0.4
+      value: 0.6
       objectReference: {fileID: 0}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: navMeshSurface
       value: 
       objectReference: {fileID: 1272674876}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
+      propertyPath: caveSpawnChance
+      value: 0.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: denseForestSize
       value: 0.623
       objectReference: {fileID: 0}
-    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
-      propertyPath: mushroomDensity
-      value: 0.2
-      objectReference: {fileID: 0}
-    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
-      propertyPath: rockLargePrefab
-      value: 
-      objectReference: {fileID: 3405259022623784667, guid: 03bba6ec90c414698987408ab359341f, type: 3}
-    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
-      propertyPath: rockSmallPrefab
-      value: 
-      objectReference: {fileID: 3405259022623784667, guid: 852eccd64e4ad4346b2488f794f86db3, type: 3}
-    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
-      propertyPath: rockMediumPrefab
-      value: 
-      objectReference: {fileID: 3405259022623784667, guid: cba36c3ea0c294b4a869ac9fdb883aff, type: 3}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: snowNoiseStrength
       value: 17.9
