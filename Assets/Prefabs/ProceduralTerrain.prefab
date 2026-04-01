@@ -126,10 +126,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b0c114da242416e4cbfdad34617c3c65, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralTerrain
-  width: 500
-  depth: 500
-  terrainScale: 40
-  heightMultiplier: 8
+  width: 800
+  depth: 800
+  terrainScale: 100
+  heightMultiplier: 20
   desertX: 0.2
   desertZ: 0.3
   forestX: 0.7

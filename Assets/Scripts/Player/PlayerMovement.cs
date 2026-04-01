@@ -155,14 +155,18 @@ public class PlayerMovement : MonoBehaviour
 
     void Look()
     {
-        // 🛑 Anti spike (corrige bug da câmera)
-        Vector2 rawInput = Vector2.ClampMagnitude(lookInput, 10f);
+        // 🛑 Anti-spike (evita bug de camera voando)
+        float mouseX = Mathf.Clamp(lookInput.x, -10f, 10f);
+        float mouseY = Mathf.Clamp(lookInput.y, -10f, 10f);
 
-        // 🎯 Smooth
-        currentLook = Vector2.SmoothDamp(currentLook, rawInput, ref lookVelocity, smoothTime);
+        // 🎯 Sensibilidade base
+        mouseX *= mouseSensitivity;
+        mouseY *= mouseSensitivity;
 
-        float mouseX = currentLook.x * mouseSensitivity;
-        float mouseY = currentLook.y * mouseSensitivity;
+        // 🎯 Micro suavização (SEM delay)
+        float smoothFactor = 0.9f; // 1 = sem suavização
+        mouseX = Mathf.Lerp(0, mouseX, smoothFactor);
+        mouseY = Mathf.Lerp(0, mouseY, smoothFactor);
 
         // 🎥 Rotação vertical
         xRotation -= mouseY;

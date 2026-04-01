@@ -336,8 +336,11 @@ MonoBehaviour:
   runSpeed: 10
   jumpForce: 2
   gravity: -9.8
-  mouseSensitivity: 0.44
+  mouseSensitivity: 0.8
   cameraHolder: {fileID: 7095383786988751147}
+  smoothTime: 0.05
+  headbobSpeed: 10
+  headbobAmount: 0.05
   maxStamina: 100
   currentStamina: 0
   staminaDrain: 20

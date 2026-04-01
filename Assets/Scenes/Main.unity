@@ -332,14 +332,6 @@ PrefabInstance:
       value: ProceduralTerrain
       objectReference: {fileID: 0}
     - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
-      propertyPath: depth
-      value: 1000
-      objectReference: {fileID: 0}
-    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
-      propertyPath: width
-      value: 1000
-      objectReference: {fileID: 0}
-    - target: {fileID: 2013110911765222889, guid: 85181d42e1d937c41aa95512d0e67a36, type: 3}
       propertyPath: navMeshSurface
       value: 
       objectReference: {fileID: 1272674876}
