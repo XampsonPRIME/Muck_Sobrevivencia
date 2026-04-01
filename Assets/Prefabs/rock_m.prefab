@@ -121,6 +121,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4304844555320787098}
+  - component: {fileID: 4180017271212081055}
   m_Layer: 0
   m_Name: rock_m
   m_TagString: Untagged
@@ -146,6 +147,25 @@ Transform:
   - {fileID: 13241820689038808}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4180017271212081055
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3405259022623784667}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d335ae19af134e5796b27f798e1429f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ResourceNode
+  itemName: Pedras
+  icon: {fileID: 21300000, guid: 19c7b56f8c5634078961e7bb01daa435, type: 3}
+  maxHealth: 6
+  hitEffect: {fileID: 6984970954037890913, guid: ad3bfc163c33441318e835888e246b3a, type: 3}
+  minDrop: 2
+  maxDrop: 4
+  requiredTool: 2
 --- !u!1 &6852404761755371559
 GameObject:
   m_ObjectHideFlags: 0
