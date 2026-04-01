@@ -2789,6 +2789,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Item
   itemName: mirtilo
   icon: {fileID: 21300000, guid: 097ba9dd06807aa469252f30ff452680, type: 3}
+  itemType: 0
+  toolType: 0
+  toolDamage: 1
 --- !u!1 &8586349253699861673
 GameObject:
   m_ObjectHideFlags: 0

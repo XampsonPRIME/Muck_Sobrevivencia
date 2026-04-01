@@ -68,7 +68,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 533f687f9818560409a017c8926227fd, type: 2}
+  - {fileID: 2100000, guid: 844e863c162944f55903c7e958ca6bb7, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -136,16 +136,37 @@ MonoBehaviour:
   forestZ: 0.3
   denseForestX: 0.4
   denseForestZ: 0.75
-  snowX: 0.645
+  snowX: 0.692
   snowZ: 0.752
   forestSize: 0.504
   desertSize: 1.032
   denseForestSize: 0.623
-  snowRadius: 88
+  snowRadius: 140
   mountainCount: 5
   mountainRadius: 60
   mountainHeight: 25
-  treePrefab: {fileID: 3656225094160004435, guid: aeac1a26589bcb04c92efc315bd5bbae, type: 3}
+  trees:
+  - prefab: {fileID: 3656225094160004435, guid: aeac1a26589bcb04c92efc315bd5bbae, type: 3}
+    yOffset: 0.8
+    biome: 1
+  - prefab: {fileID: 3656225094160004435, guid: 243e5140c561440b49ef54751d1a2684, type: 3}
+    yOffset: 1.8
+    biome: 1
+  - prefab: {fileID: 3656225094160004435, guid: e679013c6fb234f2c88ae4abffff4aa8, type: 3}
+    yOffset: 1.8
+    biome: 2
+  - prefab: {fileID: 3656225094160004435, guid: 9e3f8e8fa365c4ea5a7c743158fc58c1, type: 3}
+    yOffset: 0.8
+    biome: 0
+  - prefab: {fileID: 3656225094160004435, guid: 19bef5f74e9cf4bcfb7b611e792580a5, type: 3}
+    yOffset: -0.6
+    biome: 0
+  - prefab: {fileID: 8044336181136699972, guid: 77f31cbe981e64aa0ad6549565d8faec, type: 3}
+    yOffset: 0.8
+    biome: 0
+  - prefab: {fileID: 8044336181136699972, guid: 68ceb8525ae9f4c6fb4c16bd39c1945a, type: 3}
+    yOffset: 0.8
+    biome: 1
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
   gravetoPrefab: {fileID: 5972306984636934937, guid: 540c6c32b899547499773e634b96388a, type: 3}
   gravetoDensity: 0.04

@@ -6,13 +6,19 @@ using System.Collections.Generic;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider))]
 public class ProceduralTerrain : MonoBehaviour
 {
+    public enum BiomeType
+    {
+        Desert,
+        Forest,
+        Snow
+    }
+
     public int width = 350;
     public int depth = 350;
 
     public float terrainScale = 40f;
     public float heightMultiplier = 12f;
 
-    // 🌍 BIOMAS
     [Header("🌍 Biomas")]
     [Range(0f, 1f)] public float desertX = 0.2f;
     [Range(0f, 1f)] public float desertZ = 0.3f;
@@ -35,9 +41,16 @@ public class ProceduralTerrain : MonoBehaviour
     public float mountainRadius = 60f;
     public float mountainHeight = 25f;
 
-    // 🌲 VEGETAÇÃO
+    [System.Serializable]
+    public class TreeData
+    {
+        public GameObject prefab;
+        public float yOffset;
+        public BiomeType biome; // 🔥 define onde nasce
+    }
+
     [Header("🌲 Vegetação")]
-    public GameObject treePrefab;
+    public TreeData[] trees;
     public GameObject mushroomPrefab;
 
     [Header("🪵 Gravetos")]
@@ -50,7 +63,6 @@ public class ProceduralTerrain : MonoBehaviour
 
     public int treeStep = 6;
 
-    // 🪨 ROCHAS (CLUSTERS)
     [Header("🪨 Rochas")]
     public GameObject rockSmallPrefab;
     public GameObject rockMediumPrefab;
@@ -64,13 +76,14 @@ public class ProceduralTerrain : MonoBehaviour
     Vector3[] vertices;
     int[] triangles;
     Color[] colors;
+    Vector2[] uvs;
 
     Vector2 desertCenter;
     Vector2 forestCenter;
     Vector2 denseForestCenter;
     Vector2 snowCenter;
 
-    List<Vector2> mountains = new List<Vector2>();
+    List<Mountain> mountains = new List<Mountain>();
 
     void Start()
     {
@@ -96,8 +109,27 @@ public class ProceduralTerrain : MonoBehaviour
 
         for (int i = 0; i < mountainCount; i++)
         {
-            mountains.Add(new Vector2(Random.Range(0, width), Random.Range(0, depth)));
+            Mountain m = new Mountain();
+
+            m.position = new Vector2(
+                Random.Range(0, width),
+                Random.Range(0, depth)
+            );
+
+            m.radius = Random.Range(20f, 40f);
+            m.strength = Random.Range(5f, 12f);
+
+            mountains.Add(m);
         }
+    }
+
+    bool IsDesert(Vector2 p)
+    {
+        float dDesert = Vector2.Distance(p, desertCenter) * desertSize;
+        float dForest = Vector2.Distance(p, forestCenter) * forestSize;
+        float dDense = Vector2.Distance(p, denseForestCenter) * denseForestSize;
+
+        return dDesert < dForest && dDesert < dDense;
     }
 
     IEnumerator BuildNavMeshDelayed()
@@ -110,11 +142,25 @@ public class ProceduralTerrain : MonoBehaviour
     {
         float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
 
+        h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
+
+
         foreach (var m in mountains)
         {
-            float dist = Vector2.Distance(point, m);
-            float mask = Mathf.Clamp01(1 - (dist / mountainRadius));
-            h += mask * mountainHeight;
+            float dist = Vector2.Distance(point, m.position);
+
+            if (dist < m.radius)
+            {
+                float falloff = Mathf.Clamp01(1 - (dist / m.radius));
+
+                // 🔥 curva suave (tipo montanha real)
+                falloff = Mathf.SmoothStep(0, 1, falloff);
+
+                // opcional: deixa mais arredondado ainda
+                falloff = Mathf.Pow(falloff, 2.5f);
+
+                h += falloff * m.strength;
+            }
         }
 
         return h;
@@ -128,6 +174,7 @@ public class ProceduralTerrain : MonoBehaviour
 
         vertices = new Vector3[(width + 1) * (depth + 1)];
         colors = new Color[(width + 1) * (depth + 1)];
+        uvs = new Vector2[(width + 1) * (depth + 1)];
 
         for (int z = 0, i = 0; z <= depth; z++)
         {
@@ -138,19 +185,19 @@ public class ProceduralTerrain : MonoBehaviour
 
                 vertices[i] = new Vector3(x, height, z);
 
+                uvs[i] = new Vector2((float)x / width, (float)z / depth);
+
                 float dDesert = Vector2.Distance(p, desertCenter) * desertSize;
                 float dForest = Vector2.Distance(p, forestCenter) * forestSize;
                 float dDense = Vector2.Distance(p, denseForestCenter) * denseForestSize;
                 float dSnow = Vector2.Distance(p, snowCenter);
 
                 if (dSnow < snowRadius)
-                    colors[i] = Color.white;
+                    colors[i] = new Color(1, 0, 0); // neve
                 else if (dDesert < dForest && dDesert < dDense)
-                    colors[i] = new Color(0.95f, 0.85f, 0.5f);
-                else if (dForest < dDense)
-                    colors[i] = new Color(0.4f, 0.8f, 0.3f);
+                    colors[i] = new Color(0, 0, 0); // deserto
                 else
-                    colors[i] = new Color(0.2f, 0.6f, 0.2f);
+                    colors[i] = new Color(0, 1, 0); // floresta
 
                 i++;
             }
@@ -189,11 +236,14 @@ public class ProceduralTerrain : MonoBehaviour
         mesh.vertices = vertices;
         mesh.triangles = triangles;
         mesh.colors = colors;
+        mesh.uv = uvs;
 
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
 
-        GetComponent<MeshCollider>().sharedMesh = mesh;
+        MeshCollider col = GetComponent<MeshCollider>();
+        col.sharedMesh = null;
+        col.sharedMesh = mesh;
     }
 
     void SpawnVegetation()
@@ -205,75 +255,63 @@ public class ProceduralTerrain : MonoBehaviour
                 int i = z * (width + 1) + x;
 
                 Vector3 pos = vertices[i];
-                Vector2 p = new Vector2(x, z);
+                Vector3 normal = mesh.normals[i];
 
-                float slope = mesh.normals[i].y;
+                // 🚫 BLOQUEIA LATERAIS (ESSA LINHA RESOLVE SEU PROBLEMA)
+                if (normal.y < 0.8f)
+                    continue;
 
-                float dDesert = Vector2.Distance(p, desertCenter) * desertSize;
-                float dForest = Vector2.Distance(p, forestCenter) * forestSize;
-                float dDense = Vector2.Distance(p, denseForestCenter) * denseForestSize;
-                float dSnow = Vector2.Distance(p, snowCenter);
+                // 🌍 BIOMA
+                bool isSnow = colors[i].r > 0.3f;
+                bool isForest = colors[i].g > 0.3f;
+                bool isDesert = !isSnow && !isForest;
 
-                bool ehNeve = dSnow < snowRadius;
-                bool ehDeserto = dDesert < dForest && dDesert < dDense;
-
-                bool ehFloresta = !ehNeve && !ehDeserto;
-
-                if (ehFloresta && slope > 0.7f)
+                // 🌳 ÁRVORES / CACTOS
+                if (Random.value < treeDensity)
                 {
-                    if (Random.value < treeDensity)
-                        Instantiate(treePrefab, pos, Quaternion.identity, transform);
+                    List<TreeData> validTrees = new List<TreeData>();
 
-                    float chance = mushroomDensity;
-                    if (dDense < dForest) chance *= 2f;
+                    foreach (var tree in trees)
+                    {
+                        if (tree.biome == BiomeType.Snow && isSnow)
+                            validTrees.Add(tree);
 
-                    if (Random.value < chance)
-                        Instantiate(mushroomPrefab, pos + Vector3.up * 0.2f, Quaternion.identity, transform);
+                        else if (tree.biome == BiomeType.Forest && isForest)
+                            validTrees.Add(tree);
 
-                    // 🪵 GRAVETO NA FLORESTA
-                    if (Random.value < gravetoDensity)
-                        SpawnGraveto(pos);
+                        else if (tree.biome == BiomeType.Desert && isDesert)
+                            validTrees.Add(tree);
+                    }
+
+                    if (validTrees.Count == 0)
+                        continue;
+
+                    TreeData selected = validTrees[Random.Range(0, validTrees.Count)];
+
+                    float offset = selected.yOffset;
+
+                    GameObject t = Instantiate(
+                        selected.prefab,
+                        pos + Vector3.up * offset,
+                        Quaternion.Euler(0, Random.Range(0, 360), 0),
+                        transform
+                    );
+
+                    t.transform.localScale *= Random.Range(0.9f, 1.2f);
                 }
 
-                // 🏜️ GRAVETO NO DESERTO (menos frequência)
-                if (ehDeserto && slope > 0.8f)
+                // 🍄 cogumelos
+                if (Random.value < mushroomDensity && isForest)
                 {
-                    if (Random.value < gravetoDensity * 0.3f)
-                        SpawnGraveto(pos);
+                    Instantiate(
+                        mushroomPrefab,
+                        pos + Vector3.up * 0.2f,
+                        Quaternion.identity,
+                        transform
+                    );
                 }
             }
         }
-    }
-    void SpawnGraveto(Vector3 pos)
-    {
-        RaycastHit hit;
-
-        // joga um raio pra baixo pra encontrar o chão
-        if (Physics.Raycast(pos + Vector3.up * 5f, Vector3.down, out hit, 10f))
-        {
-            Quaternion rot = Quaternion.FromToRotation(Vector3.up, hit.normal) *
-                             Quaternion.Euler(90f, Random.Range(0f, 360f), 0f);
-
-            Instantiate(gravetoPrefab, hit.point, rot, transform);
-        }
-
-        StartCoroutine(RespawnGraveto(pos));
-    }
-
-    IEnumerator RespawnGraveto(Vector3 pos)
-    {
-        yield return new WaitForSeconds(gravetoRespawnTime);
-
-        // checa se já não tem outro graveto perto
-        Collider[] cols = Physics.OverlapSphere(pos, 1f);
-
-        foreach (var col in cols)
-        {
-            if (col.CompareTag("Graveto"))
-                yield break;
-        }
-
-        Instantiate(gravetoPrefab, pos + Vector3.up * 0.2f, Quaternion.identity, transform);
     }
 
     void SpawnRockClusters()
@@ -283,36 +321,19 @@ public class ProceduralTerrain : MonoBehaviour
             float centerX = Random.Range(0, width);
             float centerZ = Random.Range(0, depth);
 
-            Vector2 p = new Vector2(centerX, centerZ);
-
-            float dDesert = Vector2.Distance(p, desertCenter) * desertSize;
-            float dForest = Vector2.Distance(p, forestCenter) * forestSize;
-            float dDense = Vector2.Distance(p, denseForestCenter) * denseForestSize;
-            float dSnow = Vector2.Distance(p, snowCenter);
-
-            bool ehNeve = dSnow < snowRadius;
-            bool ehDeserto = dDesert < dForest && dDesert < dDense;
-
-            if (!(ehNeve || ehDeserto)) continue;
-
             int rocksInCluster = Random.Range(6, 15);
 
             for (int i = 0; i < rocksInCluster; i++)
             {
-                float offsetX = Random.Range(-8f, 8f);
-                float offsetZ = Random.Range(-8f, 8f);
-
-                float x = centerX + offsetX;
-                float z = centerZ + offsetZ;
+                float x = centerX + Random.Range(-8f, 8f);
+                float z = centerZ + Random.Range(-8f, 8f);
 
                 if (x < 0 || z < 0 || x >= width || z >= depth) continue;
 
                 int index = (int)z * (width + 1) + (int)x;
                 Vector3 pos = vertices[index];
 
-                GameObject prefab = GetRandomRock();
-
-                Instantiate(prefab, pos, Quaternion.Euler(0, Random.Range(0, 360), 0), transform);
+                Instantiate(GetRandomRock(), pos, Quaternion.identity, transform);
             }
         }
     }
