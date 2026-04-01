@@ -46,6 +46,7 @@ public class PlayerInteraction : MonoBehaviour
 
     void Start()
     {
+    
         if (inventory == null)
             inventory = FindFirstObjectByType<Inventory>();
 
