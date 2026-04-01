@@ -28,6 +28,8 @@ public class DayNightCycle : MonoBehaviour
     float fadeTimer = 0f;
     bool isFading = false;
 
+    bool warnedNight = false;
+
     void Start()
     {
         if (sun == null)
@@ -35,9 +37,11 @@ public class DayNightCycle : MonoBehaviour
 
         if (moon == null)
             moon = GameObject.Find("Moon").GetComponent<Light>();
-    }
 
-    bool warnedNight = false;
+        // 🌫️ garante que o fog está ativo
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.Exponential;
+    }
 
     void Update()
     {
@@ -54,28 +58,45 @@ public class DayNightCycle : MonoBehaviour
         float sunIntensity = Mathf.Clamp01(Mathf.Sin(timeOfDay * Mathf.PI));
         float moonIntensity = Mathf.Clamp01(Mathf.Sin((timeOfDay - 0.5f) * Mathf.PI));
 
-        // Rotação
+        // 🌞🌙 Rotação
         sun.transform.rotation = Quaternion.Euler(sunAngle - 90f, 170f, 0);
         moon.transform.rotation = Quaternion.Euler(sunAngle + 90f, 170f, 0);
 
-        // Luz
-        sun.intensity = sunIntensity;
-        moon.intensity = moonIntensity * 0.3f;
+        // 💡 LUZ (corrigido)
+        sun.intensity = Mathf.Lerp(0.1f, 1.2f, sunIntensity);
+        sun.color = Color.Lerp(new Color(1f, 0.5f, 0.3f), Color.white, sunIntensity);
 
-        RenderSettings.ambientLight = Color.Lerp(Color.black, Color.white, sunIntensity);
+        moon.intensity = Mathf.Lerp(0.2f, 0.5f, moonIntensity);
+        moon.color = new Color(0.6f, 0.7f, 1f);
+
+        // 🌍 AMBIENT LIGHT (corrigido - nunca preto!)
+        Color dayAmbient = new Color(1f, 0.95f, 0.8f);
+        Color nightAmbient = new Color(0.1f, 0.15f, 0.3f);
+        RenderSettings.ambientLight = Color.Lerp(nightAmbient, dayAmbient, sunIntensity);
+
+        // 🌫️ FOG DINÂMICO (ESSENCIAL)
+        Color dayFog = new Color(0.93f, 0.85f, 0.6f);
+        Color nightFog = new Color(0.05f, 0.08f, 0.15f);
+
+        RenderSettings.fogColor = Color.Lerp(nightFog, dayFog, sunIntensity);
+        RenderSettings.fogDensity = Mathf.Lerp(0.015f, 0.002f, sunIntensity);
+
+        // 🌌 Skybox exposição (opcional mas MUITO bom)
+        if (skyboxMaterial != null)
+        {
+            float exposure = Mathf.Lerp(0.3f, 1.3f, sunIntensity);
+            skyboxMaterial.SetFloat("_Exposure", exposure);
+        }
 
         // ⭐ estrelas
         float starVisibility = 1f - sunIntensity;
         var emission = stars.emission;
         emission.rateOverTime = starVisibility * 1000f;
 
-        // quanto mais noite, mais escuro
+        // 🌑 overlay escuro
         targetAlpha = Mathf.Lerp(0f, 0.7f, 1f - sunIntensity);
-
-        // suavizar transição
         overlayAlpha = Mathf.Lerp(overlayAlpha, targetAlpha, Time.deltaTime * overlaySpeed);
 
-        // aplicar
         Color overlayColor = darkOverlay.color;
         overlayColor.a = overlayAlpha;
         darkOverlay.color = overlayColor;
@@ -88,7 +109,7 @@ public class DayNightCycle : MonoBehaviour
         dayText.text = "Dia " + currentDay;
         hourText.text = string.Format("{0:00}:{1:00}", hours, minutes);
 
-        // 🌙 AVISO DE NOITE (CORRIGIDO)
+        // 🌙 aviso de noite
         if (hours >= 18 && hours < 19 && !warnedNight)
         {
             MessageSystem.Instance.ShowMessage("Está anoitecendo! Prepare-se para os perigos da noite.");
@@ -100,7 +121,7 @@ public class DayNightCycle : MonoBehaviour
             warnedNight = false;
         }
 
-        // 🎬 FADE DO TEXTO
+        // 🎬 fade texto
         if (isFading)
         {
             fadeTimer += Time.deltaTime;

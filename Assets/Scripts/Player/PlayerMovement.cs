@@ -11,8 +11,13 @@ public class PlayerMovement : MonoBehaviour
     public float gravity = -9.8f;
 
     [Header("Mouse")]
-    public float mouseSensitivity = 0.44f;
+    public float mouseSensitivity = 0.3f;
     public Transform cameraHolder;
+
+    [Header("Camera Advanced")]
+    public float smoothTime = 0.05f;
+    public float headbobSpeed = 10f;
+    public float headbobAmount = 0.05f;
 
     [Header("Stamina")]
     public float maxStamina = 100f;
@@ -31,6 +36,14 @@ public class PlayerMovement : MonoBehaviour
 
     bool isRunning;
     bool jumpPressed;
+
+    // 🎥 Camera smooth
+    Vector2 currentLook;
+    Vector2 lookVelocity;
+
+    // 🎥 Headbob
+    float headbobTimer;
+    Vector3 cameraStartPos;
 
     void Awake()
     {
@@ -67,6 +80,9 @@ public class PlayerMovement : MonoBehaviour
         {
             Debug.LogError("CameraHolder não foi atribuído!");
         }
+
+        cameraStartPos = cameraHolder.localPosition;
+        xRotation = 0f;
     }
 
     void Update()
@@ -74,13 +90,12 @@ public class PlayerMovement : MonoBehaviour
         HandleStamina();
         Move();
         Look();
+        HandleHeadbob();
     }
 
     void HandleStamina()
     {
         bool isMoving = moveInput.magnitude > 0.1f;
-
-        // Só corre se tiver stamina
         bool canRun = currentStamina > 0;
 
         if (isRunning && isMoving && canRun)
@@ -130,7 +145,6 @@ public class PlayerMovement : MonoBehaviour
         bool isMoving = moveInput.magnitude > 0.1f;
         bool canRun = currentStamina > 0;
 
-        // VELOCIDADE FINAL
         float currentSpeed = (isRunning && isMoving && canRun) ? runSpeed : walkSpeed;
 
         Vector3 velocity = move * currentSpeed;
@@ -141,13 +155,45 @@ public class PlayerMovement : MonoBehaviour
 
     void Look()
     {
-        float mouseX = lookInput.x * mouseSensitivity * 100f * Time.deltaTime;
-        float mouseY = lookInput.y * mouseSensitivity * 100f * Time.deltaTime;
+        // 🛑 Anti spike (corrige bug da câmera)
+        Vector2 rawInput = Vector2.ClampMagnitude(lookInput, 10f);
 
+        // 🎯 Smooth
+        currentLook = Vector2.SmoothDamp(currentLook, rawInput, ref lookVelocity, smoothTime);
+
+        float mouseX = currentLook.x * mouseSensitivity;
+        float mouseY = currentLook.y * mouseSensitivity;
+
+        // 🎥 Rotação vertical
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -80f, 80f);
 
         cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+
+        // 🧍 Rotação do player
         transform.Rotate(Vector3.up * mouseX);
+    }
+
+    void HandleHeadbob()
+    {
+        if (controller.isGrounded && moveInput.magnitude > 0.1f)
+        {
+            headbobTimer += Time.deltaTime * headbobSpeed;
+
+            float bobX = Mathf.Cos(headbobTimer) * headbobAmount;
+            float bobY = Mathf.Sin(headbobTimer * 2f) * headbobAmount;
+
+            cameraHolder.localPosition = cameraStartPos + new Vector3(bobX, bobY, 0);
+        }
+        else
+        {
+            headbobTimer = 0f;
+
+            cameraHolder.localPosition = Vector3.Lerp(
+                cameraHolder.localPosition,
+                cameraStartPos,
+                Time.deltaTime * 5f
+            );
+        }
     }
 }
