@@ -13,41 +13,34 @@ public class ResourceNode : MonoBehaviour
     public int minDrop = 1;
     public int maxDrop = 5;
 
-    // 🔥 ferramenta necessária
     public ToolType requiredTool = ToolType.None;
-
-    UIMessage uiMessage;
 
     void Start()
     {
         currentHealth = maxHealth;
-        uiMessage = FindFirstObjectByType<UIMessage>();
-
     }
 
     public void Hit(Inventory inventory, Hotbar hotbar, ToolType currentTool, int toolDamage)
     {
+        // 🔥 ferramenta errada
         if (requiredTool != ToolType.None && currentTool != requiredTool)
         {
-            UIMessage ui = FindFirstObjectByType<UIMessage>();
+            string msg = GetToolMessage();
 
-            if (requiredTool != ToolType.None && currentTool != requiredTool)
+            // 🔥 NOVO SISTEMA DE MENSAGEM
+            if (MessageSystem.Instance != null)
             {
-                if (ui != null)
-                {
-                    string msg = GetToolMessage();
-                    ui.ShowMessage(msg);
-                }
-
-                return;
+                MessageSystem.Instance.ShowMessage(msg);
+            }
+            else
+            {
+                Debug.LogWarning("MessageSystem não encontrado!");
             }
 
             return;
         }
 
-        int damage = toolDamage;
-
-        currentHealth -= damage;
+        currentHealth -= toolDamage;
 
         if (hitEffect != null)
             Instantiate(hitEffect, transform.position + Vector3.up, Quaternion.identity);
@@ -88,6 +81,12 @@ public class ResourceNode : MonoBehaviour
         {
             inventory.AddItem(itemName);
             hotbar.AddItem(itemName, icon);
+        }
+
+        // 🔥 mensagem de loot (opcional)
+        if (MessageSystem.Instance != null)
+        {
+            MessageSystem.Instance.ShowMessage($"+{amount} {itemName}");
         }
     }
 }

@@ -1,42 +1,52 @@
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 using System.Collections;
+using System.Collections.Generic;
 
 public class UIMessage : MonoBehaviour
 {
-    public TextMeshProUGUI text;
-    public float duration = 1.5f;
+    public GameObject messagePrefab; // prefab da mensagem
+    public Transform container; // painel onde fica a lista
 
-    Coroutine currentRoutine;
+    public float duration = 2f;
+    public float fadeSpeed = 4f;
 
-    void Start()
-    {
-        SetAlpha(0f); // invisível no começo
-    }
+    List<GameObject> activeMessages = new List<GameObject>();
 
     public void ShowMessage(string message)
     {
-        if (currentRoutine != null)
-            StopCoroutine(currentRoutine);
+        GameObject obj = Instantiate(messagePrefab, container);
+        activeMessages.Add(obj);
 
-        currentRoutine = StartCoroutine(ShowRoutine(message));
-    }
+        TextMeshProUGUI text = obj.GetComponentInChildren<TextMeshProUGUI>();
+        Image bg = obj.GetComponentInChildren<Image>();
+        CanvasGroup cg = obj.GetComponent<CanvasGroup>();
 
-    IEnumerator ShowRoutine(string message)
-    {
         text.text = message;
 
-        SetAlpha(1f); // mostra
+        StartCoroutine(AnimateMessage(obj, cg));
+    }
+
+    IEnumerator AnimateMessage(GameObject obj, CanvasGroup cg)
+    {
+        // fade in
+        while (cg.alpha < 1)
+        {
+            cg.alpha += Time.deltaTime * fadeSpeed;
+            yield return null;
+        }
 
         yield return new WaitForSeconds(duration);
 
-        SetAlpha(0f); // esconde
-    }
+        // fade out
+        while (cg.alpha > 0)
+        {
+            cg.alpha -= Time.deltaTime * fadeSpeed;
+            yield return null;
+        }
 
-    void SetAlpha(float value)
-    {
-        Color c = text.color;
-        c.a = value;
-        text.color = c;
+        activeMessages.Remove(obj);
+        Destroy(obj);
     }
 }
