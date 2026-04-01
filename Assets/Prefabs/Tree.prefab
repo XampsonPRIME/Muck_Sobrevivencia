@@ -235,6 +235,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2200445428083065451}
+  - component: {fileID: 2064487718924991316}
+  - component: {fileID: 5693904347362508041}
   m_Layer: 0
   m_Name: Tree
   m_TagString: Untagged
@@ -259,3 +261,43 @@ Transform:
   - {fileID: 3008499189403058491}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2064487718924991316
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3656225094160004435}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d335ae19af134e5796b27f798e1429f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ResourceNode
+  itemName: Arvore de Carvalho
+  icon: {fileID: 21300000, guid: c93fd1bd83ee241bf9852a7736f0b667, type: 3}
+  maxHealth: 4
+  hitEffect: {fileID: 6984970954037890913, guid: ad7c18d4fb5134c3eb2ff3730dd0ffb9, type: 3}
+  minDrop: 1
+  maxDrop: 5
+  requiredTool: 1
+--- !u!65 &5693904347362508041
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3656225094160004435}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
