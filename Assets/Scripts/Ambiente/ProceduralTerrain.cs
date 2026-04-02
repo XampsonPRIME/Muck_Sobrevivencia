@@ -53,6 +53,18 @@ public class ProceduralTerrain : MonoBehaviour
     public TreeData[] trees;
     public GameObject mushroomPrefab;
 
+    // 🌊 CONFIG DO LAGO// 🌊 LAGO
+    public GameObject lakePrefab;
+
+    public float lakeRadius = 25f;
+    public float waterLevel = 2.5f;
+    public float lakeDepthAmount = 4f;
+
+    private Vector2 lakePosition;
+    private bool lakePlaced = false;
+    [Header("Biomas")]
+    public float biomeScale = 50f;
+
     [Header("🪵 Gravetos")]
     public GameObject gravetoPrefab;
     public float gravetoDensity = 0.04f;
@@ -90,6 +102,7 @@ public class ProceduralTerrain : MonoBehaviour
         SetupCenters();
         GenerateMountains();
         GenerateTerrain();
+        SpawnLake(); // 👈 IMPORTANTE
 
         if (navMeshSurface != null)
             StartCoroutine(BuildNavMeshDelayed());
@@ -138,13 +151,49 @@ public class ProceduralTerrain : MonoBehaviour
         navMeshSurface.BuildNavMesh();
     }
 
+    void SpawnLake()
+    {
+        if (lakePrefab != null && lakePlaced)
+        {
+            Vector3 worldPos = new Vector3(lakePosition.x, waterLevel, lakePosition.y);
+
+            Instantiate(lakePrefab, worldPos, Quaternion.identity);
+        }
+    }
+
     float GetHeight(Vector2 point)
     {
         float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
 
         h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
 
+        // 🌍 BIOMA
+        float biome = Mathf.PerlinNoise(point.x / biomeScale, point.y / biomeScale);
+        bool isForest = biome > 0.3f && biome < 0.6f;
 
+        // 🌊 DEFINE POSIÇÃO DO LAGO (1x só)
+        if (isForest && !lakePlaced)
+        {
+            lakePosition = point;
+            lakePlaced = true;
+        }
+
+        // 🌊 ESCAVA O LAGO
+        if (lakePlaced)
+        {
+            float distance = Vector2.Distance(point, lakePosition);
+
+            if (distance < lakeRadius)
+            {
+                float t = distance / lakeRadius;
+
+                float lakeDepth = Mathf.Lerp(waterLevel, waterLevel - lakeDepthAmount, 1 - t);
+
+                h = Mathf.Min(h, lakeDepth);
+            }
+        }
+
+        // 🏔️ MONTANHAS (mantido)
         foreach (var m in mountains)
         {
             float dist = Vector2.Distance(point, m.position);
@@ -152,11 +201,7 @@ public class ProceduralTerrain : MonoBehaviour
             if (dist < m.radius)
             {
                 float falloff = Mathf.Clamp01(1 - (dist / m.radius));
-
-                // 🔥 curva suave (tipo montanha real)
                 falloff = Mathf.SmoothStep(0, 1, falloff);
-
-                // opcional: deixa mais arredondado ainda
                 falloff = Mathf.Pow(falloff, 2.5f);
 
                 h += falloff * m.strength;

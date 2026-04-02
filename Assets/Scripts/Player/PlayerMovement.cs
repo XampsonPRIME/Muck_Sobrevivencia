@@ -177,18 +177,29 @@ public class PlayerMovement : MonoBehaviour
 
     // 🎥 LOOK
     void Look()
-    {
-        if (cameraHolder == null) return;
+{
+    // 🛑 Anti-spike (evita bug de camera voando)
+    float mouseX = Mathf.Clamp(lookInput.x, -10f, 10f);
+    float mouseY = Mathf.Clamp(lookInput.y, -10f, 10f);
 
-        float mouseX = Mathf.Clamp(lookInput.x, -10f, 10f) * mouseSensitivity;
-        float mouseY = Mathf.Clamp(lookInput.y, -10f, 10f) * mouseSensitivity;
+    // 🎯 Sensibilidade base
+    mouseX *= mouseSensitivity;
+    mouseY *= mouseSensitivity;
 
-        xRotation -= mouseY;
-        xRotation = Mathf.Clamp(xRotation, -80f, 80f);
+    // 🎯 Micro suavização (SEM delay)
+    float smoothFactor = 0.9f; // 1 = sem suavização
+    mouseX = Mathf.Lerp(0, mouseX, smoothFactor);
+    mouseY = Mathf.Lerp(0, mouseY, smoothFactor);
 
-        cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
-        transform.Rotate(Vector3.up * mouseX);
-    }
+    // 🎥 Rotação vertical
+    xRotation -= mouseY;
+    xRotation = Mathf.Clamp(xRotation, -80f, 80f);
+
+    cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+
+    // 🧍 Rotação do player
+    transform.Rotate(Vector3.up * mouseX);
+}
 
     // 🎥 HEADBOB
     void HandleHeadbob()

@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &1791120564395412864
+--- !u!1 &2439320072105877589
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,48 +8,48 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 6480879004147768858}
-  - component: {fileID: 4084679087682939109}
-  - component: {fileID: 5101152296773720881}
-  - component: {fileID: 7473995015138358028}
-  - component: {fileID: 2013110911765222889}
+  - component: {fileID: 7228353216053786295}
+  - component: {fileID: 5271811982055790037}
+  - component: {fileID: -6745145442911897866}
+  - component: {fileID: 7659618710929839488}
+  - component: {fileID: 7783182106054389779}
   m_Layer: 0
-  m_Name: ProceduralTerrain
+  m_Name: TerrainChunk
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &6480879004147768858
+--- !u!4 &7228353216053786295
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1791120564395412864}
+  m_GameObject: {fileID: 2439320072105877589}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -613.29224, y: -0.00002, z: 46.61709}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &4084679087682939109
+--- !u!33 &5271811982055790037
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1791120564395412864}
+  m_GameObject: {fileID: 2439320072105877589}
   m_Mesh: {fileID: 0}
---- !u!23 &5101152296773720881
+--- !u!23 &-6745145442911897866
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1791120564395412864}
+  m_GameObject: {fileID: 2439320072105877589}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -68,7 +68,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 844e863c162944f55903c7e958ca6bb7, type: 2}
+  - {fileID: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -92,13 +92,13 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!64 &7473995015138358028
+--- !u!64 &7659618710929839488
 MeshCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1791120564395412864}
+  m_GameObject: {fileID: 2439320072105877589}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -114,73 +114,46 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 0}
---- !u!114 &2013110911765222889
+--- !u!114 &7783182106054389779
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1791120564395412864}
-  m_Enabled: 0
+  m_GameObject: {fileID: 2439320072105877589}
+  m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b0c114da242416e4cbfdad34617c3c65, type: 3}
+  m_Script: {fileID: 11500000, guid: 3c9f74121c4b545489014cdd2eed315a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ProceduralTerrain
-  width: 200
-  depth: 200
-  terrainScale: 100
-  heightMultiplier: 20
-  desertX: 0.2
-  desertZ: 0.3
-  forestX: 0.7
-  forestZ: 0.3
-  denseForestX: 0.4
-  denseForestZ: 0.75
-  snowX: 0.692
-  snowZ: 0.752
-  forestSize: 0.504
-  desertSize: 1.032
-  denseForestSize: 0.623
-  snowRadius: 140
-  mountainCount: 5
-  mountainRadius: 60
-  mountainHeight: 25
+  m_EditorClassIdentifier: Assembly-CSharp::TerrainChunk
+  size: 50
+  terrainScale: 40
+  heightMultiplier: 8
+  player: {fileID: 0}
+  safeZoneRadius: 10
+  biomeScale: 0.003
   trees:
-  - prefab: {fileID: 3656225094160004435, guid: aeac1a26589bcb04c92efc315bd5bbae, type: 3}
-    yOffset: 0.8
+  - prefab: {fileID: 3927941551767007998, guid: aa8e06a1f38944483ab9e4dca3d02fd8, type: 3}
+    yOffset: -0.2
     biome: 1
-  - prefab: {fileID: 3656225094160004435, guid: 243e5140c561440b49ef54751d1a2684, type: 3}
-    yOffset: 1.8
-    biome: 1
-  - prefab: {fileID: 3656225094160004435, guid: e679013c6fb234f2c88ae4abffff4aa8, type: 3}
-    yOffset: 1.8
-    biome: 2
-  - prefab: {fileID: 3656225094160004435, guid: 9e3f8e8fa365c4ea5a7c743158fc58c1, type: 3}
-    yOffset: 0.8
-    biome: 0
   - prefab: {fileID: 3656225094160004435, guid: 19bef5f74e9cf4bcfb7b611e792580a5, type: 3}
-    yOffset: -0.6
+    yOffset: 1
     biome: 0
-  - prefab: {fileID: 8044336181136699972, guid: 77f31cbe981e64aa0ad6549565d8faec, type: 3}
-    yOffset: 0.8
+  - prefab: {fileID: 3656225094160004435, guid: 9e3f8e8fa365c4ea5a7c743158fc58c1, type: 3}
+    yOffset: 1
     biome: 0
-  - prefab: {fileID: 8044336181136699972, guid: 68ceb8525ae9f4c6fb4c16bd39c1945a, type: 3}
-    yOffset: 0.8
-    biome: 1
+  - prefab: {fileID: 3656225094160004435, guid: e679013c6fb234f2c88ae4abffff4aa8, type: 3}
+    yOffset: 1.4
+    biome: 2
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
-  lakePrefab: {fileID: 3301930058392928260, guid: 6fd71221ad2bf4e44956a97c9596563c, type: 3}
-  lakeRadius: 25
-  waterLevel: 2.5
-  lakeDepthAmount: 4
-  biomeScale: 50
-  gravetoPrefab: {fileID: 5972306984636934937, guid: 540c6c32b899547499773e634b96388a, type: 3}
-  gravetoDensity: 0.04
-  gravetoRespawnTime: 20
-  treeDensity: 0.4
-  mushroomDensity: 0.2
-  treeStep: 10
-  rockSmallPrefab: {fileID: 3405259022623784667, guid: 852eccd64e4ad4346b2488f794f86db3, type: 3}
-  rockMediumPrefab: {fileID: 3405259022623784667, guid: cba36c3ea0c294b4a869ac9fdb883aff, type: 3}
-  rockLargePrefab: {fileID: 3405259022623784667, guid: 03bba6ec90c414698987408ab359341f, type: 3}
-  rockClusterCount: 25
-  navMeshSurface: {fileID: 0}
+  treeDensity: 0.02
+  mushroomDensity: 0.03
+  rockClusterCount: 3
+  minDistanceBetweenObjects: 4.5
+  rockSmallPrefab: {fileID: 4611803431950446891, guid: d1e087c0d2b404e379ca3a5b0b8c91c9, type: 3}
+  rockMediumPrefab: {fileID: 687441992539456540, guid: 79412605d3b7c40f4a9b20e5da838760, type: 3}
+  rockLargePrefab: {fileID: 3923582216426070236, guid: 47f48952e3e114c95a12366e66c84319, type: 3}
+  terrainMaterial: {fileID: 2100000, guid: 844e863c162944f55903c7e958ca6bb7, type: 2}
+  safeRadius: 12
+  forwardSafeDistance: 8
+  rockDensity: 0.5
