@@ -399,7 +399,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInteraction
   interactDistance: 4
   inventory: {fileID: 0}
-  hotbar: {fileID: 1055606729480124305, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+  hotbar: {fileID: 0}
   useTime: 1.5
   hitRate: 0.5
   currentTool: 0
