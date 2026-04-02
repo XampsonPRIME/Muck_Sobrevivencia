@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2634034302560835735
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7342294738517553906}
+  m_Layer: 0
+  m_Name: HandPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7342294738517553906
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2634034302560835735}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4448913397103007168}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4120711933785204348
 GameObject:
   m_ObjectHideFlags: 0
@@ -238,6 +269,7 @@ Transform:
   m_Children:
   - {fileID: 7095383786988751147}
   - {fileID: 7721250826989785090}
+  - {fileID: 7342294738517553906}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &8302166713906703741
@@ -285,13 +317,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   walkSpeed: 6
   runSpeed: 10
-  jumpForce: 2
   gravity: -9.8
   mouseSensitivity: 0.8
-  cameraHolder: {fileID: 0}
-  smoothTime: 0.05
-  headbobSpeed: 10
-  headbobAmount: 0.05
+  cameraHolder: {fileID: 7095383786988751147}
+  thirdPerson: 0
+  firstPersonOffset: {x: 0, y: 1.6, z: 0}
+  thirdPersonOffset: {x: 0, y: 2, z: -3}
   maxStamina: 100
   currentStamina: 0
   staminaDrain: 20
@@ -347,12 +378,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInteraction
   interactDistance: 4
-  inventory: {fileID: 0}
+  inventory: {fileID: 5729320078328354730}
   hotbar: {fileID: 0}
   hitRate: 0.5
-  currentTool: 0
+  currentTool: 1
   toolDamage: 1
-  handPoint: {fileID: 0}
+  handPoint: {fileID: 7342294738517553906}
   axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
   pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
   startWithAxe: 1
@@ -409,6 +440,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: playernew
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 4876bb22a9cdd40609470df7dbbfc944, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
