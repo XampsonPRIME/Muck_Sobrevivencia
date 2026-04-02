@@ -1268,7 +1268,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12170e1b9eaa82b4da0b5b16a0c8b303, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthUI
-  player: {fileID: 0}
+  player: {fileID: 8293215957773833957, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
   healthFill: {fileID: 4794300865224229929}
 --- !u!1 &9178675431013952620
 GameObject:
@@ -1358,9 +1358,65 @@ PrefabInstance:
       propertyPath: m_Name
       value: Hotbar
       objectReference: {fileID: 0}
+    - target: {fileID: 1063290501838061115, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: isSelected
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1339611843305621366, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
       propertyPath: offsetY
       value: 28
+      objectReference: {fileID: 0}
+    - target: {fileID: 1359682120992356839, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: itemData
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 1359682120992356839, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: itemType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1359682120992356839, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: toolType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1359682120992356839, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: toolDamage
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4444476987607154260, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: itemData
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4444476987607154260, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: itemType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4444476987607154260, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: toolType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4444476987607154260, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: isSelected
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4444476987607154260, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: toolDamage
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4454557730969236605, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: m_text
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 5079927396110767057, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: isSelected
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6305316957758766241, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: m_text
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 6442277169529278102, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: isSelected
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7314371162206285891, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
       propertyPath: m_Pivot.x
@@ -1442,6 +1498,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7521262881205399588, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: aa8b0297df5070d4a9e99f014727ab32, type: 3}
+    - target: {fileID: 7614261432635686241, guid: e7057958a3bb9e74fb2459ec8e75eda9, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: aa8b0297df5070d4a9e99f014727ab32, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

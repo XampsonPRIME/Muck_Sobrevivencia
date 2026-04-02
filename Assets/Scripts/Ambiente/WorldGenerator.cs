@@ -33,8 +33,6 @@ public class WorldGenerator : MonoBehaviour
         int playerChunkX = Mathf.RoundToInt(player.position.x / chunkSize);
         int playerChunkZ = Mathf.RoundToInt(player.position.z / chunkSize);
 
-        Debug.Log("Player Pos: " + player.position);
-        Debug.Log("Chunk X/Z: " + playerChunkX + " / " + playerChunkZ);
         HashSet<Vector2Int> neededChunks = new HashSet<Vector2Int>();
 
         for (int x = -viewDistance; x <= viewDistance; x++)
@@ -88,7 +86,5 @@ public class WorldGenerator : MonoBehaviour
         }
 
         chunks.Add(coord, chunk);
-
-        Debug.Log("Criou chunk: " + coord);
     }
 }

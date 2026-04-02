@@ -44,6 +44,8 @@ public class PlayerMovement : MonoBehaviour
 
     void Awake()
     {
+        currentHealth = maxHealth;
+
         controller = GetComponent<CharacterController>();
         controls = new PlayerControls();
         anim = GetComponentInChildren<Animator>();
@@ -83,6 +85,14 @@ public class PlayerMovement : MonoBehaviour
         Move();
         Look();
         HandleModelVisibility();
+    }
+
+    public void Heal(float amount)
+    {
+        currentHealth += amount;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+
+        Debug.Log("Curou: " + currentHealth);
     }
 
     void HandleModelVisibility()

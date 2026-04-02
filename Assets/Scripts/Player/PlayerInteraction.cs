@@ -162,7 +162,7 @@ public class PlayerInteraction : MonoBehaviour
 
             if (player != null && player.currentHealth < player.maxHealth)
             {
-               // player.Heal(20f);
+               player.Heal(20f);
                 slot.RemoveOne();
 
                 Debug.Log("🍄 Comeu cogumelo!");
