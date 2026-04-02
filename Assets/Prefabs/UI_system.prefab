@@ -1268,7 +1268,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12170e1b9eaa82b4da0b5b16a0c8b303, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthUI
-  player: {fileID: 8293215957773833957, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
+  player: {fileID: 0}
   healthFill: {fileID: 4794300865224229929}
 --- !u!1 &9178675431013952620
 GameObject:

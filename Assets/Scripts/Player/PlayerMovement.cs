@@ -44,11 +44,12 @@ public class PlayerMovement : MonoBehaviour
 
     void Awake()
     {
-        currentHealth = maxHealth;
-
         controller = GetComponent<CharacterController>();
         controls = new PlayerControls();
         anim = GetComponentInChildren<Animator>();
+
+        currentStamina = maxStamina;
+        currentHealth = maxHealth;
 
         playerModel = anim.gameObject;
 
@@ -85,6 +86,23 @@ public class PlayerMovement : MonoBehaviour
         Move();
         Look();
         HandleModelVisibility();
+
+        // 🔥 TESTE DE DANO
+        if (Keyboard.current.hKey.wasPressedThisFrame)
+        {
+            TakeDamage(10f);
+        }
+    }
+
+    public void TakeDamage(float amount)
+    {
+        currentHealth -= amount;
+
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+            Die();
+        }
     }
 
     public void Heal(float amount)
@@ -93,6 +111,11 @@ public class PlayerMovement : MonoBehaviour
         currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
 
         Debug.Log("Curou: " + currentHealth);
+    }
+
+    void Die()
+    {
+        Debug.Log("Player morreu");
     }
 
     void HandleModelVisibility()
