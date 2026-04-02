@@ -395,3 +395,21 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
   m_PrefabInstance: {fileID: 2983344728211494111}
   m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8401812318578981924}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22c282f927b80074fbfe8d5f8a165cc4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerInteraction
+  interactDistance: 4
+  inventory: {fileID: 0}
+  hotbar: {fileID: 0}
+  useTime: 1.5
+  hitRate: 0.5
+  currentTool: 0
+  toolDamage: 1
+  handPoint: {fileID: 695384276088008089}
+  axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
+  pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
+  startWithAxe: 1
+  startWithPickaxe: 1
