@@ -154,29 +154,29 @@ public class PlayerMovement : MonoBehaviour
     }
 
     void Look()
-    {
-        // 🛑 Anti-spike (evita bug de camera voando)
-        float mouseX = Mathf.Clamp(lookInput.x, -10f, 10f);
-        float mouseY = Mathf.Clamp(lookInput.y, -10f, 10f);
+{
+    // 🛑 Anti-spike (evita bug de camera voando)
+    float mouseX = Mathf.Clamp(lookInput.x, -10f, 10f);
+    float mouseY = Mathf.Clamp(lookInput.y, -10f, 10f);
 
-        // 🎯 Sensibilidade base
-        mouseX *= mouseSensitivity;
-        mouseY *= mouseSensitivity;
+    // 🎯 Sensibilidade base
+    mouseX *= mouseSensitivity;
+    mouseY *= mouseSensitivity;
 
-        // 🎯 Micro suavização (SEM delay)
-        float smoothFactor = 0.9f; // 1 = sem suavização
-        mouseX = Mathf.Lerp(0, mouseX, smoothFactor);
-        mouseY = Mathf.Lerp(0, mouseY, smoothFactor);
+    // 🎯 Micro suavização (SEM delay)
+    float smoothFactor = 0.9f; // 1 = sem suavização
+    mouseX = Mathf.Lerp(0, mouseX, smoothFactor);
+    mouseY = Mathf.Lerp(0, mouseY, smoothFactor);
 
-        // 🎥 Rotação vertical
-        xRotation -= mouseY;
-        xRotation = Mathf.Clamp(xRotation, -80f, 80f);
+    // 🎥 Rotação vertical
+    xRotation -= mouseY;
+    xRotation = Mathf.Clamp(xRotation, -80f, 80f);
 
-        cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+    cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
 
-        // 🧍 Rotação do player
-        transform.Rotate(Vector3.up * mouseX);
-    }
+    // 🧍 Rotação do player
+    transform.Rotate(Vector3.up * mouseX);
+}
 
     void HandleHeadbob()
     {
