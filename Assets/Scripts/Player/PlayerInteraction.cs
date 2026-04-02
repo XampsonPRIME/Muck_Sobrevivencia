@@ -8,6 +8,9 @@ public class PlayerInteraction : MonoBehaviour
     public Inventory inventory;
     public Hotbar hotbar;
 
+    float useTimer = 0f;
+    public float useTime = 1.5f;
+
     public float hitRate = 0.5f;
     float nextHitTime = 0f;
 
@@ -46,35 +49,35 @@ public class PlayerInteraction : MonoBehaviour
 
     void Start()
     {
-    
         if (inventory == null)
             inventory = FindFirstObjectByType<Inventory>();
 
         if (hotbar == null)
             hotbar = FindFirstObjectByType<Hotbar>();
 
-        // 🔥 start com machado
+        // 🔥 itens iniciais
         if (startWithAxe && axePrefab != null)
         {
             Item axe = axePrefab.GetComponent<Item>();
-
             inventory.AddItem(axe.itemName);
             hotbar.AddItem(axe.itemName, axe.icon, axe);
         }
 
-        // 🔥 start com picareta
         if (startWithPickaxe && pickaxePrefab != null)
         {
             Item pickaxe = pickaxePrefab.GetComponent<Item>();
-
             inventory.AddItem(pickaxe.itemName);
             hotbar.AddItem(pickaxe.itemName, pickaxe.icon, pickaxe);
         }
+
+        // 🔥 inicia selecionando slot 1
+        SelectSlot(0);
     }
 
     void Update()
     {
         HandleHotbarSelection();
+        HandleItemUse();
 
         Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
         RaycastHit hit;
@@ -83,15 +86,10 @@ public class PlayerInteraction : MonoBehaviour
             return;
 
         // 🔥 detectar item
-        Item item = hit.collider.GetComponent<Item>();
+        Item item = hit.collider.GetComponent<Item>() ??
+                    hit.collider.GetComponentInParent<Item>() ??
+                    hit.collider.GetComponentInChildren<Item>();
 
-        if (item == null)
-            item = hit.collider.GetComponentInParent<Item>();
-
-        if (item == null)
-            item = hit.collider.GetComponentInChildren<Item>();
-
-        // prioridade item
         if (item != null)
         {
             if (interactPressed)
@@ -99,46 +97,100 @@ public class PlayerInteraction : MonoBehaviour
                 TryPickup(item);
                 interactPressed = false;
             }
-
             return;
         }
 
-        // bater
-        if (attackHeld && Time.time >= nextHitTime)
+        // 🔥 bater (SÓ se não estiver usando item)
+        if (attackHeld && Time.time >= nextHitTime && useTimer <= 0f)
         {
             TryHit(hit);
             nextHitTime = Time.time + hitRate;
         }
     }
 
-    void TryPickup(Item item)
+    // =========================
+    // 🍄 USAR ITEM
+    // =========================
+    void HandleItemUse()
     {
+        if (!attackHeld)
+        {
+            useTimer = 0f;
+            return;
+        }
+
+        HotbarSlot slot = GetSelectedSlot();
+
+        if (slot == null || slot.IsEmpty())
+            return;
+
+        if (slot.itemType != ItemType.Resource)
+            return;
+
+        useTimer += Time.deltaTime;
+
+        if (useTimer >= useTime)
+        {
+            UseItem(slot);
+            useTimer = 0f;
+        }
+    }
+
+    HotbarSlot GetSelectedSlot()
+    {
+        foreach (HotbarSlot slot in hotbar.slots)
+        {
+            if (slot.isSelected)
+            {
+                Debug.Log("Selecionado: " + slot.itemType + " - " + slot.toolType);
+                return slot;
+            }
+        }
+
+        return null;
+    }
+
+    void UseItem(HotbarSlot slot)
+    {
+        Item item = slot.itemData;
+
         if (item == null) return;
 
+        if (item.itemName == "Cogumelo")
+        {
+            PlayerMovement player = GetComponent<PlayerMovement>();
+
+            if (player != null && player.currentHealth < player.maxHealth)
+            {
+                player.Heal(20f);
+                slot.RemoveOne();
+
+                Debug.Log("🍄 Comeu cogumelo!");
+            }
+        }
+    }
+
+    // =========================
+    // 📦 COLETAR
+    // =========================
+    void TryPickup(Item item)
+    {
         inventory.AddItem(item.itemName);
         hotbar.AddItem(item.itemName, item.icon, item);
-
-        if (item.itemType == ItemType.Tool)
-        {
-            EquipTool(item.toolType, item.toolDamage);
-        }
 
         Destroy(item.gameObject);
     }
 
+    // =========================
+    // ⛏️ BATER
+    // =========================
     void TryHit(RaycastHit hit)
     {
-        ResourceNode resource = hit.collider.GetComponent<ResourceNode>();
+        ResourceNode resource = hit.collider.GetComponent<ResourceNode>() ??
+                                hit.collider.GetComponentInParent<ResourceNode>();
 
         ToolSwing swing = currentToolObject?.GetComponent<ToolSwing>();
-
-        if (swing != null)
-        {
-            swing.Swing();
-        }
-
-        if (resource == null)
-            resource = hit.collider.GetComponentInParent<ResourceNode>();
+        swing?.Swing();
 
         if (resource != null)
         {
@@ -146,7 +198,9 @@ public class PlayerInteraction : MonoBehaviour
         }
     }
 
-    // 🔥 TROCA COM TECLAS
+    // =========================
+    // 🔢 HOTBAR
+    // =========================
     void HandleHotbarSelection()
     {
         if (Keyboard.current.digit1Key.wasPressedThisFrame) SelectSlot(0);
@@ -161,15 +215,17 @@ public class PlayerInteraction : MonoBehaviour
         if (hotbar == null || hotbar.slots.Length <= index)
             return;
 
+        // 🔥 limpa seleção anterior
+        foreach (HotbarSlot s in hotbar.slots)
+            s.isSelected = false;
+
         HotbarSlot slot = hotbar.slots[index];
+        slot.isSelected = true;
+
+        Debug.Log("Selecionou slot: " + index + " | Tipo: " + slot.itemType);
 
         if (slot.IsEmpty())
-        {
-            Debug.Log("Slot vazio");
             return;
-        }
-
-        Debug.Log("Selecionou slot: " + index);
 
         if (slot.itemType == ItemType.Tool)
         {
@@ -177,7 +233,9 @@ public class PlayerInteraction : MonoBehaviour
         }
     }
 
-    // 🔥 EQUIPAR
+    // =========================
+    // 🪓 EQUIPAR
+    // =========================
     public void EquipTool(ToolType type, int damage)
     {
         currentTool = type;
@@ -195,7 +253,6 @@ public class PlayerInteraction : MonoBehaviour
         {
             currentToolObject = Instantiate(prefab, handPoint);
 
-            // 🔥 pega configuração do prefab
             ToolView view = currentToolObject.GetComponent<ToolView>();
 
             if (view != null)
@@ -205,7 +262,6 @@ public class PlayerInteraction : MonoBehaviour
             }
             else
             {
-                // fallback padrão
                 currentToolObject.transform.localPosition = new Vector3(0.2f, -0.2f, 0.4f);
                 currentToolObject.transform.localRotation = Quaternion.Euler(0, 90, 0);
             }

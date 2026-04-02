@@ -25,6 +25,10 @@ public class PlayerMovement : MonoBehaviour
     public float staminaDrain = 20f;
     public float staminaRecovery = 15f;
 
+    [Header("❤️ Vida")]
+    public float maxHealth = 100f;
+    public float currentHealth;
+
     CharacterController controller;
     PlayerControls controls;
 
@@ -37,11 +41,6 @@ public class PlayerMovement : MonoBehaviour
     bool isRunning;
     bool jumpPressed;
 
-    // 🎥 Camera smooth
-    Vector2 currentLook;
-    Vector2 lookVelocity;
-
-    // 🎥 Headbob
     float headbobTimer;
     Vector3 cameraStartPos;
 
@@ -51,20 +50,17 @@ public class PlayerMovement : MonoBehaviour
         controls = new PlayerControls();
 
         currentStamina = maxStamina;
+        currentHealth = maxHealth;
 
-        // MOVIMENTO
         controls.Player.Move.performed += ctx => moveInput = ctx.ReadValue<Vector2>();
         controls.Player.Move.canceled += ctx => moveInput = Vector2.zero;
 
-        // OLHAR
         controls.Player.Look.performed += ctx => lookInput = ctx.ReadValue<Vector2>();
         controls.Player.Look.canceled += ctx => lookInput = Vector2.zero;
 
-        // CORRER
         controls.Player.Run.performed += ctx => isRunning = true;
         controls.Player.Run.canceled += ctx => isRunning = false;
 
-        // PULAR
         controls.Player.Jump.performed += ctx => jumpPressed = true;
     }
 
@@ -79,10 +75,10 @@ public class PlayerMovement : MonoBehaviour
         if (cameraHolder == null)
         {
             Debug.LogError("CameraHolder não foi atribuído!");
+            return;
         }
 
         cameraStartPos = cameraHolder.localPosition;
-        xRotation = 0f;
     }
 
     void Update()
@@ -91,8 +87,38 @@ public class PlayerMovement : MonoBehaviour
         Move();
         Look();
         HandleHeadbob();
+
+        // 🔥 TESTE DE DANO
+        if (Keyboard.current.hKey.wasPressedThisFrame)
+        {
+            TakeDamage(10f);
+        }
     }
 
+    // ❤️ VIDA
+    public void TakeDamage(float amount)
+    {
+        currentHealth -= amount;
+
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+            Die();
+        }
+    }
+
+    public void Heal(float amount)
+    {
+        currentHealth += amount;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+    }
+
+    void Die()
+    {
+        Debug.Log("Player morreu");
+    }
+
+    // 🔋 STAMINA
     void HandleStamina()
     {
         bool isMoving = moveInput.magnitude > 0.1f;
@@ -119,27 +145,23 @@ public class PlayerMovement : MonoBehaviour
         currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
     }
 
+    // 🏃 MOVIMENTO
     void Move()
     {
         bool isGrounded = controller.isGrounded;
 
         if (isGrounded && yVelocity < 0)
-        {
             yVelocity = -2f;
-        }
 
-        // PULO
         if (jumpPressed && isGrounded)
         {
             yVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
             jumpPressed = false;
         }
 
-        // GRAVIDADE
         yVelocity += gravity * Time.deltaTime;
         yVelocity = Mathf.Clamp(yVelocity, -50f, 50f);
 
-        // DIREÇÃO
         Vector3 move = transform.right * moveInput.x + transform.forward * moveInput.y;
 
         bool isMoving = moveInput.magnitude > 0.1f;
@@ -153,31 +175,22 @@ public class PlayerMovement : MonoBehaviour
         controller.Move(velocity * Time.deltaTime);
     }
 
+    // 🎥 LOOK
     void Look()
     {
-        // 🛑 Anti-spike (evita bug de camera voando)
-        float mouseX = Mathf.Clamp(lookInput.x, -10f, 10f);
-        float mouseY = Mathf.Clamp(lookInput.y, -10f, 10f);
+        if (cameraHolder == null) return;
 
-        // 🎯 Sensibilidade base
-        mouseX *= mouseSensitivity;
-        mouseY *= mouseSensitivity;
+        float mouseX = Mathf.Clamp(lookInput.x, -10f, 10f) * mouseSensitivity;
+        float mouseY = Mathf.Clamp(lookInput.y, -10f, 10f) * mouseSensitivity;
 
-        // 🎯 Micro suavização (SEM delay)
-        float smoothFactor = 0.9f; // 1 = sem suavização
-        mouseX = Mathf.Lerp(0, mouseX, smoothFactor);
-        mouseY = Mathf.Lerp(0, mouseY, smoothFactor);
-
-        // 🎥 Rotação vertical
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -80f, 80f);
 
         cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
-
-        // 🧍 Rotação do player
         transform.Rotate(Vector3.up * mouseX);
     }
 
+    // 🎥 HEADBOB
     void HandleHeadbob()
     {
         if (controller.isGrounded && moveInput.magnitude > 0.1f)
