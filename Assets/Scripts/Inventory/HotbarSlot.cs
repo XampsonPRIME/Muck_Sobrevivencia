@@ -10,10 +10,15 @@ public class HotbarSlot : MonoBehaviour
     string itemName;
     int amount;
 
-    // 🔥 NOVO
+    // 🔥 DADOS DO ITEM
+    public Item itemData;
+
     public ItemType itemType;
     public ToolType toolType;
     public int toolDamage;
+
+    // ✅ SELEÇÃO (ESSENCIAL)
+    public bool isSelected = false;
 
     public bool IsEmpty()
     {
@@ -33,7 +38,8 @@ public class HotbarSlot : MonoBehaviour
             icon.sprite = sprite;
             icon.enabled = true;
 
-            // 🔥 salva dados da ferramenta
+            this.itemData = itemData;
+
             if (itemData != null)
             {
                 itemType = itemData.itemType;
@@ -43,6 +49,44 @@ public class HotbarSlot : MonoBehaviour
         }
 
         amount++;
+        UpdateUI();
+    }
+
+    // 🔥 REMOVER ITEM (ex: comer cogumelo)
+    public void RemoveOne()
+    {
+        amount--;
+
+        if (amount <= 0)
+        {
+            ClearSlot();
+        }
+        else
+        {
+            UpdateUI();
+        }
+    }
+
+    void ClearSlot()
+    {
+        itemName = "";
+        amount = 0;
+
+        icon.sprite = null;
+        icon.enabled = false;
+
+        amountText.text = "";
+
+        itemData = null;
+        itemType = ItemType.Resource;
+        toolType = ToolType.None;
+        toolDamage = 0;
+
+        isSelected = false; // 👈 IMPORTANTE
+    }
+
+    void UpdateUI()
+    {
         amountText.text = amount > 1 ? amount.ToString() : "";
     }
 }
