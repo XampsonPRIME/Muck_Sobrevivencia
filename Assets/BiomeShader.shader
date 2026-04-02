@@ -1,4 +1,4 @@
-Shader "Custom/BiomeShader"
+Shader "Custom/BiomeShader_URP"
 {
     Properties
     {
@@ -9,56 +9,62 @@ Shader "Custom/BiomeShader"
 
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
-        LOD 100
+        Tags { "RenderPipeline"="UniversalRenderPipeline" "RenderType"="Opaque" }
 
         Pass
         {
-            CGPROGRAM
+            HLSLPROGRAM
+
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "UnityCG.cginc"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            struct appdata
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
                 float4 color : COLOR;
             };
 
-            struct v2f
+            struct Varyings
             {
+                float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
-                float4 vertex : SV_POSITION;
                 float4 color : COLOR;
             };
 
-            sampler2D _SandTex;
-            sampler2D _GrassTex;
-            sampler2D _SnowTex;
+            TEXTURE2D(_SandTex);
+            SAMPLER(sampler_SandTex);
 
-            v2f vert (appdata v)
+            TEXTURE2D(_GrassTex);
+            SAMPLER(sampler_GrassTex);
+
+            TEXTURE2D(_SnowTex);
+            SAMPLER(sampler_SnowTex);
+
+            Varyings vert (Attributes v)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv * 20; // tiling
+                Varyings o;
+                o.positionHCS = TransformObjectToHClip(v.positionOS.xyz);
+                o.uv = v.uv * 20;
                 o.color = v.color;
                 return o;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            half4 frag (Varyings i) : SV_Target
             {
-                float4 sand = tex2D(_SandTex, i.uv);
-                float4 grass = tex2D(_GrassTex, i.uv);
-                float4 snow = tex2D(_SnowTex, i.uv);
+                half4 sand = SAMPLE_TEXTURE2D(_SandTex, sampler_SandTex, i.uv);
+                half4 grass = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, i.uv);
+                half4 snow = SAMPLE_TEXTURE2D(_SnowTex, sampler_SnowTex, i.uv);
 
                 float3 mix1 = lerp(sand.rgb, grass.rgb, i.color.g);
                 float3 finalColor = lerp(mix1, snow.rgb, i.color.r);
 
-                return float4(finalColor, 1);
+                return half4(finalColor, 1);
             }
-            ENDCG
+
+            ENDHLSL
         }
     }
 }
