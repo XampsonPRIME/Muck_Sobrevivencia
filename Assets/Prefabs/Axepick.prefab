@@ -385,7 +385,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Item
   itemName: Picareta
-  icon: {fileID: 21300000, guid: 403e881dd45214f2e9eb0d5c2067cdd1, type: 3}
+  icon: {fileID: 21300000, guid: 7a4325fbc4fe44afaac4daff5136154d, type: 3}
   itemType: 1
   toolType: 2
   toolDamage: 1

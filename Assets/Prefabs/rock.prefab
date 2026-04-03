@@ -166,6 +166,7 @@ MonoBehaviour:
   hitEffect: {fileID: 6984970954037890913, guid: ad3bfc163c33441318e835888e246b3a, type: 3}
   minDrop: 1
   maxDrop: 1
+  itemData: {fileID: 7670054342815085070, guid: 27d9fb52f1ac842fd8f9bdbcb3c48648, type: 3}
   requiredTool: 2
 --- !u!65 &5610432442553996441
 BoxCollider:

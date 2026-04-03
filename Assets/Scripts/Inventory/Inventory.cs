@@ -3,21 +3,42 @@ using UnityEngine;
 
 public class Inventory : MonoBehaviour
 {
-    public List<string> items = new List<string>();
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
+    public List<InventoryItem> items = new List<InventoryItem>();
 
+    public void AddItem(string itemName, int amount = 1, Item itemData = null)
+    {
+        InventoryItem existing = items.Find(i => i.itemName == itemName);
+
+        if (existing != null)
+        {
+            existing.quantity += amount;
+
+            if (itemData != null)
+                existing.itemData = itemData;
+        }
+        else
+        {
+            items.Add(new InventoryItem(itemName, amount, itemData));
+        }
     }
 
-    // Update is called once per frame
-    void Update()
+    // 🔥 NOVO
+    public void RemoveItem(string itemName, int amount = 1)
     {
+        InventoryItem existing = items.Find(i => i.itemName == itemName);
 
+        if (existing == null) return;
+
+        existing.quantity -= amount;
+
+        if (existing.quantity <= 0)
+        {
+            items.Remove(existing);
+        }
     }
 
-    public void AddItem(string itemName)
+    public InventoryItem GetItem(string itemName)
     {
-        items.Add(itemName);
+        return items.Find(i => i.itemName == itemName);
     }
 }
