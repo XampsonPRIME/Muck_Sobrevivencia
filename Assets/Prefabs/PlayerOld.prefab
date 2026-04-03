@@ -24,8 +24,39 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2634034302560835735}
   serializedVersion: 2
+  m_LocalRotation: {x: -0.49351126, y: 0.49048156, z: -0.50630885, w: 0.5094368}
+  m_LocalPosition: {x: 0.535, y: 0.487, z: 0.613}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2179133186881650689}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &3741491780603672179
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 713116350377567711}
+  m_Layer: 0
+  m_Name: InteractPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &713116350377567711
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3741491780603672179}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 1.5, z: 0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -56,7 +87,7 @@ Transform:
   m_GameObject: {fileID: 4120711933785204348}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.3, y: 0.3, z: 0.5}
+  m_LocalPosition: {x: 0.3, y: -0.5999996, z: 0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -269,7 +300,7 @@ Transform:
   m_Children:
   - {fileID: 7095383786988751147}
   - {fileID: 7721250826989785090}
-  - {fileID: 7342294738517553906}
+  - {fileID: 713116350377567711}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &8302166713906703741
@@ -386,6 +417,7 @@ MonoBehaviour:
   hitRate: 0.5
   currentTool: 1
   toolDamage: 1
+  cameraHolder: {fileID: 7095383786988751147}
   handPoint: {fileID: 7342294738517553906}
   axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
   pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
@@ -448,17 +480,32 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 9100000, guid: 4876bb22a9cdd40609470df7dbbfc944, type: 2}
     - target: {fileID: 5866666021909216657, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
+      propertyPath: m_CullingMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
       propertyPath: m_ApplyRootMotion
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 8255111157037086696, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7342294738517553906}
     m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6508256520441405648}
     - targetCorrespondingSourceObject: {fileID: -6138272799379583420, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7225784498957708110}
   m_SourcePrefab: {fileID: 100100000, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
+--- !u!4 &2179133186881650689 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8255111157037086696, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
+  m_PrefabInstance: {fileID: 7831159189452339177}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &5079396977152506285 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -6138272799379583420, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
@@ -486,6 +533,25 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!1 &6948126354371676856 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
+  m_PrefabInstance: {fileID: 7831159189452339177}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6508256520441405648
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6948126354371676856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95a0360c384fe40f592db7e9cebfc116, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerIK
+  rightHandTarget: {fileID: 7342294738517553906}
+  ikWeight: 0.528
 --- !u!4 &7721250826989785090 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 19e2d02aead5141bcb364bb9f7c0ea4a, type: 3}
