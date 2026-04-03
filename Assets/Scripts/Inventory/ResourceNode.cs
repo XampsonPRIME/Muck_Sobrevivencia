@@ -12,6 +12,7 @@ public class ResourceNode : MonoBehaviour
 
     public int minDrop = 1;
     public int maxDrop = 5;
+    public Item itemData;
 
     public ToolType requiredTool = ToolType.None;
 
@@ -69,21 +70,10 @@ public class ResourceNode : MonoBehaviour
 
     void DropResource(Inventory inventory, Hotbar hotbar)
     {
-        if (inventory == null || hotbar == null)
-        {
-            Debug.LogError("Inventory ou Hotbar NULL!");
-            return;
-        }
-
         int amount = Random.Range(minDrop, maxDrop + 1);
 
-        for (int i = 0; i < amount; i++)
-        {
-            inventory.AddItem(itemName);
-            hotbar.AddItem(itemName, icon);
-        }
+        inventory.AddItem(itemName, amount, itemData);
 
-        // 🔥 mensagem de loot (opcional)
         if (MessageSystem.Instance != null)
         {
             MessageSystem.Instance.ShowMessage($"+{amount} {itemName}");

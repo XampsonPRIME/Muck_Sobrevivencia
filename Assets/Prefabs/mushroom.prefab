@@ -121,9 +121,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7268848671727734337}
-  - component: {fileID: 8078496968023989759}
   - component: {fileID: 7061592873722453952}
   - component: {fileID: -2417998230779488468}
+  - component: {fileID: 1933423102441146631}
+  - component: {fileID: -4891758293517597708}
   m_Layer: 0
   m_Name: mushroom
   m_TagString: Untagged
@@ -148,23 +149,6 @@ Transform:
   - {fileID: 3967311577770656353}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8078496968023989759
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3201780949669350080}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bdf76ccc4082a134a8dd2206da289a08, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Item
-  itemName: Cogumelo
-  icon: {fileID: 21300000, guid: 4eda54ee62c8d014084871b4232c5bfb, type: 3}
-  itemType: 0
-  toolType: 0
-  toolDamage: 1
 --- !u!23 &7061592873722453952
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -235,6 +219,43 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0.27, z: 0}
+--- !u!114 &1933423102441146631
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3201780949669350080}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bdf76ccc4082a134a8dd2206da289a08, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Item
+  itemName: cogumelo
+  icon: {fileID: 21300000, guid: 4eda54ee62c8d014084871b4232c5bfb, type: 3}
+  itemType: 0
+  toolType: 0
+  toolDamage: 1
+--- !u!114 &-4891758293517597708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3201780949669350080}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d335ae19af134e5796b27f798e1429f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ResourceNode
+  itemName: cogumelo
+  icon: {fileID: 21300000, guid: 4eda54ee62c8d014084871b4232c5bfb, type: 3}
+  maxHealth: 1
+  hitEffect: {fileID: 0}
+  minDrop: 1
+  maxDrop: 1
+  itemData: {fileID: 1933423102441146631}
+  requiredTool: 0
 --- !u!1 &7378055843066023324
 GameObject:
   m_ObjectHideFlags: 0

@@ -4,20 +4,20 @@ public class Hotbar : MonoBehaviour
 {
     public HotbarSlot[] slots;
 
-    public void AddItem(string itemName, Sprite icon, Item itemData = null)
+    public void AddItem(string itemName, Sprite icon, Item itemData)
     {
-        // empilhar
-        foreach (HotbarSlot slot in slots)
+        // 🔥 NÃO DUPLICAR
+        foreach (var slot in slots)
         {
-            if (!slot.IsEmpty() && slot.CanStack(itemName))
+            if (slot.itemData == itemData)
             {
-                slot.AddItem(itemName, icon, itemData);
+                Debug.Log("Item já está na hotbar!");
                 return;
             }
         }
 
-        // slot vazio
-        foreach (HotbarSlot slot in slots)
+        // 🔥 encontra slot vazio
+        foreach (var slot in slots)
         {
             if (slot.IsEmpty())
             {

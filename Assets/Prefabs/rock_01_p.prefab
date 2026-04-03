@@ -119,4 +119,5 @@ MonoBehaviour:
   hitEffect: {fileID: 0}
   minDrop: 1
   maxDrop: 5
+  itemData: {fileID: 7670054342815085070, guid: 27d9fb52f1ac842fd8f9bdbcb3c48648, type: 3}
   requiredTool: 0
