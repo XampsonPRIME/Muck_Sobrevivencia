@@ -18,10 +18,13 @@ public class PlayerInteraction : MonoBehaviour
 
     bool interactPressed;
     bool attackHeld;
+    PlayerIK playerIK;
 
-    // 🔥 ferramenta atual
     public ToolType currentTool = ToolType.None;
     public int toolDamage = 1;
+
+    [Header("Referências")]
+    public Transform cameraHolder;
 
     [Header("Mão")]
     public Transform handPoint;
@@ -49,13 +52,15 @@ public class PlayerInteraction : MonoBehaviour
 
     void Start()
     {
+        playerIK = GetComponent<PlayerIK>();
+
         if (inventory == null)
             inventory = FindFirstObjectByType<Inventory>();
 
         if (hotbar == null)
             hotbar = FindFirstObjectByType<Hotbar>();
 
-        // 🔥 itens iniciais
+        // itens iniciais
         if (startWithAxe && axePrefab != null)
         {
             Item axe = axePrefab.GetComponent<Item>();
@@ -70,7 +75,6 @@ public class PlayerInteraction : MonoBehaviour
             hotbar.AddItem(pickaxe.itemName, pickaxe.icon, pickaxe);
         }
 
-        // 🔥 inicia selecionando slot 1
         SelectSlot(0);
     }
 
@@ -79,13 +83,24 @@ public class PlayerInteraction : MonoBehaviour
         HandleHotbarSelection();
         HandleItemUse();
 
-        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
+        // 🔥 RAY PROFISSIONAL (FUNCIONA FPS + TPS)
+        Vector3 origin = transform.position + Vector3.up * 1.5f;
+        Vector3 direction = cameraHolder.forward;
+
+        // pequeno offset pra evitar pegar chão
+        origin += direction * 0.3f;
+
+        Ray ray = new Ray(origin, direction);
         RaycastHit hit;
+
+        Debug.DrawRay(origin, direction * interactDistance, Color.red);
 
         if (!Physics.Raycast(ray, out hit, interactDistance))
             return;
 
-        // 🔥 detectar item
+        // =========================
+        // 📦 ITEM
+        // =========================
         Item item = hit.collider.GetComponent<Item>() ??
                     hit.collider.GetComponentInParent<Item>() ??
                     hit.collider.GetComponentInChildren<Item>();
@@ -100,7 +115,9 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        // 🔥 bater (SÓ se não estiver usando item)
+        // =========================
+        // ⛏️ BATER
+        // =========================
         if (attackHeld && Time.time >= nextHitTime && useTimer <= 0f)
         {
             TryHit(hit);
@@ -141,12 +158,8 @@ public class PlayerInteraction : MonoBehaviour
         foreach (HotbarSlot slot in hotbar.slots)
         {
             if (slot.isSelected)
-            {
-                Debug.Log("Selecionado: " + slot.itemType + " - " + slot.toolType);
                 return slot;
-            }
         }
-
         return null;
     }
 
@@ -162,9 +175,8 @@ public class PlayerInteraction : MonoBehaviour
 
             if (player != null && player.currentHealth < player.maxHealth)
             {
-               player.Heal(20f);
+                player.Heal(20);
                 slot.RemoveOne();
-
                 Debug.Log("🍄 Comeu cogumelo!");
             }
         }
@@ -186,6 +198,16 @@ public class PlayerInteraction : MonoBehaviour
     // =========================
     void TryHit(RaycastHit hit)
     {
+
+        // 🔥 ANIMAÇÃO
+        Animator anim = GetComponentInChildren<Animator>();
+        if (anim != null)
+        {
+            anim.ResetTrigger("Chop");
+            anim.SetTrigger("Chop");
+        }
+
+
         ResourceNode resource = hit.collider.GetComponent<ResourceNode>() ??
                                 hit.collider.GetComponentInParent<ResourceNode>();
 
@@ -215,21 +237,38 @@ public class PlayerInteraction : MonoBehaviour
         if (hotbar == null || hotbar.slots.Length <= index)
             return;
 
-        // 🔥 limpa seleção anterior
         foreach (HotbarSlot s in hotbar.slots)
             s.isSelected = false;
 
         HotbarSlot slot = hotbar.slots[index];
         slot.isSelected = true;
 
-        Debug.Log("Selecionou slot: " + index + " | Tipo: " + slot.itemType);
-
+        // 🔥 SE SLOT VAZIO → REMOVE FERRAMENTA
         if (slot.IsEmpty())
+        {
+            UnequipTool();
             return;
+        }
 
         if (slot.itemType == ItemType.Tool)
         {
             EquipTool(slot.toolType, slot.toolDamage);
+        }
+        else
+        {
+            // 🔥 se for recurso → também remove ferramenta
+            UnequipTool();
+        }
+    }
+
+    void UnequipTool()
+    {
+        currentTool = ToolType.None;
+
+        if (currentToolObject != null)
+        {
+            Destroy(currentToolObject);
+            currentToolObject = null;
         }
     }
 
@@ -249,24 +288,28 @@ public class PlayerInteraction : MonoBehaviour
         if (type == ToolType.Axe) prefab = axePrefab;
         if (type == ToolType.Pickaxe) prefab = pickaxePrefab;
 
-        if (prefab != null && handPoint != null)
+        if (prefab == null) return;
+
+        // 🔥 pega a mão REAL do rig
+        Animator anim = GetComponentInChildren<Animator>();
+        Transform hand = anim.GetBoneTransform(HumanBodyBones.RightHand);
+
+        if (hand == null)
         {
-            currentToolObject = Instantiate(prefab, handPoint);
-
-            ToolView view = currentToolObject.GetComponent<ToolView>();
-
-            if (view != null)
-            {
-                currentToolObject.transform.localPosition = view.position;
-                currentToolObject.transform.localRotation = Quaternion.Euler(view.rotation);
-            }
-            else
-            {
-                currentToolObject.transform.localPosition = new Vector3(0.2f, -0.2f, 0.4f);
-                currentToolObject.transform.localRotation = Quaternion.Euler(0, 90, 0);
-            }
+            Debug.LogError("❌ Mão não encontrada!");
+            return;
         }
 
-        Debug.Log("Equipou: " + type);
+        // 🔥 instancia direto na mão
+        currentToolObject = Instantiate(prefab, hand);
+
+        // 🔥 reset base
+        currentToolObject.transform.localPosition = Vector3.zero;
+        currentToolObject.transform.localRotation = Quaternion.identity;
+
+        // 🔥 ajuste fino (IMPORTANTE)
+        currentToolObject.transform.localPosition = new Vector3(-0.056f, 0.064f, 0.001f);
+        currentToolObject.transform.localRotation = Quaternion.Euler(0.027f, -0.024f, 0.14f);
     }
+
 }
