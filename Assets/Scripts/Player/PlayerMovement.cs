@@ -29,6 +29,13 @@ public class PlayerMovement : MonoBehaviour
     public float maxHealth = 100f;
     public float currentHealth;
 
+    [Header("🍗 Fome")]
+    public float maxHunger = 100f;
+    public float currentHunger;
+
+    public float hungerDrain = 5f; // por segundo
+    public float hungerDamageRate = 10f; // dano quando zerado
+
     CharacterController controller;
     PlayerControls controls;
     Animator anim;
@@ -47,6 +54,10 @@ public class PlayerMovement : MonoBehaviour
         controller = GetComponent<CharacterController>();
         controls = new PlayerControls();
         anim = GetComponentInChildren<Animator>();
+
+        currentStamina = maxStamina;
+        currentHealth = maxHealth;
+        currentHunger = maxHunger;
 
         playerModel = anim.gameObject;
 
@@ -67,8 +78,6 @@ public class PlayerMovement : MonoBehaviour
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
-
-        currentStamina = maxStamina;
     }
 
     void Update()
@@ -83,6 +92,50 @@ public class PlayerMovement : MonoBehaviour
         Move();
         Look();
         HandleModelVisibility();
+        HandleHunger();
+
+        // 🔥 TESTE DE DANO
+        if (Keyboard.current.hKey.wasPressedThisFrame)
+        {
+            TakeDamage(10f);
+        }
+    }
+    
+    void HandleHunger()
+    {
+        // diminui fome
+        currentHunger -= hungerDrain * Time.deltaTime;
+        currentHunger = Mathf.Clamp(currentHunger, 0, maxHunger);
+
+        // se zerou → perde vida
+        if (currentHunger <= 0)
+        {
+            TakeDamage(hungerDamageRate * Time.deltaTime);
+        }
+    }
+
+    public void Heal(float amount)
+    {
+        currentHealth += amount;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+
+        Debug.Log("Curou: " + currentHealth);
+    }
+
+    public void TakeDamage(float amount)
+    {
+        currentHealth -= amount;
+
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+            Die();
+        }
+    }
+
+    void Die()
+    {
+        Debug.Log("Player morreu");
     }
 
     void HandleModelVisibility()
@@ -167,41 +220,6 @@ public class PlayerMovement : MonoBehaviour
             animSpeed = moveInput.magnitude * 0.5f; // WALK
 
         anim.SetFloat("Speed", animSpeed);
-    }
-
-    public void Heal(int amount)
-    {
-        currentHealth += amount;
-        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
-
-        Debug.Log("❤️ Vida: " + currentHealth);
-    }
-    
-     public void TakeDamage(int amount)
-    {
-        currentHealth -= amount;
-        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
-
-        Debug.Log("❤️ Vida: " + currentHealth);
-
-        if (currentHealth <= 0)
-        {
-            Die();
-        }
-    }
-
-    void Die()
-    {
-        Debug.Log("Você morreu!");
-        // Aqui você pode adicionar lógica de respawn ou game over
-    }
-
-     public void RestoreStamina(int amount)
-    {
-        currentStamina += amount;
-        currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
-
-        Debug.Log("⚡ Stamina: " + currentStamina);
     }
 
     // 🎥 LOOK

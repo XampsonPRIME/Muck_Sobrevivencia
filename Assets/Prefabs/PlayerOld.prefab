@@ -360,6 +360,10 @@ MonoBehaviour:
   staminaRecovery: 15
   maxHealth: 100
   currentHealth: 0
+  maxHunger: 100
+  currentHunger: 0
+  hungerDrain: 0.2
+  hungerDamageRate: 5
 --- !u!143 &9221579800806840827
 CharacterController:
   m_ObjectHideFlags: 0
@@ -417,7 +421,6 @@ MonoBehaviour:
   hitRate: 0.5
   currentTool: 1
   toolDamage: 1
-  cameraHolder: {fileID: 7095383786988751147}
   handPoint: {fileID: 7342294738517553906}
   axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
   pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
