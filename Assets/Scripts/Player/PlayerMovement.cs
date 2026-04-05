@@ -132,6 +132,12 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    public void RestoreHunger(float amount)
+    {
+        currentHunger += amount;
+        currentHunger = Mathf.Clamp(currentHunger, 0, maxHunger);
+    }
+
     public void Heal(float amount)
     {
         currentHealth += amount;

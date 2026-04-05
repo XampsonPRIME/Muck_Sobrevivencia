@@ -10,15 +10,23 @@ public class HotbarSlot : MonoBehaviour
     string itemName;
     int amount;
 
-    // 🔥 DADOS DO ITEM
     public Item itemData;
-
     public ItemType itemType;
     public ToolType toolType;
     public int toolDamage;
-
-    // ✅ SELEÇÃO (ESSENCIAL)
     public bool isSelected = false;
+
+    public bool isConsumable;
+    public float healthRestore;
+    public float hungerRestore;
+    public float consumeHoldTime;
+    public string prefabName;
+    public Vector3 handLocalPosition;
+    public Vector3 handLocalEulerAngles;
+    public Vector3 handLocalScale = Vector3.one;
+
+    public string ItemName => itemName;
+    public int Amount => amount;
 
     public bool IsEmpty()
     {
@@ -30,7 +38,7 @@ public class HotbarSlot : MonoBehaviour
         return itemName == name;
     }
 
-    public void AddItem(string name, Sprite sprite, Item itemData = null)
+    public void AddItem(string name, Sprite sprite, Item sourceItem = null)
     {
         if (IsEmpty())
         {
@@ -38,13 +46,32 @@ public class HotbarSlot : MonoBehaviour
             icon.sprite = sprite;
             icon.enabled = true;
 
-            this.itemData = itemData;
+            itemData = sourceItem;
+            itemType = sourceItem != null ? sourceItem.itemType : ItemType.Resource;
+            toolType = sourceItem != null ? sourceItem.toolType : ToolType.None;
+            toolDamage = sourceItem != null ? sourceItem.toolDamage : 0;
+            prefabName = sourceItem != null ? sourceItem.gameObject.name : "";
+            handLocalScale = Vector3.one;
 
-            if (itemData != null)
+            ConsumableItem consumable = sourceItem != null ? sourceItem.GetComponent<ConsumableItem>() : null;
+            if (consumable != null)
             {
-                itemType = itemData.itemType;
-                toolType = itemData.toolType;
-                toolDamage = itemData.toolDamage;
+                isConsumable = true;
+                healthRestore = consumable.healthRestore;
+                hungerRestore = consumable.hungerRestore;
+                consumeHoldTime = consumable.consumeHoldTime;
+                handLocalPosition = consumable.handLocalPosition;
+                handLocalEulerAngles = consumable.handLocalEulerAngles;
+                handLocalScale = consumable.handLocalScale;
+            }
+            else
+            {
+                isConsumable = false;
+                healthRestore = 0f;
+                hungerRestore = 0f;
+                consumeHoldTime = 0f;
+                handLocalPosition = Vector3.zero;
+                handLocalEulerAngles = Vector3.zero;
             }
         }
 
@@ -52,37 +79,38 @@ public class HotbarSlot : MonoBehaviour
         UpdateUI();
     }
 
-    // 🔥 REMOVER ITEM (ex: comer cogumelo)
     public void RemoveOne()
     {
         amount--;
 
         if (amount <= 0)
-        {
             ClearSlot();
-        }
         else
-        {
             UpdateUI();
-        }
     }
 
-    void ClearSlot()
+    public void ClearSlot()
     {
         itemName = "";
         amount = 0;
 
         icon.sprite = null;
         icon.enabled = false;
-
         amountText.text = "";
 
         itemData = null;
         itemType = ItemType.Resource;
         toolType = ToolType.None;
         toolDamage = 0;
-
-        isSelected = false; // 👈 IMPORTANTE
+        isConsumable = false;
+        healthRestore = 0f;
+        hungerRestore = 0f;
+        consumeHoldTime = 0f;
+        prefabName = "";
+        handLocalPosition = Vector3.zero;
+        handLocalEulerAngles = Vector3.zero;
+        handLocalScale = Vector3.one;
+        isSelected = false;
     }
 
     void UpdateUI()
