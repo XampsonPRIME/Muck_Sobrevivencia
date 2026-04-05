@@ -14,6 +14,7 @@ public class PlayerInteraction : MonoBehaviour
 
     PlayerControls controls;
     InputAction[] hotbarActions;
+    PlayerMovement playerMovement;
 
     public ToolType currentTool = ToolType.None;
     public int toolDamage = 1;
@@ -22,7 +23,9 @@ public class PlayerInteraction : MonoBehaviour
     public GameObject axePrefab;
     public GameObject pickaxePrefab;
 
-    GameObject currentToolObject;
+    GameObject currentEquippedObject;
+    HotbarSlot selectedSlot;
+    float consumeTimer;
 
     [Header("Start Item")]
     public bool startWithAxe = true;
@@ -59,18 +62,16 @@ public class PlayerInteraction : MonoBehaviour
 
     void Start()
     {
+        playerMovement = GetComponent<PlayerMovement>();
+
         if (inventory == null)
             inventory = FindFirstObjectByType<Inventory>();
 
         if (hotbar == null)
             hotbar = FindFirstObjectByType<Hotbar>();
 
-        if (cameraHolder == null)
-        {
-            PlayerMovement movement = GetComponent<PlayerMovement>();
-            if (movement != null)
-                cameraHolder = movement.cameraHolder;
-        }
+        if (cameraHolder == null && playerMovement != null)
+            cameraHolder = playerMovement.cameraHolder;
 
         if (cameraHolder == null && Camera.main != null)
             cameraHolder = Camera.main.transform;
@@ -99,13 +100,69 @@ public class PlayerInteraction : MonoBehaviour
         if (GameState.IsInventoryOpen)
             return;
 
+        HandleConsumableUse();
+
+        if (selectedSlot != null && selectedSlot.isConsumable)
+            return;
+
         if (controls.Player.Attack.WasPressedThisFrame())
             Attack();
 
-        bool interactPressed = controls.Player.Interact.WasPressedThisFrame();
-        if (!interactPressed)
+        if (controls.Player.Interact.WasPressedThisFrame())
+            TryPickupFromRay();
+    }
+
+    void HandleConsumableUse()
+    {
+        bool isHoldingAttack = controls.Player.Attack.IsPressed();
+
+        if (selectedSlot == null || selectedSlot.IsEmpty() || !selectedSlot.isConsumable)
+        {
+            consumeTimer = 0f;
+            return;
+        }
+
+        if (!isHoldingAttack)
+        {
+            consumeTimer = 0f;
+            return;
+        }
+
+        float consumeDuration = Mathf.Max(0.15f, selectedSlot.consumeHoldTime);
+        consumeTimer += Time.deltaTime;
+
+        if (consumeTimer < consumeDuration)
             return;
 
+        consumeTimer = 0f;
+        ConsumeSelectedItem();
+    }
+
+    void ConsumeSelectedItem()
+    {
+        if (selectedSlot == null || selectedSlot.IsEmpty() || !selectedSlot.isConsumable)
+            return;
+
+        string consumedItemName = selectedSlot.ItemName;
+
+        if (playerMovement != null)
+        {
+            playerMovement.Heal(selectedSlot.healthRestore);
+            playerMovement.RestoreHunger(selectedSlot.hungerRestore);
+        }
+
+        inventory?.RemoveItem(selectedSlot.ItemName, 1);
+        selectedSlot.RemoveOne();
+
+        if (selectedSlot.IsEmpty())
+            UnequipCurrentItem();
+
+        if (MessageSystem.Instance != null)
+            MessageSystem.Instance.ShowMessage($"Consumiu {consumedItemName}");
+    }
+
+    void TryPickupFromRay()
+    {
         if (!TryGetInteractionRay(out Ray ray))
             return;
 
@@ -126,7 +183,7 @@ public class PlayerInteraction : MonoBehaviour
 
         inventory.AddItem(item.itemName, 1, item);
 
-        if (item.itemType == ItemType.Tool)
+        if (item.itemType == ItemType.Tool || item.itemType == ItemType.Consumable)
             hotbar.AddItem(item.itemName, item.icon, item);
 
         Destroy(item.gameObject);
@@ -201,32 +258,43 @@ public class PlayerInteraction : MonoBehaviour
         if (hotbar == null || hotbar.slots.Length <= index)
             return;
 
-        foreach (HotbarSlot s in hotbar.slots)
-            s.isSelected = false;
+        foreach (HotbarSlot slot in hotbar.slots)
+            slot.isSelected = false;
 
-        HotbarSlot slot = hotbar.slots[index];
-        slot.isSelected = true;
+        selectedSlot = hotbar.slots[index];
+        selectedSlot.isSelected = true;
+        consumeTimer = 0f;
 
-        if (slot.IsEmpty())
+        if (selectedSlot.IsEmpty())
         {
-            UnequipTool();
+            UnequipCurrentItem();
             return;
         }
 
-        if (slot.itemType == ItemType.Tool)
-            EquipTool(slot.toolType, slot.toolDamage);
-        else
-            UnequipTool();
+        if (selectedSlot.itemType == ItemType.Tool)
+        {
+            EquipTool(selectedSlot.toolType, selectedSlot.toolDamage);
+            return;
+        }
+
+        if (selectedSlot.itemType == ItemType.Consumable)
+        {
+            EquipConsumable(selectedSlot);
+            return;
+        }
+
+        UnequipCurrentItem();
     }
 
-    void UnequipTool()
+    void UnequipCurrentItem()
     {
         currentTool = ToolType.None;
+        consumeTimer = 0f;
 
-        if (currentToolObject != null)
+        if (currentEquippedObject != null)
         {
-            Destroy(currentToolObject);
-            currentToolObject = null;
+            Destroy(currentEquippedObject);
+            currentEquippedObject = null;
         }
     }
 
@@ -234,9 +302,7 @@ public class PlayerInteraction : MonoBehaviour
     {
         currentTool = type;
         toolDamage = damage;
-
-        if (currentToolObject != null)
-            Destroy(currentToolObject);
+        consumeTimer = 0f;
 
         GameObject prefab = null;
 
@@ -244,7 +310,70 @@ public class PlayerInteraction : MonoBehaviour
         if (type == ToolType.Pickaxe) prefab = pickaxePrefab;
 
         if (prefab == null)
+        {
+            UnequipCurrentItem();
             return;
+        }
+
+        EquipObjectInHand(prefab, Vector3.zero, Vector3.zero, Vector3.one, false);
+    }
+
+    void EquipConsumable(HotbarSlot slot)
+    {
+        currentTool = ToolType.None;
+        toolDamage = 0;
+
+        GameObject sourcePrefab = FindConsumablePrefab(slot);
+        if (sourcePrefab == null)
+        {
+            UnequipCurrentItem();
+            return;
+        }
+
+        EquipObjectInHand(
+            sourcePrefab,
+            slot.handLocalPosition,
+            slot.handLocalEulerAngles,
+            slot.handLocalScale,
+            true
+        );
+    }
+
+    GameObject FindConsumablePrefab(HotbarSlot slot)
+    {
+        if (slot.itemData != null)
+            return slot.itemData.gameObject;
+
+        GameObject[] prefabs = Resources.FindObjectsOfTypeAll<GameObject>();
+
+        if (!string.IsNullOrWhiteSpace(slot.prefabName))
+        {
+            foreach (GameObject prefab in prefabs)
+            {
+                if (prefab.name == slot.prefabName && prefab.GetComponent<Item>() != null)
+                    return prefab;
+            }
+        }
+
+        foreach (GameObject prefab in prefabs)
+        {
+            Item item = prefab.GetComponent<Item>();
+            if (item != null && item.itemName == slot.ItemName)
+                return prefab;
+        }
+
+        return null;
+    }
+
+    void EquipObjectInHand(
+        GameObject prefab,
+        Vector3 localPosition,
+        Vector3 localEulerAngles,
+        Vector3 localScale,
+        bool stripGameplayComponents)
+    {
+        if (currentEquippedObject != null)
+            Destroy(currentEquippedObject);
 
         Animator anim = GetPlayerAnimator();
         if (anim == null)
@@ -254,16 +383,34 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         Transform hand = anim.GetBoneTransform(HumanBodyBones.RightHand);
-
         if (hand == null)
         {
             Debug.LogError("Mao nao encontrada!");
             return;
         }
 
-        currentToolObject = Instantiate(prefab, hand);
-        currentToolObject.transform.localPosition = new Vector3(-0.056f, 0.064f, 0.001f);
-        currentToolObject.transform.localRotation = Quaternion.Euler(0.027f, -0.024f, 0.14f);
+        currentEquippedObject = Instantiate(prefab, hand);
+        currentEquippedObject.transform.localPosition = localPosition;
+        currentEquippedObject.transform.localRotation = Quaternion.Euler(localEulerAngles);
+        currentEquippedObject.transform.localScale = localScale;
+
+        if (!stripGameplayComponents)
+            return;
+
+        foreach (Collider col in currentEquippedObject.GetComponentsInChildren<Collider>(true))
+            Destroy(col);
+
+        foreach (Rigidbody rb in currentEquippedObject.GetComponentsInChildren<Rigidbody>(true))
+            Destroy(rb);
+
+        foreach (Item item in currentEquippedObject.GetComponentsInChildren<Item>(true))
+            Destroy(item);
+
+        foreach (ResourceNode node in currentEquippedObject.GetComponentsInChildren<ResourceNode>(true))
+            Destroy(node);
+
+        foreach (ConsumableItem consumable in currentEquippedObject.GetComponentsInChildren<ConsumableItem>(true))
+            Destroy(consumable);
     }
 
     Animator GetPlayerAnimator()

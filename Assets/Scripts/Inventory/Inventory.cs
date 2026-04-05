@@ -23,11 +23,12 @@ public class Inventory : MonoBehaviour
     }
 
     // 🔥 NOVO
-    public void RemoveItem(string itemName, int amount = 1)
+    public bool RemoveItem(string itemName, int amount = 1)
     {
         InventoryItem existing = items.Find(i => i.itemName == itemName);
 
-        if (existing == null) return;
+        if (existing == null)
+            return false;
 
         existing.quantity -= amount;
 
@@ -35,6 +36,8 @@ public class Inventory : MonoBehaviour
         {
             items.Remove(existing);
         }
+
+        return true;
     }
 
     public InventoryItem GetItem(string itemName)

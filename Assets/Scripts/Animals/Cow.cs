@@ -335,10 +335,21 @@ public class Cow : MonoBehaviour
             else
             {
                 item.itemName = "Carne";
-                item.itemType = ItemType.Resource;
+                item.itemType = ItemType.Consumable;
                 item.toolType = ToolType.None;
                 item.toolDamage = 0;
             }
+
+            ConsumableItem consumable = drop.GetComponent<ConsumableItem>();
+            if (consumable == null)
+                consumable = drop.AddComponent<ConsumableItem>();
+
+            consumable.healthRestore = 20f;
+            consumable.hungerRestore = 35f;
+            consumable.consumeHoldTime = 1.2f;
+            consumable.handLocalPosition = new Vector3(0.06f, 0.03f, 0.12f);
+            consumable.handLocalEulerAngles = new Vector3(0f, -20f, 65f);
+            consumable.handLocalScale = new Vector3(1.4f, 1.4f, 1.4f);
         }
     }
 

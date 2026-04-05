@@ -125,6 +125,7 @@ GameObject:
   - component: {fileID: -2417998230779488468}
   - component: {fileID: 1933423102441146631}
   - component: {fileID: -4891758293517597708}
+  - component: {fileID: 2057700143681921471}
   m_Layer: 0
   m_Name: mushroom
   m_TagString: Untagged
@@ -233,7 +234,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Item
   itemName: cogumelo
   icon: {fileID: 21300000, guid: 4eda54ee62c8d014084871b4232c5bfb, type: 3}
-  itemType: 0
+  itemType: 2
   toolType: 0
   toolDamage: 1
 --- !u!114 &-4891758293517597708
@@ -256,6 +257,24 @@ MonoBehaviour:
   maxDrop: 1
   itemData: {fileID: 1933423102441146631}
   requiredTool: 0
+--- !u!114 &2057700143681921471
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3201780949669350080}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6e4bfb278f2b40c0b4d2d5c51e2a0e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ConsumableItem
+  healthRestore: 6
+  hungerRestore: 12
+  consumeHoldTime: 0.8
+  handLocalPosition: {x: 0.08, y: 0.02, z: 0.12}
+  handLocalEulerAngles: {x: 15, y: 0, z: 90}
+  handLocalScale: {x: 1, y: 1, z: 1}
 --- !u!1 &7378055843066023324
 GameObject:
   m_ObjectHideFlags: 0
