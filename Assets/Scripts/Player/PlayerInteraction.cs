@@ -135,6 +135,15 @@ public class PlayerInteraction : MonoBehaviour
             anim.SetTrigger("Chop");
         }
 
+        Cow cow = hit.collider.GetComponent<Cow>() ??
+                  hit.collider.GetComponentInParent<Cow>();
+
+        if (cow != null)
+        {
+            cow.Hit(toolDamage);
+            return;
+        }
+
         ResourceNode resource = hit.collider.GetComponent<ResourceNode>() ??
                                 hit.collider.GetComponentInParent<ResourceNode>();
 
