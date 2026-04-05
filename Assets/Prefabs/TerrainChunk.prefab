@@ -153,6 +153,18 @@ MonoBehaviour:
   rockSmallPrefab: {fileID: 4611803431950446891, guid: d1e087c0d2b404e379ca3a5b0b8c91c9, type: 3}
   rockMediumPrefab: {fileID: 687441992539456540, guid: 79412605d3b7c40f4a9b20e5da838760, type: 3}
   rockLargePrefab: {fileID: 3923582216426070236, guid: 47f48952e3e114c95a12366e66c84319, type: 3}
+  cowPrefab: {fileID: 4473973017088153482, guid: 17c490e9a89ec31409947054bcb0c4a9, type: 3}
+  cowMeatItem: {fileID: 675325374166930406, guid: 99a57057cca3fea4e953c0c6ac0e7fcb, type: 3}
+  cowMeatDropPrefab: {fileID: 6861233700314253629, guid: 99a57057cca3fea4e953c0c6ac0e7fcb, type: 3}
+  cowBodyMaterial: {fileID: 0}
+  cowSpotMaterial: {fileID: 0}
+  cowHoofMaterial: {fileID: 0}
+  cowGroupChance: 0.08
+  maxCowGroupsPerChunk: 1
+  minDistanceBetweenCowGroups: 2
+  cowSpawnRadius: 5
+  cowRespawnDelay: 25
+  cowWanderRadius: 8
   terrainMaterial: {fileID: 2100000, guid: 844e863c162944f55903c7e958ca6bb7, type: 2}
   safeRadius: 12
   forwardSafeDistance: 8

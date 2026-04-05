@@ -44,6 +44,20 @@ public class TerrainChunk : MonoBehaviour
     public GameObject rockMediumPrefab;
     public GameObject rockLargePrefab;
 
+    [Header("Animais")]
+    public GameObject cowPrefab;
+    public Item cowMeatItem;
+    public GameObject cowMeatDropPrefab;
+    public Material cowBodyMaterial;
+    public Material cowSpotMaterial;
+    public Material cowHoofMaterial;
+    public float cowGroupChance = 0.35f;
+    public int maxCowGroupsPerChunk = 1;
+    public float minDistanceBetweenCowGroups = 18f;
+    public float cowSpawnRadius = 5f;
+    public float cowRespawnDelay = 25f;
+    public float cowWanderRadius = 8f;
+
 
     [Header("Material")]
     public Material terrainMaterial;
@@ -62,6 +76,7 @@ public class TerrainChunk : MonoBehaviour
     Vector2[] uvs;
 
     List<Vector3> usedPositions = new List<Vector3>();
+    List<Vector3> cowGroupPositions = new List<Vector3>();
 
     public void Generate(Vector2 offset)
     {
@@ -120,6 +135,7 @@ public class TerrainChunk : MonoBehaviour
         BuildMesh();
         SpawnVegetation(offset);
         SpawnRockClusters(offset);
+        SpawnCowGroups(offset);
     }
 
     BiomeType GetBiome(Vector2 point)
@@ -422,6 +438,86 @@ public class TerrainChunk : MonoBehaviour
                 rockCount++;
             }
         }
+    }
+
+    void SpawnCowGroups(Vector2 offset)
+    {
+        int desiredGroups = Mathf.Max(0, maxCowGroupsPerChunk);
+
+        if (cowPrefab == null || desiredGroups == 0)
+            return;
+
+        cowGroupPositions.Clear();
+        List<Vector3> validPositions = new List<Vector3>();
+
+        for (int i = 0; i < vertices.Length; i += 18)
+        {
+            Vector3 localPos = vertices[i];
+            Vector3 worldPos = localPos + transform.position;
+
+            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 8f)
+                continue;
+
+            if (mesh.normals[i].y < 0.92f)
+                continue;
+
+            Vector2 point = new Vector2(localPos.x + offset.x, localPos.z + offset.y);
+            if (GetBiome(point) != BiomeType.Forest)
+                continue;
+
+            if (IsTooClose(worldPos))
+                continue;
+
+            validPositions.Add(worldPos);
+        }
+
+        int groupsSpawned = 0;
+
+        while (groupsSpawned < desiredGroups && validPositions.Count > 0)
+        {
+            if (Random.value > cowGroupChance)
+                break;
+
+            int index = Random.Range(0, validPositions.Count);
+            Vector3 chosenPos = validPositions[index];
+
+            CreateCowSpawnPoint(chosenPos);
+            cowGroupPositions.Add(chosenPos);
+            usedPositions.Add(chosenPos);
+            groupsSpawned++;
+
+            validPositions.RemoveAll(pos => Vector3.Distance(pos, chosenPos) < minDistanceBetweenCowGroups);
+        }
+    }
+
+    bool IsNearExistingCowGroup(Vector3 pos)
+    {
+        foreach (Vector3 existing in cowGroupPositions)
+        {
+            if (Vector3.Distance(existing, pos) < minDistanceBetweenCowGroups)
+                return true;
+        }
+
+        return false;
+    }
+
+    void CreateCowSpawnPoint(Vector3 worldPos)
+    {
+        GameObject spawnObject = new GameObject("Cow Spawn Point");
+        spawnObject.transform.SetParent(transform, true);
+        spawnObject.transform.position = worldPos;
+
+        CowSpawnPoint spawnPoint = spawnObject.AddComponent<CowSpawnPoint>();
+        spawnPoint.cowPrefab = cowPrefab;
+        spawnPoint.cowsPerGroup = 2;
+        spawnPoint.spawnRadius = cowSpawnRadius;
+        spawnPoint.respawnDelay = cowRespawnDelay;
+        spawnPoint.cowWanderRadius = cowWanderRadius;
+        spawnPoint.meatItemData = cowMeatItem;
+        spawnPoint.meatDropPrefab = cowMeatDropPrefab;
+        spawnPoint.bodyMaterial = cowBodyMaterial;
+        spawnPoint.spotMaterial = cowSpotMaterial;
+        spawnPoint.hoofMaterial = cowHoofMaterial;
     }
 
     GameObject GetRandomRock()
