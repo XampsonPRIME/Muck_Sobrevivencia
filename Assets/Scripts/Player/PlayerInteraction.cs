@@ -13,10 +13,8 @@ public class PlayerInteraction : MonoBehaviour
     float nextHitTime = 0f;
 
     PlayerControls controls;
+    InputAction[] hotbarActions;
 
-    bool interactPressed;
-
-    // ferramenta atual
     public ToolType currentTool = ToolType.None;
     public int toolDamage = 1;
 
@@ -33,13 +31,31 @@ public class PlayerInteraction : MonoBehaviour
     void Awake()
     {
         controls = new PlayerControls();
-
-        controls.Player.Interact.performed += ctx => interactPressed = true;
-        controls.Player.Attack.performed += ctx => Attack();
+        hotbarActions = new[]
+        {
+            new InputAction("Hotbar1", binding: "<Keyboard>/1"),
+            new InputAction("Hotbar2", binding: "<Keyboard>/2"),
+            new InputAction("Hotbar3", binding: "<Keyboard>/3"),
+            new InputAction("Hotbar4", binding: "<Keyboard>/4"),
+            new InputAction("Hotbar5", binding: "<Keyboard>/5")
+        };
     }
 
-    void OnEnable() => controls.Enable();
-    void OnDisable() => controls.Disable();
+    void OnEnable()
+    {
+        controls.Enable();
+
+        foreach (InputAction action in hotbarActions)
+            action.Enable();
+    }
+
+    void OnDisable()
+    {
+        foreach (InputAction action in hotbarActions)
+            action.Disable();
+
+        controls.Disable();
+    }
 
     void Start()
     {
@@ -79,24 +95,29 @@ public class PlayerInteraction : MonoBehaviour
     void Update()
     {
         HandleHotbarSelection();
-        if (GameState.IsInventoryOpen) return;
+
+        if (GameState.IsInventoryOpen)
+            return;
+
+        if (controls.Player.Attack.WasPressedThisFrame())
+            Attack();
+
+        bool interactPressed = controls.Player.Interact.WasPressedThisFrame();
+        if (!interactPressed)
+            return;
+
         if (!TryGetInteractionRay(out Ray ray))
             return;
 
-        RaycastHit hit;
-
-        if (!Physics.Raycast(ray, out hit, interactDistance))
+        if (!Physics.Raycast(ray, out RaycastHit hit, interactDistance))
             return;
 
         Item item = hit.collider.GetComponent<Item>() ??
                     hit.collider.GetComponentInParent<Item>() ??
                     hit.collider.GetComponentInChildren<Item>();
 
-        if (item != null && interactPressed)
-        {
+        if (item != null)
             TryPickup(item);
-            interactPressed = false;
-        }
     }
 
     void TryPickup(Item item)
@@ -106,26 +127,22 @@ public class PlayerInteraction : MonoBehaviour
         inventory.AddItem(item.itemName, 1, item);
 
         if (item.itemType == ItemType.Tool)
-        {
             hotbar.AddItem(item.itemName, item.icon, item);
-        }
 
         Destroy(item.gameObject);
     }
 
     void Attack()
     {
-        if (Time.time < nextHitTime) return;
-        if (GameState.IsInventoryOpen) return;
+        if (Time.time < nextHitTime || GameState.IsInventoryOpen)
+            return;
 
         nextHitTime = Time.time + hitRate;
 
         if (!TryGetInteractionRay(out Ray ray))
             return;
 
-        RaycastHit hit;
-
-        if (!Physics.Raycast(ray, out hit, interactDistance))
+        if (!Physics.Raycast(ray, out RaycastHit hit, interactDistance))
             return;
 
         Animator anim = GetPlayerAnimator();
@@ -148,9 +165,7 @@ public class PlayerInteraction : MonoBehaviour
                                 hit.collider.GetComponentInParent<ResourceNode>();
 
         if (resource != null)
-        {
             resource.Hit(inventory, hotbar, currentTool, toolDamage);
-        }
     }
 
     bool TryGetInteractionRay(out Ray ray)
@@ -171,11 +186,14 @@ public class PlayerInteraction : MonoBehaviour
 
     void HandleHotbarSelection()
     {
-        if (Keyboard.current.digit1Key.wasPressedThisFrame) SelectSlot(0);
-        if (Keyboard.current.digit2Key.wasPressedThisFrame) SelectSlot(1);
-        if (Keyboard.current.digit3Key.wasPressedThisFrame) SelectSlot(2);
-        if (Keyboard.current.digit4Key.wasPressedThisFrame) SelectSlot(3);
-        if (Keyboard.current.digit5Key.wasPressedThisFrame) SelectSlot(4);
+        for (int i = 0; i < hotbarActions.Length; i++)
+        {
+            if (hotbarActions[i].WasPressedThisFrame())
+            {
+                SelectSlot(i);
+                return;
+            }
+        }
     }
 
     void SelectSlot(int index)
@@ -190,7 +208,10 @@ public class PlayerInteraction : MonoBehaviour
         slot.isSelected = true;
 
         if (slot.IsEmpty())
+        {
+            UnequipTool();
             return;
+        }
 
         if (slot.itemType == ItemType.Tool)
             EquipTool(slot.toolType, slot.toolDamage);
@@ -222,7 +243,8 @@ public class PlayerInteraction : MonoBehaviour
         if (type == ToolType.Axe) prefab = axePrefab;
         if (type == ToolType.Pickaxe) prefab = pickaxePrefab;
 
-        if (prefab == null) return;
+        if (prefab == null)
+            return;
 
         Animator anim = GetPlayerAnimator();
         if (anim == null)

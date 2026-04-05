@@ -15,6 +15,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("Camera")]
     public Transform cameraHolder;
     public bool thirdPerson = false;
+    public float thirdPersonPitch = 15f;
 
     public Vector3 firstPersonOffset = new Vector3(0, 1.6f, 0);
     public Vector3 thirdPersonOffset = new Vector3(0, 2f, -3f);
@@ -25,26 +26,29 @@ public class PlayerMovement : MonoBehaviour
     public float staminaDrain = 20f;
     public float staminaRecovery = 15f;
 
-    [Header("❤️ Vida")]
+    [Header("Vida")]
     public float maxHealth = 100f;
     public float currentHealth;
 
-    [Header("🍗 Fome")]
+    [Header("Fome")]
     public float maxHunger = 100f;
     public float currentHunger;
 
-    public float hungerDrain = 5f; // por segundo
-    public float hungerDamageRate = 10f; // dano quando zerado
+    public float hungerDrain = 5f;
+    public float hungerDamageRate = 10f;
 
     CharacterController controller;
     PlayerControls controls;
     Animator anim;
+    InputAction toggleCameraAction;
+    InputAction damageTestAction;
 
     Vector2 moveInput;
     Vector2 lookInput;
 
     float yVelocity;
     float xRotation;
+    float yRotation;
     bool isRunning;
 
     GameObject playerModel;
@@ -54,60 +58,74 @@ public class PlayerMovement : MonoBehaviour
         controller = GetComponent<CharacterController>();
         controls = new PlayerControls();
         anim = GetComponentInChildren<Animator>();
+        toggleCameraAction = new InputAction("ToggleCamera", binding: "<Keyboard>/c");
+        damageTestAction = new InputAction("DamageTest", binding: "<Keyboard>/h");
 
         currentStamina = maxStamina;
         currentHealth = maxHealth;
         currentHunger = maxHunger;
 
         playerModel = anim.gameObject;
-
-        controls.Player.Move.performed += ctx => moveInput = ctx.ReadValue<Vector2>();
-        controls.Player.Move.canceled += ctx => moveInput = Vector2.zero;
-
-        controls.Player.Look.performed += ctx => lookInput = ctx.ReadValue<Vector2>();
-        controls.Player.Look.canceled += ctx => lookInput = Vector2.zero;
-
-        controls.Player.Run.performed += ctx => isRunning = true;
-        controls.Player.Run.canceled += ctx => isRunning = false;
     }
 
-    void OnEnable() => controls.Enable();
-    void OnDisable() => controls.Disable();
+    void OnEnable()
+    {
+        controls.Enable();
+        toggleCameraAction.Enable();
+        damageTestAction.Enable();
+    }
+
+    void OnDisable()
+    {
+        damageTestAction.Disable();
+        toggleCameraAction.Disable();
+        controls.Disable();
+    }
 
     void Start()
     {
+        yRotation = transform.eulerAngles.y;
+        xRotation = thirdPerson ? thirdPersonPitch : 0f;
+        ApplyCameraPose();
+
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
     void Update()
     {
-        // alternar câmera
-        if (Keyboard.current.cKey.wasPressedThisFrame)
+        moveInput = controls.Player.Move.ReadValue<Vector2>();
+        lookInput = controls.Player.Look.ReadValue<Vector2>();
+        isRunning = controls.Player.Run.IsPressed();
+
+        if (toggleCameraAction.WasPressedThisFrame())
         {
             thirdPerson = !thirdPerson;
+            xRotation = thirdPerson ? thirdPersonPitch : Mathf.Clamp(xRotation, -80f, 80f);
         }
 
         HandleStamina();
-        Move();
         Look();
+        Move();
         HandleModelVisibility();
         HandleHunger();
 
-        // 🔥 TESTE DE DANO
-        if (Keyboard.current.hKey.wasPressedThisFrame)
+        if (damageTestAction.WasPressedThisFrame())
         {
             TakeDamage(10f);
         }
     }
-    
+
+    void LateUpdate()
+    {
+        ApplyCameraPose();
+    }
+
     void HandleHunger()
     {
-        // diminui fome
         currentHunger -= hungerDrain * Time.deltaTime;
         currentHunger = Mathf.Clamp(currentHunger, 0, maxHunger);
 
-        // se zerou → perde vida
         if (currentHunger <= 0)
         {
             TakeDamage(hungerDamageRate * Time.deltaTime);
@@ -140,71 +158,51 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleModelVisibility()
     {
-        if (!thirdPerson)
-            playerModel.SetActive(false); // FPS
-        else
-            playerModel.SetActive(true);  // TPS
+        if (playerModel == null)
+            return;
+
+        playerModel.SetActive(thirdPerson);
     }
 
     void HandleStamina()
     {
-        bool isMoving = moveInput.magnitude > 0.1f;
-        bool canRun = currentStamina > 0;
+        bool isMoving = moveInput.sqrMagnitude > 0.01f;
+        bool canRun = currentStamina > 0f;
 
         if (isRunning && isMoving && canRun)
         {
             currentStamina -= staminaDrain * Time.deltaTime;
 
-            if (currentStamina <= 0)
+            if (currentStamina <= 0f)
             {
-                currentStamina = 0;
+                currentStamina = 0f;
                 isRunning = false;
             }
         }
-        else
+        else if (currentStamina < maxStamina)
         {
-            if (currentStamina < maxStamina)
-                currentStamina += staminaRecovery * Time.deltaTime;
+            currentStamina += staminaRecovery * Time.deltaTime;
         }
 
-        currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
+        currentStamina = Mathf.Clamp(currentStamina, 0f, maxStamina);
     }
 
-    // 🏃 MOVIMENTO
     void Move()
     {
         bool grounded = controller.isGrounded;
 
-        if (grounded && yVelocity < 0)
+        if (grounded && yVelocity < 0f)
             yVelocity = -2f;
 
         yVelocity += gravity * Time.deltaTime;
 
-        Vector3 move;
+        Quaternion yawRotationOnly = Quaternion.Euler(0f, yRotation, 0f);
+        Vector3 forward = yawRotationOnly * Vector3.forward;
+        Vector3 right = yawRotationOnly * Vector3.right;
+        Vector3 move = (forward * moveInput.y) + (right * moveInput.x);
 
-        if (!thirdPerson)
-        {
-            // FPS
-            Vector3 forward = cameraHolder.forward;
-            Vector3 right = cameraHolder.right;
-
-            forward.y = 0;
-            right.y = 0;
-
-            move = forward * moveInput.y + right * moveInput.x;
-        }
-        else
-        {
-            // TPS
-            Vector3 forward = cameraHolder.forward;
-            forward.y = 0;
-
-            move = forward * moveInput.y;
-        }
-
-        bool isMoving = moveInput.magnitude > 0.1f;
-        bool canRun = currentStamina > 0;
-
+        bool isMoving = moveInput.sqrMagnitude > 0.01f;
+        bool canRun = currentStamina > 0f;
         float speed = (isRunning && isMoving && canRun) ? runSpeed : walkSpeed;
 
         Vector3 velocity = move.normalized * speed;
@@ -212,40 +210,38 @@ public class PlayerMovement : MonoBehaviour
 
         controller.Move(velocity * Time.deltaTime);
 
-        float animSpeed;
-
-        if (isRunning && moveInput.magnitude > 0.1f)
-            animSpeed = 1f; // RUN
-        else
-            animSpeed = moveInput.magnitude * 0.5f; // WALK
-
-        anim.SetFloat("Speed", animSpeed);
+        if (anim != null)
+        {
+            float animSpeed = (isRunning && isMoving) ? 1f : moveInput.magnitude * 0.5f;
+            anim.SetFloat("Speed", animSpeed);
+        }
     }
 
-    // 🎥 LOOK
     void Look()
     {
-        float mouseX = lookInput.x * mouseSensitivity * 100f * Time.deltaTime;
-        float mouseY = lookInput.y * mouseSensitivity * 100f * Time.deltaTime;
+        Vector2 mouseDelta = lookInput * mouseSensitivity;
+
+        yRotation += mouseDelta.x;
 
         if (!thirdPerson)
         {
-            // FPS
-            xRotation -= mouseY;
+            xRotation -= mouseDelta.y;
             xRotation = Mathf.Clamp(xRotation, -80f, 80f);
-
-            cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
-            cameraHolder.localPosition = firstPersonOffset;
-
-            transform.Rotate(Vector3.up * mouseX);
         }
         else
         {
-            // TPS
-            transform.Rotate(Vector3.up * mouseX);
-
-            cameraHolder.localRotation = Quaternion.Euler(15f, 0f, 0f);
-            cameraHolder.localPosition = thirdPersonOffset;
+            xRotation = thirdPersonPitch;
         }
+    }
+
+    void ApplyCameraPose()
+    {
+        transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
+
+        if (cameraHolder == null)
+            return;
+
+        cameraHolder.localPosition = thirdPerson ? thirdPersonOffset : firstPersonOffset;
+        cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
     }
 }

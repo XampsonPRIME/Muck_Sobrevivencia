@@ -1,30 +1,53 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class InventoryUI : MonoBehaviour
 {
     public GameObject panel;
     public Transform content;
     public GameObject slotPrefab;
+
     PlayerInteraction playerInteraction;
+    PlayerMovement playerMovement;
     Inventory inventory;
+    InputAction toggleInventoryAction;
+
+    void Awake()
+    {
+        toggleInventoryAction = new InputAction("ToggleInventory", binding: "<Keyboard>/i");
+    }
+
+    void OnEnable()
+    {
+        toggleInventoryAction.Enable();
+    }
+
+    void OnDisable()
+    {
+        toggleInventoryAction.Disable();
+    }
 
     void Start()
     {
         inventory = FindFirstObjectByType<Inventory>();
         playerInteraction = FindFirstObjectByType<PlayerInteraction>();
-        panel.SetActive(false);
+        playerMovement = FindFirstObjectByType<PlayerMovement>();
+
+        if (panel != null)
+            panel.SetActive(false);
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.I))
-        {
+        if (toggleInventoryAction.WasPressedThisFrame())
             Toggle();
-        }
     }
 
     void Toggle()
     {
+        if (panel == null)
+            return;
+
         bool isOpen = !panel.activeSelf;
         panel.SetActive(isOpen);
 
@@ -35,14 +58,11 @@ public class InventoryUI : MonoBehaviour
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
 
-            // 🔥 BLOQUEIA PLAYER
             if (playerInteraction != null)
                 playerInteraction.enabled = false;
 
-            // 🔥 BLOQUEIA MOVIMENTO / CÂMERA
-            var movement = FindFirstObjectByType<PlayerMovement>();
-            if (movement != null)
-                movement.enabled = false;
+            if (playerMovement != null)
+                playerMovement.enabled = false;
 
             Refresh();
         }
@@ -51,14 +71,11 @@ public class InventoryUI : MonoBehaviour
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
 
-            // 🔥 REATIVA PLAYER
             if (playerInteraction != null)
                 playerInteraction.enabled = true;
 
-            // 🔥 REATIVA MOVIMENTO
-            var movement = FindFirstObjectByType<PlayerMovement>();
-            if (movement != null)
-                movement.enabled = true;
+            if (playerMovement != null)
+                playerMovement.enabled = true;
         }
     }
 
@@ -66,31 +83,22 @@ public class InventoryUI : MonoBehaviour
     {
         if (inventory == null || content == null || slotPrefab == null)
         {
-            Debug.LogError("❌ InventoryUI não configurado!");
+            Debug.LogError("InventoryUI nao configurado!");
             return;
         }
 
-        // limpa slots
         for (int i = content.childCount - 1; i >= 0; i--)
-        {
             Destroy(content.GetChild(i).gameObject);
-        }
 
-        // cria slots
         foreach (var item in inventory.items)
         {
             GameObject slotGO = Instantiate(slotPrefab, content);
-
             InventorySlotUI slot = slotGO.GetComponent<InventorySlotUI>();
 
             if (slot != null)
-            {
                 slot.Setup(item);
-            }
             else
-            {
-                Debug.LogError("❌ Slot sem InventorySlotUI!");
-            }
+                Debug.LogError("Slot sem InventorySlotUI!");
         }
     }
 }
