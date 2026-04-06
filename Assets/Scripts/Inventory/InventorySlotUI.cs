@@ -12,44 +12,43 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler
 
     float lastClickTime;
     float doubleClickDelay = 0.3f;
-    
 
     public void Setup(InventoryItem item)
     {
         currentItem = item;
 
-        if (item.itemData.icon != null)
+        if (icon != null && item.itemData != null && item.itemData.icon != null)
         {
             icon.sprite = item.itemData.icon;
             icon.enabled = true;
         }
-        else
+        else if (icon != null)
         {
+            icon.sprite = null;
             icon.enabled = false;
         }
 
-        amountText.text = item.quantity > 1 ? item.quantity.ToString() : "";
+        if (amountText != null)
+            amountText.text = item.quantity > 1 ? item.quantity.ToString() : "";
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
         if (Time.time - lastClickTime < doubleClickDelay)
-        {
             OnDoubleClick();
-        }
 
         lastClickTime = Time.time;
     }
 
     void OnDoubleClick()
     {
-        Debug.Log("🔥 Double Click: " + currentItem.itemName);
+        if (currentItem == null || currentItem.itemData == null)
+            return;
 
         Hotbar hotbar = FindFirstObjectByType<Hotbar>();
+        if (hotbar == null)
+            return;
 
-        if (hotbar == null) return;
-
-        // 🔥 manda pra hotbar
         hotbar.AddItem(
             currentItem.itemName,
             currentItem.itemData.icon,
