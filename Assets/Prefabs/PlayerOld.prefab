@@ -415,13 +415,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInteraction
   interactDistance: 4
+  cameraHolder: {fileID: 7095383786988751147}
   inventory: {fileID: 5729320078328354730}
   hotbar: {fileID: 0}
-  useTime: 1.5
   hitRate: 0.5
   currentTool: 1
   toolDamage: 1
-  handPoint: {fileID: 7342294738517553906}
   axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
   pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
   startWithAxe: 1

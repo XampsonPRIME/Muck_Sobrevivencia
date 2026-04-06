@@ -11,8 +11,10 @@ public enum ToolType
 {
     None,
     Axe,
-    Pickaxe
+    Pickaxe,
+    
 }
+
 
 public class Item : MonoBehaviour
 {
@@ -24,4 +26,5 @@ public class Item : MonoBehaviour
     // 🔥 Só usado se for ferramenta
     public ToolType toolType = ToolType.None;
     public int toolDamage = 1;
+    
 }

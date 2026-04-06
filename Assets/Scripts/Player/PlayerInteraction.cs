@@ -5,6 +5,7 @@ public class PlayerInteraction : MonoBehaviour
 {
     public float interactDistance = 4f;
     public Transform cameraHolder;
+    public Transform cameraHolder;
 
     public Inventory inventory;
     public Hotbar hotbar;
@@ -178,6 +179,8 @@ public class PlayerInteraction : MonoBehaviour
     }
 
     void TryPickup(Item item)
+    {
+        Debug.Log("Pegou: " + item.itemName + " icon: " + item.icon);
     {
         Debug.Log("Pegou: " + item.itemName + " icon: " + item.icon);
 

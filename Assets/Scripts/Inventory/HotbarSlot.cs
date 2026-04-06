@@ -1,8 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.EventSystems;
 
-public class HotbarSlot : MonoBehaviour
+public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
 {
     public Image icon;
     public TextMeshProUGUI amountText;
@@ -16,17 +17,13 @@ public class HotbarSlot : MonoBehaviour
     public int toolDamage;
     public bool isSelected = false;
 
-    public bool isConsumable;
-    public float healthRestore;
-    public float hungerRestore;
-    public float consumeHoldTime;
-    public string prefabName;
-    public Vector3 handLocalPosition;
-    public Vector3 handLocalEulerAngles;
-    public Vector3 handLocalScale = Vector3.one;
-
-    public string ItemName => itemName;
-    public int Amount => amount;
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData.button == PointerEventData.InputButton.Right)
+        {
+            ReturnOneToInventory();
+        }
+    }
 
     public bool IsEmpty()
     {
@@ -79,6 +76,33 @@ public class HotbarSlot : MonoBehaviour
         UpdateUI();
     }
 
+    public string GetItemName() => itemName;
+    public int GetAmount() => amount;
+    public Item GetItemData() => itemData;
+
+    public void SetItem(string name, Sprite sprite, Item data, int newAmount)
+    {
+        if (data == null || newAmount <= 0)
+        {
+            ClearSlot();
+            return;
+        }
+
+        itemName = name;
+        itemData = data;
+        amount = newAmount;
+
+        icon.sprite = sprite;
+        icon.enabled = true;
+
+        itemType = data.itemType;
+        toolType = data.toolType;
+        toolDamage = data.toolDamage;
+
+        UpdateUI();
+    }
+
+    // 🔥 REMOVER ITEM (ex: comer cogumelo)
     public void RemoveOne()
     {
         amount--;
@@ -87,6 +111,18 @@ public class HotbarSlot : MonoBehaviour
             ClearSlot();
         else
             UpdateUI();
+    }
+
+    public void Clear()
+    {
+        itemName = "";
+        itemData = null;
+
+        if (icon != null)
+        {
+            icon.sprite = null;
+            icon.enabled = false;
+        }
     }
 
     public void ClearSlot()
@@ -116,5 +152,110 @@ public class HotbarSlot : MonoBehaviour
     void UpdateUI()
     {
         amountText.text = amount > 1 ? amount.ToString() : "";
+    }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        if (IsEmpty() || itemData == null) return;
+
+        DragDropController.BeginDrag(
+            itemData.icon,
+            new DragPayload
+            {
+                sourceType = DragSourceType.Hotbar,
+                hotbarSlot = this,
+                itemData = itemData,
+                amount = amount
+            }
+        );
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        DragDropController.UpdateDrag(eventData.position);
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        DragDropController.EndDrag();
+    }
+
+    public void OnDrop(PointerEventData eventData)
+    {
+        DragPayload payload = DragDropController.CurrentPayload;
+        if (payload == null) return;
+
+        if (payload.sourceType == DragSourceType.Hotbar)
+        {
+            if (payload.hotbarSlot == this) return;
+            SwapWithHotbarSlot(payload.hotbarSlot);
+            return;
+        }
+
+        if (payload.sourceType == DragSourceType.Inventory)
+        {
+            MoveOrSwapFromInventory(payload.inventorySlot, payload.itemData, payload.amount);
+        }
+    }
+
+    void ReturnOneToInventory()
+    {
+        if (IsEmpty()) return;
+
+        Inventory inventory = FindFirstObjectByType<Inventory>();
+        if (inventory == null) return;
+
+        string nameToReturn = itemData != null ? itemData.itemName : itemName;
+        inventory.AddItem(nameToReturn, 1, itemData);
+        RemoveOne();
+    }
+
+    void SwapWithHotbarSlot(HotbarSlot other)
+    {
+        if (other == null) return;
+
+        Item otherItem = other.GetItemData();
+        int otherAmount = other.GetAmount();
+        string otherName = other.GetItemName();
+
+        Item thisItem = itemData;
+        int thisAmount = amount;
+        string thisName = itemName;
+
+        SetItem(otherName, otherItem != null ? otherItem.icon : null, otherItem, otherAmount);
+        other.SetItem(thisName, thisItem != null ? thisItem.icon : null, thisItem, thisAmount);
+    }
+
+    void MoveOrSwapFromInventory(InventorySlotUI inventorySlot, Item invItem, int invAmount)
+    {
+        if (inventorySlot == null || invItem == null || invAmount <= 0) return;
+
+        Inventory inventory = FindFirstObjectByType<Inventory>();
+        if (inventory == null) return;
+
+        if (IsEmpty())
+        {
+            SetItem(invItem.itemName, invItem.icon, invItem, invAmount);
+            inventory.RemoveItem(invItem.itemName, invAmount);
+
+            InventoryUI ui = FindFirstObjectByType<InventoryUI>();
+            if (ui != null) ui.Refresh();
+            return;
+        }
+
+        Item hotbarItem = itemData;
+        int hotbarAmount = amount;
+        string hotbarName = itemName;
+
+        SetItem(invItem.itemName, invItem.icon, invItem, invAmount);
+
+        InventoryItem invCurrent = inventorySlot.CurrentItem;
+        invCurrent.itemName = hotbarName;
+        invCurrent.quantity = hotbarAmount;
+        invCurrent.itemData = hotbarItem;
+        invCurrent.itemType = hotbarItem.itemType;
+        invCurrent.toolType = hotbarItem.toolType;
+
+        inventorySlot.Setup(invCurrent);
     }
 }

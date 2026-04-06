@@ -79,7 +79,7 @@ public class InventoryUI : MonoBehaviour
         }
     }
 
-    void Refresh()
+    public void Refresh()
     {
         if (inventory == null || content == null || slotPrefab == null)
         {
