@@ -4,6 +4,8 @@ using TMPro;
 
 public class DayNightCycle : MonoBehaviour
 {
+    public static DayNightCycle Instance { get; private set; }
+
     public TextMeshProUGUI warningText;
     public Material skyboxMaterial;
     public Light sun;
@@ -30,8 +32,35 @@ public class DayNightCycle : MonoBehaviour
 
     bool warnedNight = false;
 
+    public int CurrentHour
+    {
+        get
+        {
+            float totalHours = timeOfDay * 24f;
+            return Mathf.FloorToInt(totalHours);
+        }
+    }
+
+    public int CurrentMinute
+    {
+        get
+        {
+            float totalHours = timeOfDay * 24f;
+            int hours = Mathf.FloorToInt(totalHours);
+            return Mathf.FloorToInt((totalHours - hours) * 60f);
+        }
+    }
+
+    public int CurrentDay => currentDay;
+
+    public string CurrentTimeFormatted => string.Format("{0:00}:{1:00}", CurrentHour, CurrentMinute);
+
+    public bool IsNight => CurrentHour >= 18 || CurrentHour < 6;
+
     void Start()
     {
+        Instance = this;
+
         if (sun == null)
             sun = GameObject.Find("Sun").GetComponent<Light>();
 
@@ -156,5 +185,11 @@ public class DayNightCycle : MonoBehaviour
         warningText.text = message;
         fadeTimer = 0f;
         isFading = true;
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
     }
 }

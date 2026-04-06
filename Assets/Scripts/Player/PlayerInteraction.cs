@@ -218,6 +218,15 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
+        MiniKrug miniKrug = hit.collider.GetComponent<MiniKrug>() ??
+                            hit.collider.GetComponentInParent<MiniKrug>();
+
+        if (miniKrug != null)
+        {
+            miniKrug.Hit(toolDamage, playerMovement);
+            return;
+        }
+
         ResourceNode resource = hit.collider.GetComponent<ResourceNode>() ??
                                 hit.collider.GetComponentInParent<ResourceNode>();
 
