@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 public class PlayerInteraction : MonoBehaviour
 {
     public float interactDistance = 4f;
+    public Transform cameraHolder;
 
     public Inventory inventory;
     public Hotbar hotbar;
@@ -36,8 +37,6 @@ public class PlayerInteraction : MonoBehaviour
 
         controls.Player.Interact.performed += ctx => interactPressed = true;
 
-        // 🔥 ATAQUE AGORA É EVENTO ÚNICO
-        controls.Player.Attack.performed += ctx => Attack();
     }
 
     void OnEnable() => controls.Enable();
@@ -81,7 +80,7 @@ public class PlayerInteraction : MonoBehaviour
         origin += direction * 0.3f;
 
         Ray ray = new Ray(origin, direction);
-        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
+
         RaycastHit hit;
 
         if (!Physics.Raycast(ray, out hit, interactDistance))
@@ -100,23 +99,68 @@ public class PlayerInteraction : MonoBehaviour
                 interactPressed = false;
             }
         }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            if (!GameState.IsInventoryOpen)
+            {
+                UseSelectedItem();
+            }
+        }
     }
 
     void TryPickup(Item item)
-{
-    Debug.Log("Pegou: " + item.itemName + " icon: " + item.icon);
-
-    // 🔥 vai pro inventário
-    inventory.AddItem(item.itemName, 1, item);
-
-    // 🔥 se for ferramenta → vai pra hotbar
-    if (item.itemType == ItemType.Tool)
     {
-        hotbar.AddItem(item.itemName, item.icon, item);
+        Debug.Log("Pegou: " + item.itemName + " icon: " + item.icon);
+
+        // 🔥 vai pro inventário
+        inventory.AddItem(item.itemName, 1, item);
+
+        // 🔥 se for ferramenta → vai pra hotbar
+        if (item.itemType == ItemType.Tool)
+        {
+            hotbar.AddItem(item.itemName, item.icon, item);
+        }
+
+        Destroy(item.gameObject);
     }
 
-    Destroy(item.gameObject);
-}
+    void UseSelectedItem()
+    {
+        var slot = hotbar.GetSelectedSlot();
+
+        if (slot == null || slot.itemData == null) return;
+
+        Item item = slot.itemData;
+
+        if (item.itemType == ItemType.Tool)
+        {
+            Attack();
+            return;
+        }
+
+        if (item.itemType == ItemType.Consumable)
+        {
+            Debug.Log("Consumindo " + item.itemName);
+
+            inventory.RemoveItem(item.itemName, 1);
+
+            var invItem = inventory.GetItem(item.itemName);
+
+            if (invItem == null)
+            {
+                // 🔥 limpa TODOS os slots com esse item
+                foreach (var s in hotbar.slots)
+                {
+                    if (s.itemData != null && s.itemData.itemName == item.itemName)
+                    {
+                        s.Clear();
+                    }
+                }
+            }
+            return;
+        }
+    }
 
     // =========================
     // 🪓 ATAQUE (CORRIGIDO)
@@ -173,7 +217,8 @@ public class PlayerInteraction : MonoBehaviour
         if (hotbar == null || hotbar.slots.Length <= index)
             return;
 
-        // 🔥 limpa seleção anterior
+        hotbar.SetSelectedIndex(index); // 🔥 IMPORTANTE
+
         foreach (HotbarSlot s in hotbar.slots)
             s.isSelected = false;
 
@@ -183,9 +228,9 @@ public class PlayerInteraction : MonoBehaviour
         if (slot.IsEmpty())
             return;
 
-        if (slot.itemType == ItemType.Tool)
+        if (slot.itemData != null && slot.itemData.itemType == ItemType.Tool)
         {
-            EquipTool(slot.toolType, slot.toolDamage);
+            EquipTool(slot.itemData.toolType, slot.itemData.toolDamage);
         }
         else
         {
