@@ -26,7 +26,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
     {
         currentItem = item;
 
-        if (icon != null && item.itemData != null && item.itemData.icon != null)
+        if (icon != null && item.itemData.icon != null)
         {
             icon.sprite = item.itemData.icon;
             icon.enabled = true;
