@@ -127,10 +127,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 4252190915010664961, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
-      propertyPath: cameraHolder
-      value: 
-      objectReference: {fileID: 1021360642}
     - target: {fileID: 4448913397103007168, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 100
@@ -180,11 +176,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
---- !u!4 &1021360642 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 7095383786988751147, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
-  m_PrefabInstance: {fileID: 887082127}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1328769922
 PrefabInstance:
   m_ObjectHideFlags: 0
