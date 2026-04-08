@@ -11,8 +11,8 @@ public class LobbyUI : MonoBehaviour
     Canvas canvas;
     SaveGameManager saveGameManager;
     GraphicRaycaster graphicRaycaster;
-    InputField addressInput;
-    InputField portInput;
+    TMP_InputField addressInput;
+    TMP_InputField portInput;
     TextMeshProUGUI statusText;
     bool waitingForSession;
 
@@ -156,7 +156,7 @@ public class LobbyUI : MonoBehaviour
                 "127.0.0.1",
                 new Vector2(-120f, -340f),
                 new Vector2(460f, 74f),
-                InputField.ContentType.Standard
+                TMP_InputField.ContentType.Standard
             );
             addressInput.text = "127.0.0.1";
 
@@ -166,7 +166,7 @@ public class LobbyUI : MonoBehaviour
                 "7777",
                 new Vector2(300f, -340f),
                 new Vector2(160f, 74f),
-                InputField.ContentType.IntegerNumber
+                TMP_InputField.ContentType.IntegerNumber
             );
             portInput.text = "7777";
         }
@@ -201,6 +201,12 @@ public class LobbyUI : MonoBehaviour
 
     void Update()
     {
+        if (GameState.IsInLobby)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
         if (statusText != null && LanMultiplayerManager.Instance != null)
             statusText.text = LanMultiplayerManager.Instance.StatusMessage;
 
@@ -233,6 +239,14 @@ public class LobbyUI : MonoBehaviour
 
         for (int i = 0; i < results.Count; i++)
         {
+            TMP_InputField inputField = results[i].gameObject.GetComponentInParent<TMP_InputField>();
+            if (inputField != null)
+            {
+                EventSystem.current.SetSelectedGameObject(inputField.gameObject);
+                inputField.ActivateInputField();
+                return;
+            }
+
             Button button = results[i].gameObject.GetComponentInParent<Button>();
             if (button == null || !button.interactable)
                 continue;
@@ -324,10 +338,8 @@ public class LobbyUI : MonoBehaviour
         return button;
     }
 
-    InputField CreateInputField(Transform parent, string objectName, string placeholder, Vector2 anchoredPosition, Vector2 size, InputField.ContentType contentType)
+    TMP_InputField CreateInputField(Transform parent, string objectName, string placeholder, Vector2 anchoredPosition, Vector2 size, TMP_InputField.ContentType contentType)
     {
-        Font builtInFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-
         GameObject fieldObject = CreateUiObject(objectName, parent);
         RectTransform fieldRect = fieldObject.AddComponent<RectTransform>();
         fieldRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -338,38 +350,49 @@ public class LobbyUI : MonoBehaviour
         Image fieldImage = fieldObject.AddComponent<Image>();
         fieldImage.color = new Color(0.12f, 0.15f, 0.2f, 0.96f);
 
-        InputField inputField = fieldObject.AddComponent<InputField>();
+        TMP_InputField inputField = fieldObject.AddComponent<TMP_InputField>();
         inputField.contentType = contentType;
-        inputField.lineType = InputField.LineType.SingleLine;
+        inputField.lineType = TMP_InputField.LineType.SingleLine;
         inputField.selectionColor = new Color(0.65f, 0.8f, 1f, 0.35f);
+        inputField.caretColor = new Color(0.94f, 0.97f, 1f, 1f);
+        inputField.customCaretColor = true;
 
-        GameObject placeholderObject = CreateUiObject("Placeholder", fieldObject.transform);
-        RectTransform placeholderRect = placeholderObject.AddComponent<RectTransform>();
-        placeholderRect.anchorMin = Vector2.zero;
-        placeholderRect.anchorMax = Vector2.one;
-        placeholderRect.offsetMin = new Vector2(18f, 8f);
-        placeholderRect.offsetMax = new Vector2(-18f, -8f);
+        GameObject viewportObject = CreateUiObject("Viewport", fieldObject.transform);
+        RectTransform viewportRect = viewportObject.AddComponent<RectTransform>();
+        viewportRect.anchorMin = Vector2.zero;
+        viewportRect.anchorMax = Vector2.one;
+        viewportRect.offsetMin = new Vector2(18f, 8f);
+        viewportRect.offsetMax = new Vector2(-18f, -8f);
+        viewportObject.AddComponent<RectMask2D>();
 
-        Text placeholderText = placeholderObject.AddComponent<Text>();
-        placeholderText.font = builtInFont;
-        placeholderText.text = placeholder;
-        placeholderText.fontSize = 28;
-        placeholderText.alignment = TextAnchor.MiddleLeft;
-        placeholderText.color = new Color(0.63f, 0.7f, 0.78f, 0.85f);
-
-        GameObject textObject = CreateUiObject("Text", fieldObject.transform);
+        GameObject textObject = CreateUiObject("Text", viewportObject.transform);
         RectTransform textRect = textObject.AddComponent<RectTransform>();
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = new Vector2(18f, 8f);
-        textRect.offsetMax = new Vector2(-18f, -8f);
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
 
-        Text text = textObject.AddComponent<Text>();
-        text.font = builtInFont;
-        text.fontSize = 28;
-        text.alignment = TextAnchor.MiddleLeft;
+        TextMeshProUGUI text = textObject.AddComponent<TextMeshProUGUI>();
+        text.fontSize = 28f;
+        text.alignment = TextAlignmentOptions.MidlineLeft;
         text.color = new Color(0.94f, 0.97f, 1f, 1f);
+        text.enableWordWrapping = false;
 
+        GameObject placeholderObject = CreateUiObject("Placeholder", viewportObject.transform);
+        RectTransform placeholderRect = placeholderObject.AddComponent<RectTransform>();
+        placeholderRect.anchorMin = Vector2.zero;
+        placeholderRect.anchorMax = Vector2.one;
+        placeholderRect.offsetMin = Vector2.zero;
+        placeholderRect.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI placeholderText = placeholderObject.AddComponent<TextMeshProUGUI>();
+        placeholderText.text = placeholder;
+        placeholderText.fontSize = 28f;
+        placeholderText.alignment = TextAlignmentOptions.MidlineLeft;
+        placeholderText.color = new Color(0.63f, 0.7f, 0.78f, 0.85f);
+        placeholderText.enableWordWrapping = false;
+
+        inputField.textViewport = viewportRect;
         inputField.textComponent = text;
         inputField.placeholder = placeholderText;
         return inputField;
