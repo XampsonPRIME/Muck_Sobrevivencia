@@ -9,6 +9,8 @@ public class StaminaUI : MonoBehaviour
 
     void Update()
     {
+        ResolvePlayer();
+
         if (player == null || staminaFill == null)
             return;
 
@@ -20,6 +22,12 @@ public class StaminaUI : MonoBehaviour
 
     void Start()
     {
-        player = LanMultiplayerManager.FindGameplayPlayer();
+        ResolvePlayer();
+    }
+
+    void ResolvePlayer()
+    {
+        if (player == null)
+            player = LanMultiplayerManager.FindGameplayPlayer();
     }
 }

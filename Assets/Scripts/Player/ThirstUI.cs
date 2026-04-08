@@ -8,15 +8,22 @@ public class ThirstUI : MonoBehaviour
 
     void Start()
     {
-        if (player == null)
-            player = FindAnyObjectByType<PlayerMovement>();
+        ResolvePlayer();
     }
 
     void Update()
     {
+        ResolvePlayer();
+
         if (player == null || thirstFill == null)
             return;
 
         thirstFill.fillAmount = player.currentThirst / player.maxThirst;
+    }
+
+    void ResolvePlayer()
+    {
+        if (player == null)
+            player = LanMultiplayerManager.FindGameplayPlayer();
     }
 }

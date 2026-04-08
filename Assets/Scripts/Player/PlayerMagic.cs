@@ -186,6 +186,13 @@ public class PlayerMagic : MonoBehaviour
             BossEnemy bossEnemy = hit.GetComponent<BossEnemy>() ?? hit.GetComponentInParent<BossEnemy>();
             if (bossEnemy != null && hitBosses.Add(bossEnemy))
             {
+                if (LanMultiplayerManager.Instance != null &&
+                    LanMultiplayerManager.Instance.TryHandleGameplayHit(bossEnemy, playerMovement, ToolType.Axe, areaMagicDamage))
+                {
+                    affectedCount++;
+                    continue;
+                }
+
                 bossEnemy.Hit(areaMagicDamage, playerMovement);
                 affectedCount++;
             }

@@ -6,16 +6,24 @@ public class HungerUI : MonoBehaviour
     public PlayerMovement player;
     public Image hungerFill;
 
-        void Start()
+    void Start()
     {
-        if (player == null)
-            player = FindAnyObjectByType<PlayerMovement>();
+        ResolvePlayer();
     }
 
     void Update()
     {
-        if (player == null) return;
+        ResolvePlayer();
+
+        if (player == null || hungerFill == null)
+            return;
 
         hungerFill.fillAmount = player.currentHunger / player.maxHunger;
+    }
+
+    void ResolvePlayer()
+    {
+        if (player == null)
+            player = LanMultiplayerManager.FindGameplayPlayer();
     }
 }

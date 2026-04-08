@@ -8,12 +8,13 @@ public class HealthUI : MonoBehaviour
 
     void Start()
     {
-        if (player == null)
-            player = FindAnyObjectByType<PlayerMovement>();
+        ResolvePlayer();
     }
 
     void Update()
     {
+        ResolvePlayer();
+
         if (player == null || healthFill == null) return;
 
         float value = player.currentHealth / player.maxHealth;
@@ -25,5 +26,11 @@ public class HealthUI : MonoBehaviour
             new Color(0.10f, 0f, 0f), // vermelho escuro
             Color.red, // vermelho brilhante
             player.currentHealth / player.maxHealth);
+    }
+
+    void ResolvePlayer()
+    {
+        if (player == null)
+            player = LanMultiplayerManager.FindGameplayPlayer();
     }
 }

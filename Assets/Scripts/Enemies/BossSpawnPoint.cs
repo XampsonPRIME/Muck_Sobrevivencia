@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class BossSpawnPoint : MonoBehaviour
 {
@@ -26,6 +27,29 @@ public class BossSpawnPoint : MonoBehaviour
         Vector3 spawnPosition = GetGroundedSpawnPosition();
         spawnedBoss = Instantiate(bossPrefab, spawnPosition + Vector3.up * 0.5f, transform.rotation);
         spawnedBoss.name = bossPrefab.name;
+        LanNetworkEntity.Ensure(spawnedBoss.transform, BuildBossEntityId());
+    }
+
+    string BuildBossEntityId()
+    {
+        return $"{SceneManager.GetActiveScene().name}|BossSpawn|{BuildTransformPath(transform)}";
+    }
+
+    static string BuildTransformPath(Transform current)
+    {
+        if (current == null)
+            return "null";
+
+        string path = current.name;
+        Transform cursor = current.parent;
+
+        while (cursor != null)
+        {
+            path = $"{cursor.name}/{path}";
+            cursor = cursor.parent;
+        }
+
+        return path;
     }
 
     Vector3 GetGroundedSpawnPosition()

@@ -26,6 +26,15 @@ public class LanNetworkEntity : MonoBehaviour
         return entity;
     }
 
+    public static LanNetworkEntity Ensure(Component owner, string forcedEntityId)
+    {
+        LanNetworkEntity entity = Ensure(owner);
+        if (entity != null && !string.IsNullOrWhiteSpace(forcedEntityId))
+            entity.entityId = forcedEntityId;
+
+        return entity;
+    }
+
     string BuildStableId()
     {
         StringBuilder builder = new StringBuilder();
