@@ -45,9 +45,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BossSpawnPoint
   bossPrefab: {fileID: 100100000, guid: 166fb8ea58ce14828a3fe6b131146f24, type: 3}
+  playerPrefab: {fileID: 100100000, guid: 4d0824d1d5eff421db6f7f1b8cc83407, type: 3}
   spawnOnStart: 1
+  ensurePlayerOnStart: 1
   groundRayHeight: 40
   groundRayDistance: 120
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  playerSpawnOffset: {x: 0, y: 0, z: -12}

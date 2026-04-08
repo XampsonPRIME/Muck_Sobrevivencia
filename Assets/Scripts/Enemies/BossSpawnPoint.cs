@@ -4,15 +4,22 @@ using UnityEngine.SceneManagement;
 public class BossSpawnPoint : MonoBehaviour
 {
     public GameObject bossPrefab;
+    public GameObject playerPrefab;
     public bool spawnOnStart = true;
+    public bool ensurePlayerOnStart = true;
     public float groundRayHeight = 40f;
     public float groundRayDistance = 120f;
     public LayerMask groundMask = ~0;
+    public Vector3 playerSpawnOffset = new Vector3(0f, 0f, -12f);
 
     GameObject spawnedBoss;
+    GameObject spawnedPlayer;
 
     void Start()
     {
+        if (ensurePlayerOnStart)
+            SpawnPlayerIfNeeded();
+
         if (!spawnOnStart || bossPrefab == null)
             return;
 
@@ -28,6 +35,17 @@ public class BossSpawnPoint : MonoBehaviour
         spawnedBoss = Instantiate(bossPrefab, spawnPosition + Vector3.up * 0.5f, transform.rotation);
         spawnedBoss.name = bossPrefab.name;
         LanNetworkEntity.Ensure(spawnedBoss.transform, BuildBossEntityId());
+    }
+
+    void SpawnPlayerIfNeeded()
+    {
+        if (playerPrefab == null || spawnedPlayer != null || FindFirstObjectByType<PlayerMovement>() != null)
+            return;
+
+        Vector3 desiredPosition = transform.position + playerSpawnOffset;
+        Vector3 groundedPosition = GetGroundedPositionOrFallback(desiredPosition);
+        spawnedPlayer = Instantiate(playerPrefab, groundedPosition + Vector3.up * 0.5f, Quaternion.identity);
+        spawnedPlayer.name = playerPrefab.name;
     }
 
     string BuildBossEntityId()
@@ -54,12 +72,17 @@ public class BossSpawnPoint : MonoBehaviour
 
     Vector3 GetGroundedSpawnPosition()
     {
-        Vector3 rayOrigin = transform.position + Vector3.up * groundRayHeight;
+        return GetGroundedPositionOrFallback(transform.position);
+    }
+
+    Vector3 GetGroundedPositionOrFallback(Vector3 position)
+    {
+        Vector3 rayOrigin = position + Vector3.up * groundRayHeight;
 
         if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, groundRayDistance, groundMask, QueryTriggerInteraction.Ignore))
             return hit.point;
 
-        return transform.position;
+        return position;
     }
 
     void OnDrawGizmos()
