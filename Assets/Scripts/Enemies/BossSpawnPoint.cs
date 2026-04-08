@@ -46,6 +46,11 @@ public class BossSpawnPoint : MonoBehaviour
         Vector3 groundedPosition = GetGroundedPositionOrFallback(desiredPosition);
         spawnedPlayer = Instantiate(playerPrefab, groundedPosition + Vector3.up * 0.5f, Quaternion.identity);
         spawnedPlayer.name = playerPrefab.name;
+
+        Vector3 lookDirection = transform.position - spawnedPlayer.transform.position;
+        lookDirection.y = 0f;
+        if (lookDirection.sqrMagnitude > 0.001f)
+            spawnedPlayer.transform.rotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
     }
 
     string BuildBossEntityId()

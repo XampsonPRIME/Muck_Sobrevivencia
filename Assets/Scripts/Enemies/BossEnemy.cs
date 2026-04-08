@@ -54,12 +54,15 @@ public class BossEnemy : MonoBehaviour
     Canvas worldCanvas;
     Image healthFillImage;
     TextMeshProUGUI healthText;
+    static Material bodyMaterial;
+    static Material accentMaterial;
 
     void Start()
     {
         currentHealth = maxHealth;
         spawnPosition = transform.position;
         patrolTarget = spawnPosition;
+        EnsureVisibleModel();
         EnsureMainCollider();
         EnsureStablePhysics();
         SnapToGround();
@@ -70,6 +73,98 @@ public class BossEnemy : MonoBehaviour
         UpdateHealthUI(false);
         RefreshTarget();
         PickPatrolTarget(true);
+    }
+
+    void EnsureVisibleModel()
+    {
+        if (HasVisibleRenderer())
+            return;
+
+        EnsureMaterials();
+
+        GameObject visualRoot = new GameObject("Visual");
+        visualRoot.transform.SetParent(transform, false);
+
+        CreatePart("Body", PrimitiveType.Capsule, visualRoot.transform,
+            new Vector3(0f, 1.35f, 0f),
+            new Vector3(1.9f, 2.3f, 1.9f),
+            Quaternion.identity,
+            bodyMaterial);
+
+        CreatePart("Head", PrimitiveType.Cube, visualRoot.transform,
+            new Vector3(0f, 2.75f, 0.8f),
+            new Vector3(1.15f, 0.95f, 1f),
+            Quaternion.identity,
+            bodyMaterial);
+
+        CreatePart("HornLeft", PrimitiveType.Cylinder, visualRoot.transform,
+            new Vector3(-0.42f, 3.25f, 0.88f),
+            new Vector3(0.16f, 0.55f, 0.16f),
+            Quaternion.Euler(12f, 0f, -22f),
+            accentMaterial);
+
+        CreatePart("HornRight", PrimitiveType.Cylinder, visualRoot.transform,
+            new Vector3(0.42f, 3.25f, 0.88f),
+            new Vector3(0.16f, 0.55f, 0.16f),
+            Quaternion.Euler(12f, 0f, 22f),
+            accentMaterial);
+
+        CreatePart("ArmLeft", PrimitiveType.Cube, visualRoot.transform,
+            new Vector3(-1.1f, 1.55f, 0f),
+            new Vector3(0.42f, 1.4f, 0.42f),
+            Quaternion.Euler(0f, 0f, 10f),
+            accentMaterial);
+
+        CreatePart("ArmRight", PrimitiveType.Cube, visualRoot.transform,
+            new Vector3(1.1f, 1.55f, 0f),
+            new Vector3(0.42f, 1.4f, 0.42f),
+            Quaternion.Euler(0f, 0f, -10f),
+            accentMaterial);
+    }
+
+    bool HasVisibleRenderer()
+    {
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer != null && renderer.transform != transform)
+                return true;
+        }
+
+        return false;
+    }
+
+    void EnsureMaterials()
+    {
+        if (bodyMaterial == null)
+        {
+            bodyMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            bodyMaterial.color = new Color(0.34f, 0.08f, 0.08f, 1f);
+        }
+
+        if (accentMaterial == null)
+        {
+            accentMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            accentMaterial.color = new Color(0.8f, 0.68f, 0.2f, 1f);
+        }
+    }
+
+    void CreatePart(string partName, PrimitiveType primitiveType, Transform parent, Vector3 localPosition, Vector3 localScale, Quaternion localRotation, Material material)
+    {
+        GameObject part = GameObject.CreatePrimitive(primitiveType);
+        part.name = partName;
+        part.transform.SetParent(parent, false);
+        part.transform.localPosition = localPosition;
+        part.transform.localRotation = localRotation;
+        part.transform.localScale = localScale;
+
+        Collider partCollider = part.GetComponent<Collider>();
+        if (partCollider != null)
+            Destroy(partCollider);
+
+        Renderer renderer = part.GetComponent<Renderer>();
+        if (renderer != null && material != null)
+            renderer.sharedMaterial = material;
     }
 
     void Update()
