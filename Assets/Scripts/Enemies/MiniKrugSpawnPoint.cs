@@ -103,7 +103,7 @@ public class MiniKrugSpawnPoint : MonoBehaviour
 
     PlayerMovement FindClosestPlayerToSpawner()
     {
-        PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
+        PlayerMovement[] players = LanMultiplayerManager.GetGameplayPlayers();
         float bestDistance = float.MaxValue;
         PlayerMovement bestPlayer = null;
 

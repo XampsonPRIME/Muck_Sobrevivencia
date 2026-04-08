@@ -44,6 +44,7 @@ public class BossEnemy : MonoBehaviour
     float nextTargetRefreshTime;
     float nextPatrolRefreshTime;
     float healthUiHideTime;
+    public int CurrentHealth => currentHealth;
 
     Vector3 spawnPosition;
     Vector3 patrolTarget;
@@ -62,6 +63,7 @@ public class BossEnemy : MonoBehaviour
         EnsureMainCollider();
         EnsureStablePhysics();
         SnapToGround();
+        LanNetworkEntity.Ensure(this);
         spawnPosition = transform.position;
         patrolTarget = spawnPosition;
         EnsureCombatUI();
@@ -94,6 +96,33 @@ public class BossEnemy : MonoBehaviour
 
         if (currentHealth <= 0)
             Die();
+    }
+
+    public void ApplyNetworkHit(int damage, out int goldAmount, out int xpAmount, out bool unlockMagic, out int remainingHealth, out bool destroyed)
+    {
+        int finalDamage = Mathf.Max(1, damage);
+        currentHealth -= finalDamage;
+        ShowDamagePopup(finalDamage);
+        ShowHealthUITemporarily();
+        UpdateHealthUI(true);
+
+        destroyed = currentHealth <= 0;
+        goldAmount = destroyed ? Random.Range(minGoldDrop, maxGoldDrop + 1) : 0;
+        xpAmount = destroyed ? xpReward : 0;
+        unlockMagic = destroyed;
+        remainingHealth = Mathf.Max(0, currentHealth);
+
+        if (destroyed)
+            Destroy(gameObject);
+    }
+
+    public void ApplyNetworkState(int networkHealth, bool destroyed)
+    {
+        currentHealth = Mathf.Max(0, networkHealth);
+        UpdateHealthUI(!destroyed);
+
+        if (destroyed)
+            Destroy(gameObject);
     }
 
     void UpdateMovement()
@@ -206,7 +235,7 @@ public class BossEnemy : MonoBehaviour
     {
         nextTargetRefreshTime = Time.time + targetRefreshInterval;
 
-        PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
+        PlayerMovement[] players = LanMultiplayerManager.GetGameplayPlayers();
         float bestDistance = float.MaxValue;
         PlayerMovement closestPlayer = null;
 

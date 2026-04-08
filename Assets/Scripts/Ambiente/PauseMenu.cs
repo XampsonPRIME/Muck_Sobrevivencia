@@ -16,6 +16,8 @@ public class PauseMenu : MonoBehaviour
     GameObject overlayObject;
     GameObject mainPanel;
     GameObject settingsPanel;
+    TextMeshProUGUI mainSessionInfoText;
+    TextMeshProUGUI settingsSessionInfoText;
     InputAction pauseAction;
     PlayerMovement playerMovement;
 
@@ -56,6 +58,7 @@ public class PauseMenu : MonoBehaviour
     void Update()
     {
         ResolvePlayer();
+        UpdateSessionInfo();
 
         if (GameState.IsInLobby || GameState.IsPlayerDead)
         {
@@ -150,7 +153,7 @@ public class PauseMenu : MonoBehaviour
     void ResolvePlayer()
     {
         if (playerMovement == null)
-            playerMovement = FindFirstObjectByType<PlayerMovement>();
+            playerMovement = LanMultiplayerManager.FindGameplayPlayer();
     }
 
     void LoadSettings()
@@ -245,9 +248,10 @@ public class PauseMenu : MonoBehaviour
 
         mainPanel = CreatePanel("MainPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(560f, 520f));
         CreateTitle(mainPanel.transform, "Pausado");
-        CreateButton(mainPanel.transform, "ResumeButton", "Continuar", new Vector2(0f, 70f), new Color(0.72f, 0.56f, 0.18f, 1f), ResumeGame);
-        CreateButton(mainPanel.transform, "SettingsButton", "Configuracoes", new Vector2(0f, -40f), new Color(0.34f, 0.54f, 0.78f, 1f), OpenSettings);
-        CreateButton(mainPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -150f), new Color(0.68f, 0.29f, 0.24f, 1f), QuitGame);
+        CreateButton(mainPanel.transform, "ResumeButton", "Continuar", new Vector2(0f, 95f), new Color(0.72f, 0.56f, 0.18f, 1f), ResumeGame);
+        CreateButton(mainPanel.transform, "SettingsButton", "Configuracoes", new Vector2(0f, -15f), new Color(0.34f, 0.54f, 0.78f, 1f), OpenSettings);
+        CreateButton(mainPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -125f), new Color(0.68f, 0.29f, 0.24f, 1f), QuitGame);
+        mainSessionInfoText = CreateInfoBlock(mainPanel.transform, new Vector2(0f, -225f));
 
         settingsPanel = CreatePanel("SettingsPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(640f, 560f));
         CreateTitle(settingsPanel.transform, "Configuracoes");
@@ -261,7 +265,9 @@ public class PauseMenu : MonoBehaviour
             playerMovement != null ? playerMovement.mouseSensitivity : PlayerPrefs.GetFloat(MouseSensitivityKey, 2f),
             SetMouseSensitivity
         );
-        CreateButton(settingsPanel.transform, "BackButton", "Voltar", new Vector2(0f, -180f), new Color(0.72f, 0.56f, 0.18f, 1f), ShowMainPanel);
+        settingsSessionInfoText = CreateInfoBlock(settingsPanel.transform, new Vector2(0f, -165f));
+        UpdateSessionInfo();
+        CreateButton(settingsPanel.transform, "BackButton", "Voltar", new Vector2(0f, -220f), new Color(0.72f, 0.56f, 0.18f, 1f), ShowMainPanel);
     }
 
     GameObject CreatePanel(string name, Transform parent, Vector2 anchoredPosition, Vector2 size)
@@ -382,6 +388,50 @@ public class PauseMenu : MonoBehaviour
         slider.fillRect = fillRect;
         slider.handleRect = handleRect;
         slider.onValueChanged.AddListener(onChanged);
+    }
+
+    TextMeshProUGUI CreateInfoBlock(Transform parent, Vector2 anchoredPosition)
+    {
+        GameObject infoObject = CreateUiObject("SessionInfo", parent);
+        RectTransform infoRect = infoObject.AddComponent<RectTransform>();
+        infoRect.anchorMin = new Vector2(0.5f, 0.5f);
+        infoRect.anchorMax = new Vector2(0.5f, 0.5f);
+        infoRect.pivot = new Vector2(0.5f, 0.5f);
+        infoRect.anchoredPosition = anchoredPosition;
+        infoRect.sizeDelta = new Vector2(540f, 120f);
+
+        TextMeshProUGUI infoText = infoObject.AddComponent<TextMeshProUGUI>();
+        infoText.alignment = TextAlignmentOptions.Center;
+        infoText.fontSize = 24f;
+        infoText.color = new Color(0.84f, 0.9f, 0.98f, 1f);
+        infoText.text = "Sessao: Solo\nIP do host: -\nPorta: -";
+        return infoText;
+    }
+
+    void UpdateSessionInfo()
+    {
+        if (mainSessionInfoText == null && settingsSessionInfoText == null)
+            return;
+
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager == null || !manager.IsMultiplayerActive)
+        {
+            SetSessionInfoText("Sessao: Solo\nIP do host: -\nPorta: -");
+            return;
+        }
+
+        string sessionLabel = manager.Mode == LanMultiplayerManager.SessionMode.Host ? "Host LAN" : "Cliente LAN";
+        string hostAddress = string.IsNullOrWhiteSpace(manager.CurrentAddress) ? "-" : manager.CurrentAddress;
+        SetSessionInfoText($"Sessao: {sessionLabel}\nIP do host: {hostAddress}\nPorta: {manager.CurrentPort}");
+    }
+
+    void SetSessionInfoText(string text)
+    {
+        if (mainSessionInfoText != null)
+            mainSessionInfoText.text = text;
+
+        if (settingsSessionInfoText != null)
+            settingsSessionInfoText.text = text;
     }
 
     Button CreateButton(Transform parent, string objectName, string label, Vector2 anchoredPosition, Color buttonColor, UnityEngine.Events.UnityAction onClick)

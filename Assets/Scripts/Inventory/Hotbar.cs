@@ -13,7 +13,6 @@ public class Hotbar : MonoBehaviour
         // 🔥 NÃO DUPLICAR (CORRETO)
         foreach (var slot in slots)
         {
-            Debug.Log($"Slot: {slot.name}, Item: {slot.itemData?.itemName}");
             if (slot.itemData?.itemName == itemName)
             {
                 return; // 🔥 não adiciona duplicado

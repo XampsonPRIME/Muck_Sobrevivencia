@@ -11,7 +11,7 @@ public class LevelHUD : MonoBehaviour
 
     void Start()
     {
-        progression = FindFirstObjectByType<PlayerProgression>();
+        ResolveProgression();
         EnsureUI();
         Refresh();
     }
@@ -19,10 +19,17 @@ public class LevelHUD : MonoBehaviour
     void Update()
     {
         if (progression == null)
-            progression = FindFirstObjectByType<PlayerProgression>();
+            ResolveProgression();
 
         EnsureUI();
         Refresh();
+    }
+
+    void ResolveProgression()
+    {
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
+        if (player != null)
+            progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
     }
 
     void EnsureUI()

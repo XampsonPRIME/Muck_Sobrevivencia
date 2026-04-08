@@ -70,7 +70,7 @@ public class SaveGameManager : MonoBehaviour
         if (FindFirstObjectByType<SaveGameManager>() != null)
             return;
 
-        if (FindFirstObjectByType<PlayerMovement>() == null)
+        if (LanMultiplayerManager.FindGameplayPlayer() == null)
             return;
 
         GameObject managerObject = new GameObject("SaveGameManager");
@@ -97,6 +97,9 @@ public class SaveGameManager : MonoBehaviour
     void Update()
     {
         ResolveReferences();
+
+        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+            return;
 
         if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || playerMovement == null)
             return;
@@ -143,6 +146,9 @@ public class SaveGameManager : MonoBehaviour
     public bool SaveGame(bool showMessage = false)
     {
         ResolveReferences();
+
+        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+            return false;
 
         if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused)
             return false;
@@ -217,6 +223,9 @@ public class SaveGameManager : MonoBehaviour
     public bool LoadGame()
     {
         ResolveReferences();
+        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+            return false;
+
         if (!HasSave() || playerMovement == null || inventory == null || hotbar == null)
             return false;
 
@@ -356,13 +365,13 @@ public class SaveGameManager : MonoBehaviour
     void ResolveReferences()
     {
         if (playerMovement == null)
-            playerMovement = FindFirstObjectByType<PlayerMovement>();
+            playerMovement = LanMultiplayerManager.FindGameplayPlayer();
 
         if (playerInteraction == null)
-            playerInteraction = FindFirstObjectByType<PlayerInteraction>();
+            playerInteraction = playerMovement != null ? playerMovement.GetComponent<PlayerInteraction>() : FindFirstObjectByType<PlayerInteraction>();
 
         if (inventory == null)
-            inventory = FindFirstObjectByType<Inventory>();
+            inventory = playerMovement != null ? playerMovement.GetComponent<Inventory>() : FindFirstObjectByType<Inventory>();
 
         if (hotbar == null)
             hotbar = FindFirstObjectByType<Hotbar>();
@@ -390,12 +399,13 @@ public class SaveGameManager : MonoBehaviour
 
     void OnApplicationQuit()
     {
-        SaveGame();
+        if (LanMultiplayerManager.Instance == null || !LanMultiplayerManager.Instance.IsMultiplayerActive)
+            SaveGame();
     }
 
     void OnApplicationPause(bool pauseStatus)
     {
-        if (pauseStatus)
+        if (pauseStatus && (LanMultiplayerManager.Instance == null || !LanMultiplayerManager.Instance.IsMultiplayerActive))
             SaveGame();
     }
 }

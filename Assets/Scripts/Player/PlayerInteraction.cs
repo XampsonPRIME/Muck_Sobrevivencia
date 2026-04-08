@@ -72,7 +72,7 @@ public class PlayerInteraction : MonoBehaviour
         playerMovement = GetComponent<PlayerMovement>();
 
         if (inventory == null)
-            inventory = FindFirstObjectByType<Inventory>();
+            inventory = GetComponent<Inventory>();
 
         if (hotbar == null)
             hotbar = FindFirstObjectByType<Hotbar>();
@@ -372,15 +372,6 @@ public class PlayerInteraction : MonoBehaviour
             anim.SetTrigger("Chop");
         }
 
-        Cow cow = hit.collider.GetComponent<Cow>() ??
-                  hit.collider.GetComponentInParent<Cow>();
-
-        if (cow != null)
-        {
-            cow.Hit(toolDamage);
-            return;
-        }
-
         MiniKrug miniKrug = hit.collider.GetComponent<MiniKrug>() ??
                             hit.collider.GetComponentInParent<MiniKrug>();
 
@@ -395,7 +386,24 @@ public class PlayerInteraction : MonoBehaviour
 
         if (bossEnemy != null)
         {
+            if (LanMultiplayerManager.Instance != null &&
+                LanMultiplayerManager.Instance.TryHandleGameplayHit(bossEnemy, playerMovement, currentTool, toolDamage))
+                return;
+
             bossEnemy.Hit(toolDamage, playerMovement);
+            return;
+        }
+
+        Cow cow = hit.collider.GetComponent<Cow>() ??
+                  hit.collider.GetComponentInParent<Cow>();
+
+        if (cow != null)
+        {
+            if (LanMultiplayerManager.Instance != null &&
+                LanMultiplayerManager.Instance.TryHandleGameplayHit(cow, playerMovement, currentTool, toolDamage))
+                return;
+
+            cow.Hit(toolDamage);
             return;
         }
 
@@ -403,7 +411,13 @@ public class PlayerInteraction : MonoBehaviour
                                 hit.collider.GetComponentInParent<ResourceNode>();
 
         if (resource != null)
+        {
+            if (LanMultiplayerManager.Instance != null &&
+                LanMultiplayerManager.Instance.TryHandleGameplayHit(resource, playerMovement, currentTool, toolDamage))
+                return;
+
             resource.Hit(inventory, hotbar, currentTool, toolDamage);
+        }
     }
 
     bool TryGetInteractionRay(out Ray ray)

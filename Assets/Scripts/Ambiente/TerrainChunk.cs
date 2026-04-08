@@ -4,6 +4,31 @@ using System.Collections.Generic;
 
 public class TerrainChunk : MonoBehaviour
 {
+    class ChunkRandom
+    {
+        readonly System.Random random;
+
+        public ChunkRandom(int seed)
+        {
+            random = new System.Random(seed);
+        }
+
+        public float Value()
+        {
+            return (float)random.NextDouble();
+        }
+
+        public int Range(int minInclusive, int maxExclusive)
+        {
+            return random.Next(minInclusive, maxExclusive);
+        }
+
+        public float Range(float minInclusive, float maxInclusive)
+        {
+            return Mathf.Lerp(minInclusive, maxInclusive, Value());
+        }
+    }
+
     public enum BiomeType
     {
         Desert,
@@ -100,6 +125,21 @@ public class TerrainChunk : MonoBehaviour
     List<Vector3> cowGroupPositions = new List<Vector3>();
     static Material riverMaterial;
 
+    int BuildChunkSeed(Vector2 offset, int salt)
+    {
+        int worldSeed = LanMultiplayerManager.Instance != null ? LanMultiplayerManager.Instance.WorldSeed : 0;
+
+        unchecked
+        {
+            int hash = 17;
+            hash = (hash * 31) + worldSeed;
+            hash = (hash * 31) + Mathf.RoundToInt(offset.x);
+            hash = (hash * 31) + Mathf.RoundToInt(offset.y);
+            hash = (hash * 31) + salt;
+            return hash;
+        }
+    }
+
     public void Generate(Vector2 offset)
     {
         if (alreadyGenerated)
@@ -108,7 +148,10 @@ public class TerrainChunk : MonoBehaviour
         alreadyGenerated = true;
 
         if (player == null)
-            player = FindFirstObjectByType<PlayerMovement>()?.transform;
+        {
+            PlayerMovement playerMovement = LanMultiplayerManager.FindGameplayPlayer();
+            player = playerMovement != null ? playerMovement.transform : null;
+        }
 
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
@@ -578,6 +621,7 @@ public class TerrainChunk : MonoBehaviour
     // 🌲 VEGETAÇÃO AJUSTADA
     IEnumerator SpawnVegetationAsync(Vector2 offset)
     {
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 101));
         usedPositions.Clear();
         int treeCount = 0;
         int iterationsSinceYield = 0;
@@ -640,7 +684,7 @@ public class TerrainChunk : MonoBehaviour
 
 
             // 🌲 ÁRVORES
-            if (treeCount < maxTreesPerChunk && Random.value < density)
+            if (treeCount < maxTreesPerChunk && rng.Value() < density)
             {
                 List<TreeData> validTrees = new List<TreeData>();
 
@@ -655,7 +699,7 @@ public class TerrainChunk : MonoBehaviour
 
                 if (validTrees.Count > 0)
                 {
-                    TreeData selected = validTrees[Random.Range(0, validTrees.Count)];
+                    TreeData selected = validTrees[rng.Range(0, validTrees.Count)];
                     Vector3 groundPoint = GetGroundPoint(worldPos);
 
                     if (IsTooClose(groundPoint, minTreeDistance))
@@ -664,7 +708,7 @@ public class TerrainChunk : MonoBehaviour
                     GameObject tree = Instantiate(
                         selected.prefab,
                         groundPoint,
-                        Quaternion.Euler(0, Random.Range(0, 360), 0),
+                        Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
                         transform
                     );
 
@@ -676,16 +720,16 @@ public class TerrainChunk : MonoBehaviour
             }
 
             // 🍄
-            if (biome == BiomeType.Forest && Random.value < mushroomDensity) // chance do cluster
+            if (biome == BiomeType.Forest && rng.Value() < mushroomDensity) // chance do cluster
             {
                 int mushroomCount = 3;
 
                 for (int m = 0; m < mushroomCount; m++)
                 {
                     Vector3 offsetPos = new Vector3(
-                        Random.Range(-1.5f, 1.5f),
+                        rng.Range(-1.5f, 1.5f),
                         0,
-                        Random.Range(-1.5f, 1.5f)
+                        rng.Range(-1.5f, 1.5f)
                     );
 
                     Vector3 finalPos = worldPos + offsetPos;
@@ -698,7 +742,7 @@ public class TerrainChunk : MonoBehaviour
                     Instantiate(
                         mushroomPrefab,
                         finalGroundPoint + Vector3.up * 0.2f,
-                        Quaternion.Euler(0, Random.Range(0, 360), 0),
+                        Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
                         transform
                     );
 
@@ -722,6 +766,7 @@ public class TerrainChunk : MonoBehaviour
 
     IEnumerator SpawnRockClustersAsync(Vector2 offset)
     {
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 202));
         float density = rockDensity;
         int iterationsSinceYield = 0;
 
@@ -760,11 +805,11 @@ public class TerrainChunk : MonoBehaviour
                 break;
 
             // 🎯 chance de nem gerar cluster
-            if (Random.value > density)
+            if (rng.Value() > density)
                 continue;
 
-            float x = Random.Range(0, size);
-            float z = Random.Range(0, size);
+            float x = rng.Range(0f, size);
+            float z = rng.Range(0f, size);
 
             int index = (int)z * (size + 1) + (int)x;
 
@@ -794,9 +839,9 @@ public class TerrainChunk : MonoBehaviour
                     break;
 
                 Vector3 offsetPos = new Vector3(
-                    Random.Range(-10f, 10f), // 🔥 bem espalhado
+                    rng.Range(-10f, 10f), // 🔥 bem espalhado
                     0,
-                    Random.Range(-10f, 10f)
+                    rng.Range(-10f, 10f)
                 );
 
                 Vector3 spawnPos = basePos + offsetPos;
@@ -819,9 +864,9 @@ public class TerrainChunk : MonoBehaviour
                     continue;
 
                 GameObject rock = Instantiate(
-                    GetRandomRock(),
+                    GetRandomRock(rng),
                     spawnPos,
-                    Quaternion.Euler(0, Random.Range(0, 360), 0),
+                    Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
                     transform
                 );
 
@@ -895,6 +940,7 @@ public class TerrainChunk : MonoBehaviour
 
     IEnumerator SpawnCowGroupsAsync(Vector2 offset)
     {
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 303));
         int desiredGroups = Mathf.Max(0, maxCowGroupsPerChunk);
 
         if (cowPrefab == null || desiredGroups == 0)
@@ -941,10 +987,10 @@ public class TerrainChunk : MonoBehaviour
         {
             yield return null;
 
-            if (Random.value > cowGroupChance)
+            if (rng.Value() > cowGroupChance)
                 break;
 
-            int index = Random.Range(0, validPositions.Count);
+            int index = rng.Range(0, validPositions.Count);
             Vector3 chosenPos = validPositions[index];
 
             CreateCowSpawnPoint(chosenPos);
@@ -986,9 +1032,9 @@ public class TerrainChunk : MonoBehaviour
         spawnPoint.hoofMaterial = cowHoofMaterial;
     }
 
-    GameObject GetRandomRock()
+    GameObject GetRandomRock(ChunkRandom rng)
     {
-        float r = Random.value;
+        float r = rng.Value();
 
         if (r < 0.2f) return rockLargePrefab;
         if (r < 0.5f) return rockMediumPrefab;

@@ -116,7 +116,7 @@ public class PlayerMovement : MonoBehaviour
 
         playerModel = anim.gameObject;
         playerModelStartLocalPosition = playerModel.transform.localPosition;
-        inventory = GetComponent<Inventory>() ?? FindFirstObjectByType<Inventory>();
+        inventory = GetComponent<Inventory>();
         hotbar = GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
         spawnPosition = transform.position;
         spawnRotation = transform.rotation;

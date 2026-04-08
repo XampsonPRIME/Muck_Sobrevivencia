@@ -265,7 +265,8 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
     {
         if (IsEmpty()) return;
 
-        Inventory inventory = FindFirstObjectByType<Inventory>();
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
+        Inventory inventory = player != null ? player.GetComponent<Inventory>() : null;
         if (inventory == null) return;
 
         string nameToReturn = itemData != null ? itemData.itemName : itemName;
@@ -293,7 +294,8 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
     {
         if (inventorySlot == null || invItem == null || invAmount <= 0) return;
 
-        Inventory inventory = FindFirstObjectByType<Inventory>();
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
+        Inventory inventory = player != null ? player.GetComponent<Inventory>() : null;
         if (inventory == null) return;
 
         if (IsEmpty())

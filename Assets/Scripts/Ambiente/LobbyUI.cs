@@ -11,6 +11,10 @@ public class LobbyUI : MonoBehaviour
     Canvas canvas;
     SaveGameManager saveGameManager;
     GraphicRaycaster graphicRaycaster;
+    InputField addressInput;
+    InputField portInput;
+    TextMeshProUGUI statusText;
+    bool waitingForSession;
 
     void Start()
     {
@@ -94,8 +98,8 @@ public class LobbyUI : MonoBehaviour
             CreateButton(
                 overlayObject.transform,
                 "ContinueButton",
-                "Continuar",
-                new Vector2(0f, -34f),
+                "Continuar solo",
+                new Vector2(0f, -12f),
                 new Color(0.72f, 0.56f, 0.18f, 1f),
                 ContinueGame
             );
@@ -103,8 +107,8 @@ public class LobbyUI : MonoBehaviour
             CreateButton(
                 overlayObject.transform,
                 "NewGameButton",
-                "Novo jogo",
-                new Vector2(0f, -154f),
+                "Novo solo",
+                new Vector2(0f, -126f),
                 new Color(0.34f, 0.54f, 0.78f, 1f),
                 StartGame
             );
@@ -114,12 +118,77 @@ public class LobbyUI : MonoBehaviour
             CreateButton(
                 overlayObject.transform,
                 "StartButton",
-                "Entrar no jogo",
-                new Vector2(0f, -56f),
+                "Jogar solo",
+                new Vector2(0f, -12f),
                 new Color(0.72f, 0.56f, 0.18f, 1f),
                 StartGame
             );
         }
+
+        CreateSectionLabel(overlayObject.transform, "Multiplayer LAN", new Vector2(0f, -210f), 36f, new Color(0.97f, 0.88f, 0.7f, 1f));
+
+        CreateButton(
+            overlayObject.transform,
+            "HostButton",
+            "Hospedar",
+            new Vector2(-190f, -430f),
+            new Color(0.34f, 0.66f, 0.48f, 1f),
+            HostGame
+        );
+
+        CreateButton(
+            overlayObject.transform,
+            "JoinButton",
+            "Entrar",
+            new Vector2(190f, -430f),
+            new Color(0.31f, 0.49f, 0.8f, 1f),
+            JoinGame
+        );
+
+        CreateSectionLabel(overlayObject.transform, "IP do host", new Vector2(-210f, -280f), 24f, new Color(0.78f, 0.86f, 0.95f, 1f));
+        CreateSectionLabel(overlayObject.transform, "Porta", new Vector2(230f, -280f), 24f, new Color(0.78f, 0.86f, 0.95f, 1f));
+
+        try
+        {
+            addressInput = CreateInputField(
+                overlayObject.transform,
+                "AddressInput",
+                "127.0.0.1",
+                new Vector2(-120f, -340f),
+                new Vector2(460f, 74f),
+                InputField.ContentType.Standard
+            );
+            addressInput.text = "127.0.0.1";
+
+            portInput = CreateInputField(
+                overlayObject.transform,
+                "PortInput",
+                "7777",
+                new Vector2(300f, -340f),
+                new Vector2(160f, 74f),
+                InputField.ContentType.IntegerNumber
+            );
+            portInput.text = "7777";
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning($"Falha ao criar campos do lobby multiplayer: {exception.Message}");
+            addressInput = null;
+            portInput = null;
+        }
+
+        GameObject statusObject = CreateUiObject("StatusText", overlayObject.transform);
+        RectTransform statusRect = statusObject.AddComponent<RectTransform>();
+        statusRect.anchorMin = new Vector2(0.5f, 0.5f);
+        statusRect.anchorMax = new Vector2(0.5f, 0.5f);
+        statusRect.sizeDelta = new Vector2(1100f, 120f);
+        statusRect.anchoredPosition = new Vector2(0f, -540f);
+
+        statusText = statusObject.AddComponent<TextMeshProUGUI>();
+        statusText.alignment = TextAlignmentOptions.Center;
+        statusText.fontSize = 24f;
+        statusText.color = new Color(0.76f, 0.82f, 0.9f, 1f);
+        statusText.text = "Solo";
     }
 
     void EnterLobby()
@@ -132,6 +201,22 @@ public class LobbyUI : MonoBehaviour
 
     void Update()
     {
+        if (statusText != null && LanMultiplayerManager.Instance != null)
+            statusText.text = LanMultiplayerManager.Instance.StatusMessage;
+
+        if (waitingForSession && LanMultiplayerManager.Instance != null)
+        {
+            if (LanMultiplayerManager.Instance.IsSessionReady)
+            {
+                ExitLobby();
+                Destroy(gameObject);
+                return;
+            }
+
+            if (LanMultiplayerManager.Instance.State == LanMultiplayerManager.SessionState.Error)
+                waitingForSession = false;
+        }
+
         if (!GameState.IsInLobby || canvas == null || graphicRaycaster == null || EventSystem.current == null || Mouse.current == null)
             return;
 
@@ -159,14 +244,45 @@ public class LobbyUI : MonoBehaviour
 
     void StartGame()
     {
+        LanMultiplayerManager.Instance?.StartSolo();
         saveGameManager?.StartNewGame();
         Destroy(gameObject);
     }
 
     void ContinueGame()
     {
+        LanMultiplayerManager.Instance?.StartSolo();
         if (saveGameManager != null && saveGameManager.ContinueFromSave())
             Destroy(gameObject);
+    }
+
+    void HostGame()
+    {
+        int port = ReadPort();
+        if (LanMultiplayerManager.Instance == null)
+            return;
+
+        if (!LanMultiplayerManager.Instance.StartHost(port))
+            return;
+
+        ExitLobby();
+        Destroy(gameObject);
+    }
+
+    void JoinGame()
+    {
+        int port = ReadPort();
+        string address = addressInput != null && !string.IsNullOrWhiteSpace(addressInput.text)
+            ? addressInput.text
+            : "127.0.0.1";
+
+        if (LanMultiplayerManager.Instance == null)
+            return;
+
+        if (!LanMultiplayerManager.Instance.StartClient(address, port))
+            return;
+
+        waitingForSession = true;
     }
 
     Button CreateButton(Transform parent, string objectName, string label, Vector2 anchoredPosition, Color buttonColor, UnityEngine.Events.UnityAction onClick)
@@ -206,6 +322,89 @@ public class LobbyUI : MonoBehaviour
         buttonText.color = new Color(0.12f, 0.08f, 0.02f, 1f);
 
         return button;
+    }
+
+    InputField CreateInputField(Transform parent, string objectName, string placeholder, Vector2 anchoredPosition, Vector2 size, InputField.ContentType contentType)
+    {
+        Font builtInFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+
+        GameObject fieldObject = CreateUiObject(objectName, parent);
+        RectTransform fieldRect = fieldObject.AddComponent<RectTransform>();
+        fieldRect.anchorMin = new Vector2(0.5f, 0.5f);
+        fieldRect.anchorMax = new Vector2(0.5f, 0.5f);
+        fieldRect.sizeDelta = size;
+        fieldRect.anchoredPosition = anchoredPosition;
+
+        Image fieldImage = fieldObject.AddComponent<Image>();
+        fieldImage.color = new Color(0.12f, 0.15f, 0.2f, 0.96f);
+
+        InputField inputField = fieldObject.AddComponent<InputField>();
+        inputField.contentType = contentType;
+        inputField.lineType = InputField.LineType.SingleLine;
+        inputField.selectionColor = new Color(0.65f, 0.8f, 1f, 0.35f);
+
+        GameObject placeholderObject = CreateUiObject("Placeholder", fieldObject.transform);
+        RectTransform placeholderRect = placeholderObject.AddComponent<RectTransform>();
+        placeholderRect.anchorMin = Vector2.zero;
+        placeholderRect.anchorMax = Vector2.one;
+        placeholderRect.offsetMin = new Vector2(18f, 8f);
+        placeholderRect.offsetMax = new Vector2(-18f, -8f);
+
+        Text placeholderText = placeholderObject.AddComponent<Text>();
+        placeholderText.font = builtInFont;
+        placeholderText.text = placeholder;
+        placeholderText.fontSize = 28;
+        placeholderText.alignment = TextAnchor.MiddleLeft;
+        placeholderText.color = new Color(0.63f, 0.7f, 0.78f, 0.85f);
+
+        GameObject textObject = CreateUiObject("Text", fieldObject.transform);
+        RectTransform textRect = textObject.AddComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(18f, 8f);
+        textRect.offsetMax = new Vector2(-18f, -8f);
+
+        Text text = textObject.AddComponent<Text>();
+        text.font = builtInFont;
+        text.fontSize = 28;
+        text.alignment = TextAnchor.MiddleLeft;
+        text.color = new Color(0.94f, 0.97f, 1f, 1f);
+
+        inputField.textComponent = text;
+        inputField.placeholder = placeholderText;
+        return inputField;
+    }
+
+    void CreateSectionLabel(Transform parent, string label, Vector2 anchoredPosition, float fontSize, Color color)
+    {
+        GameObject labelObject = CreateUiObject($"{label}Label", parent);
+        RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+        labelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        labelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        labelRect.sizeDelta = new Vector2(780f, 54f);
+        labelRect.anchoredPosition = anchoredPosition;
+
+        TextMeshProUGUI text = labelObject.AddComponent<TextMeshProUGUI>();
+        text.text = label;
+        text.alignment = TextAlignmentOptions.Center;
+        text.fontSize = fontSize;
+        text.color = color;
+    }
+
+    int ReadPort()
+    {
+        if (portInput != null && int.TryParse(portInput.text, out int port))
+            return port;
+
+        return 7777;
+    }
+
+    void ExitLobby()
+    {
+        GameState.IsInLobby = false;
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     GameObject CreateUiObject(string objectName, Transform parent)

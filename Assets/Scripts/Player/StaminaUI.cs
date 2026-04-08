@@ -20,6 +20,6 @@ public class StaminaUI : MonoBehaviour
 
     void Start()
     {
-        player = FindFirstObjectByType<PlayerMovement>();
+        player = LanMultiplayerManager.FindGameplayPlayer();
     }
 }

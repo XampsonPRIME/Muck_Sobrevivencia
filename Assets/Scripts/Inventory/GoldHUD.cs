@@ -31,9 +31,8 @@ public class GoldHUD : MonoBehaviour
 
     void Start()
     {
-        inventory = FindFirstObjectByType<Inventory>();
         cycle = FindFirstObjectByType<DayNightCycle>();
-        progression = FindFirstObjectByType<PlayerProgression>();
+        ResolvePlayerReferences();
         EnsureUI();
         HideOriginalClockTexts();
         Refresh();
@@ -41,23 +40,10 @@ public class GoldHUD : MonoBehaviour
 
     void Update()
     {
-        if (inventory == null)
-            inventory = FindFirstObjectByType<Inventory>();
-
         if (cycle == null)
             cycle = FindFirstObjectByType<DayNightCycle>();
 
-        if (progression == null)
-        {
-            progression = FindFirstObjectByType<PlayerProgression>();
-
-            if (progression == null)
-            {
-                PlayerMovement player = FindFirstObjectByType<PlayerMovement>();
-                if (player != null)
-                    progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
-            }
-        }
+        ResolvePlayerReferences();
 
         EnsureUI();
 
@@ -251,5 +237,18 @@ public class GoldHUD : MonoBehaviour
 
         if (goldIcon != null && goldIcon.sprite == null)
             goldIcon.sprite = GoldItemRegistry.GetGoldSprite();
+    }
+
+    void ResolvePlayerReferences()
+    {
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
+        if (player == null)
+            return;
+
+        if (inventory == null)
+            inventory = player.GetComponent<Inventory>();
+
+        if (progression == null)
+            progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
     }
 }

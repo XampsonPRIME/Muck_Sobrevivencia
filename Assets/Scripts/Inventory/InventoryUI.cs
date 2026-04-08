@@ -29,9 +29,12 @@ public class InventoryUI : MonoBehaviour
 
     void Start()
     {
-        inventory = FindFirstObjectByType<Inventory>();
-        playerInteraction = FindFirstObjectByType<PlayerInteraction>();
-        playerMovement = FindFirstObjectByType<PlayerMovement>();
+        playerMovement = LanMultiplayerManager.FindGameplayPlayer();
+        if (playerMovement != null)
+        {
+            inventory = playerMovement.GetComponent<Inventory>();
+            playerInteraction = playerMovement.GetComponent<PlayerInteraction>();
+        }
 
         if (panel != null)
             panel.SetActive(false);

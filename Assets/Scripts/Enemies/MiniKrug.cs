@@ -129,7 +129,7 @@ public class MiniKrug : MonoBehaviour
     {
         nextTargetRefreshTime = Time.time + targetRefreshInterval;
 
-        PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
+        PlayerMovement[] players = LanMultiplayerManager.GetGameplayPlayers();
         float bestDistance = float.MaxValue;
         PlayerMovement closestPlayer = null;
 

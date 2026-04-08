@@ -4,6 +4,33 @@ using UnityEngine;
 
 public class CowSpawnPoint : MonoBehaviour
 {
+    class SpawnRandom
+    {
+        readonly System.Random random;
+
+        public SpawnRandom(int seed)
+        {
+            random = new System.Random(seed);
+        }
+
+        public float Value()
+        {
+            return (float)random.NextDouble();
+        }
+
+        public float Range(float minInclusive, float maxInclusive)
+        {
+            return Mathf.Lerp(minInclusive, maxInclusive, Value());
+        }
+
+        public Vector2 InsideUnitCircle()
+        {
+            float angle = Value() * Mathf.PI * 2f;
+            float radius = Mathf.Sqrt(Value());
+            return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+        }
+    }
+
     public GameObject cowPrefab;
     public int cowsPerGroup = 2;
     public float spawnRadius = 5f;
@@ -44,10 +71,14 @@ public class CowSpawnPoint : MonoBehaviour
 
         while (activeCows.Count < cowsPerGroup)
         {
-            Vector2 offset2D = Random.insideUnitCircle * spawnRadius;
+            int worldSeed = LanMultiplayerManager.Instance != null ? LanMultiplayerManager.Instance.WorldSeed : 0;
+            int spawnIndex = activeCows.Count;
+            int seed = BuildSpawnSeed(worldSeed, spawnIndex);
+            SpawnRandom rng = new SpawnRandom(seed);
+            Vector2 offset2D = rng.InsideUnitCircle() * spawnRadius;
             Vector3 spawnPos = transform.position + new Vector3(offset2D.x, 0f, offset2D.y);
 
-            GameObject cowObject = Instantiate(cowPrefab, spawnPos, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f), transform);
+            GameObject cowObject = Instantiate(cowPrefab, spawnPos, Quaternion.Euler(0f, rng.Range(0f, 360f), 0f), transform);
             Cow cow = cowObject.GetComponent<Cow>();
 
             if (cow == null)
@@ -62,6 +93,19 @@ public class CowSpawnPoint : MonoBehaviour
             cow.SetSpawnData(this, transform.position);
 
             activeCows.Add(cow);
+        }
+    }
+
+    int BuildSpawnSeed(int worldSeed, int spawnIndex)
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = (hash * 31) + worldSeed;
+            hash = (hash * 31) + Mathf.RoundToInt(transform.position.x * 100f);
+            hash = (hash * 31) + Mathf.RoundToInt(transform.position.z * 100f);
+            hash = (hash * 31) + spawnIndex;
+            return hash;
         }
     }
 

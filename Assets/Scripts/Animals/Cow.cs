@@ -34,6 +34,7 @@ public class Cow : MonoBehaviour
     Vector3 targetPosition;
     float idleTimer;
     bool hasTarget;
+    public int CurrentHealth => currentHealth;
 
     CowSpawnPoint spawnPoint;
 
@@ -50,6 +51,7 @@ public class Cow : MonoBehaviour
 
         EnsureMainCollider();
         SnapToGround();
+        LanNetworkEntity.Ensure(this);
         PickNewTarget(true);
     }
 
@@ -73,13 +75,48 @@ public class Cow : MonoBehaviour
             Die();
     }
 
+    public void ApplyNetworkHit(int damage, out int rewardAmount, out string rewardItemName, out string rewardPrefabName, out int remainingHealth, out bool destroyed)
+    {
+        rewardItemName = meatItemData != null ? meatItemData.itemName : "Carne";
+        rewardPrefabName = meatItemData != null ? meatItemData.gameObject.name : string.Empty;
+        rewardAmount = 0;
+
+        currentHealth -= Mathf.Max(1, damage);
+        destroyed = currentHealth <= 0;
+
+        if (destroyed)
+        {
+            rewardAmount = Random.Range(minMeatDrop, maxMeatDrop + 1);
+
+            if (spawnPoint != null)
+                spawnPoint.NotifyCowDeath(this);
+
+            Destroy(gameObject);
+        }
+
+        remainingHealth = Mathf.Max(0, currentHealth);
+    }
+
+    public void ApplyNetworkState(int networkHealth, bool destroyed)
+    {
+        currentHealth = Mathf.Max(0, networkHealth);
+
+        if (destroyed)
+        {
+            if (spawnPoint != null)
+                spawnPoint.NotifyCowDeath(this);
+
+            Destroy(gameObject);
+        }
+    }
+
     public void BuildProceduralModel()
     {
         EnsureMaterials();
 
         Transform oldVisual = transform.Find("Visual");
         if (oldVisual != null)
-            DestroyObject(oldVisual.gameObject);
+            DestroyRuntimeObject(oldVisual.gameObject);
 
         GameObject visualRoot = new GameObject("Visual");
         visualRoot.transform.SetParent(transform, false);

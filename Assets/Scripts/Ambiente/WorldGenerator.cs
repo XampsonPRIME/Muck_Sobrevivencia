@@ -21,10 +21,46 @@ public class WorldGenerator : MonoBehaviour
     readonly HashSet<Vector2Int> queuedChunkCoords = new HashSet<Vector2Int>();
     Vector2Int lastPlayerChunk;
     bool hasLastPlayerChunk;
+    bool initialized;
 
     void Start()
     {
-        player = FindFirstObjectByType<PlayerMovement>().transform;
+        PlayerMovement playerMovement = LanMultiplayerManager.FindGameplayPlayer();
+        player = playerMovement != null ? playerMovement.transform : null;
+    }
+
+    void Update()
+    {
+        if (!initialized)
+        {
+            if (GameState.IsInLobby)
+                return;
+
+            if (LanMultiplayerManager.Instance != null &&
+                LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client &&
+                !LanMultiplayerManager.Instance.IsSessionReady)
+                return;
+
+            InitializeWorld();
+        }
+
+        if (player == null)
+            return;
+
+        Vector2Int currentChunk = GetPlayerChunkCoord();
+        if (!hasLastPlayerChunk || currentChunk != lastPlayerChunk)
+        {
+            UpdateChunkTargets(force: true);
+            lastPlayerChunk = currentChunk;
+            hasLastPlayerChunk = true;
+        }
+
+        ProcessPendingChunkCreates();
+    }
+
+    void InitializeWorld()
+    {
+        player = LanMultiplayerManager.FindGameplayPlayer()?.transform;
         riverSystem = FindFirstObjectByType<RiverSystem>();
 
         if (riverSystem == null)
@@ -41,28 +77,13 @@ public class WorldGenerator : MonoBehaviour
             }
         }
 
-        if (player != null)
-        {
-            riverSystem.Initialize(player.position);
-            SetupDistantMountains();
-            UpdateChunkTargets(force: true);
-        }
-    }
-
-    void Update()
-    {
         if (player == null)
             return;
 
-        Vector2Int currentChunk = GetPlayerChunkCoord();
-        if (!hasLastPlayerChunk || currentChunk != lastPlayerChunk)
-        {
-            UpdateChunkTargets(force: true);
-            lastPlayerChunk = currentChunk;
-            hasLastPlayerChunk = true;
-        }
-
-        ProcessPendingChunkCreates();
+        initialized = true;
+        riverSystem.Initialize(player.position);
+        SetupDistantMountains();
+        UpdateChunkTargets(force: true);
     }
 
     Vector2Int GetPlayerChunkCoord()
