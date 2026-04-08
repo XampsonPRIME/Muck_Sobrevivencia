@@ -44,4 +44,19 @@ public class Inventory : MonoBehaviour
     {
         return items.Find(i => i.itemName == itemName);
     }
+
+    public bool SetBottleState(string itemName, bool oldState, bool newState)
+    {
+        InventoryItem item = items.Find(i => i.itemName == itemName && i.isBottle && i.bottleIsFilled == oldState);
+        if (item == null)
+            return false;
+
+        item.SetBottleState(newState);
+        return true;
+    }
+
+    public void ClearAll()
+    {
+        items.Clear();
+    }
 }

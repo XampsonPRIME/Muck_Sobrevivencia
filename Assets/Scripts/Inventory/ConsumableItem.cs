@@ -5,6 +5,8 @@ public class ConsumableItem : MonoBehaviour
     [Header("Recuperacao")]
     public float healthRestore = 5f;
     public float hungerRestore = 10f;
+    public float thirstRestore = 12f;
+    public Item itemAfterConsume;
 
     [Header("Consumo")]
     public float consumeHoldTime = 1f;

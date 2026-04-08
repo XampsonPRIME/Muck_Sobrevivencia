@@ -11,6 +11,7 @@ public class DayNightCycle : MonoBehaviour
     public Light sun;
     public Light moon;
     public float dayDuration = 120f;
+    [Range(0f, 23.99f)] public float startHour = 8f;
     public TextMeshProUGUI dayText;
     public TextMeshProUGUI hourText;
     public ParticleSystem stars;
@@ -70,6 +71,9 @@ public class DayNightCycle : MonoBehaviour
         // 🌫️ garante que o fog está ativo
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Exponential;
+
+        timeOfDay = Mathf.Repeat(startHour / 24f, 1f);
+        ApplyCycleVisuals();
     }
 
     void Update()
@@ -78,9 +82,17 @@ public class DayNightCycle : MonoBehaviour
 
         if (timeOfDay >= 1f)
         {
-            timeOfDay = 0f;
+            timeOfDay -= 1f;
             currentDay++;
         }
+
+        ApplyCycleVisuals();
+    }
+
+    void ApplyCycleVisuals()
+    {
+        if (sun == null || moon == null)
+            return;
 
         float sunAngle = timeOfDay * 360f;
 
@@ -118,25 +130,34 @@ public class DayNightCycle : MonoBehaviour
         }
 
         // ⭐ estrelas
-        float starVisibility = 1f - sunIntensity;
-        var emission = stars.emission;
-        emission.rateOverTime = starVisibility * 1000f;
+        if (stars != null)
+        {
+            float starVisibility = 1f - sunIntensity;
+            var emission = stars.emission;
+            emission.rateOverTime = starVisibility * 1000f;
+        }
 
         // 🌑 overlay escuro
-        targetAlpha = Mathf.Lerp(0f, 0.7f, 1f - sunIntensity);
-        overlayAlpha = Mathf.Lerp(overlayAlpha, targetAlpha, Time.deltaTime * overlaySpeed);
+        if (darkOverlay != null)
+        {
+            targetAlpha = Mathf.Lerp(0f, 0.7f, 1f - sunIntensity);
+            overlayAlpha = Mathf.Lerp(overlayAlpha, targetAlpha, Time.deltaTime * overlaySpeed);
 
-        Color overlayColor = darkOverlay.color;
-        overlayColor.a = overlayAlpha;
-        darkOverlay.color = overlayColor;
+            Color overlayColor = darkOverlay.color;
+            overlayColor.a = overlayAlpha;
+            darkOverlay.color = overlayColor;
+        }
 
         // ⏰ horário
         float totalHours = timeOfDay * 24f;
         int hours = Mathf.FloorToInt(totalHours);
         int minutes = Mathf.FloorToInt((totalHours - hours) * 60f);
 
-        dayText.text = "Dia " + currentDay;
-        hourText.text = string.Format("{0:00}:{1:00}", hours, minutes);
+        if (dayText != null)
+            dayText.text = "Dia " + currentDay;
+
+        if (hourText != null)
+            hourText.text = string.Format("{0:00}:{1:00}", hours, minutes);
 
         // 🌙 aviso de noite
         if (hours >= 18 && hours < 19 && !warnedNight)
@@ -151,7 +172,7 @@ public class DayNightCycle : MonoBehaviour
         }
 
         // 🎬 fade texto
-        if (isFading)
+        if (isFading && warningText != null)
         {
             fadeTimer += Time.deltaTime;
 

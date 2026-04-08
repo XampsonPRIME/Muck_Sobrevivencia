@@ -137,19 +137,43 @@ MonoBehaviour:
     yOffset: -0.2
     biome: 1
   - prefab: {fileID: 3656225094160004435, guid: 19bef5f74e9cf4bcfb7b611e792580a5, type: 3}
-    yOffset: 1
+    yOffset: 0
     biome: 0
   - prefab: {fileID: 3656225094160004435, guid: 9e3f8e8fa365c4ea5a7c743158fc58c1, type: 3}
-    yOffset: 1
+    yOffset: 0
     biome: 0
   - prefab: {fileID: 3656225094160004435, guid: e679013c6fb234f2c88ae4abffff4aa8, type: 3}
     yOffset: 1.4
     biome: 2
+  - prefab: {fileID: 1749420383345158772, guid: 7e9362da8db664c9da5ffcd4668be754, type: 3}
+    yOffset: 0
+    biome: 1
+  - prefab: {fileID: 6459140991037640186, guid: 18da621a17ab246cba0ff6b4137ed2cf, type: 3}
+    yOffset: 0
+    biome: 1
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
-  treeDensity: 0.02
+  treeDensity: 0.01
+  maxTreesPerChunk: 3
   mushroomDensity: 0.03
   rockClusterCount: 3
-  minDistanceBetweenObjects: 4.5
+  generationYieldInterval: 120
+  enableRiver: 1
+  riverWidth: 4
+  riverBankBlend: 2.5
+  riverDepth: 2.4
+  riverCurveScale: 0.015
+  riverWorldWidth: 140
+  riverWaterHeightOffset: 0.18
+  riverVisualStep: 2
+  riverTriggerStep: 5
+  riverSurfaceThickness: 0.12
+  riverWidthVariation: 0.8
+  riverVisualWidthMultiplier: 0.58
+  riverChunkOverlap: 6
+  riverSurfaceSmoothing: 0.7
+  riverMaxSegmentGap: 4.5
+  minDistanceBetweenObjects: 7
+  minTreeDistance: 10
   rockSmallPrefab: {fileID: 4611803431950446891, guid: d1e087c0d2b404e379ca3a5b0b8c91c9, type: 3}
   rockMediumPrefab: {fileID: 687441992539456540, guid: 79412605d3b7c40f4a9b20e5da838760, type: 3}
   rockLargePrefab: {fileID: 3923582216426070236, guid: 47f48952e3e114c95a12366e66c84319, type: 3}

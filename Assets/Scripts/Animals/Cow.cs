@@ -346,6 +346,7 @@ public class Cow : MonoBehaviour
 
             consumable.healthRestore = 20f;
             consumable.hungerRestore = 35f;
+            consumable.thirstRestore = 5f;
             consumable.consumeHoldTime = 1.2f;
             consumable.handLocalPosition = new Vector3(0.06f, 0.03f, 0.12f);
             consumable.handLocalEulerAngles = new Vector3(0f, -20f, 65f);

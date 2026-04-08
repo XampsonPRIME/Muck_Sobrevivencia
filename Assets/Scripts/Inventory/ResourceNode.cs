@@ -15,6 +15,9 @@ public class ResourceNode : MonoBehaviour
     public Item itemData;
 
     public ToolType requiredTool = ToolType.None;
+    public int emptyHandDamage = 1;
+    public int emptyHandMinDrop = 1;
+    public int emptyHandMaxDrop = 1;
 
     void Start()
     {
@@ -23,8 +26,11 @@ public class ResourceNode : MonoBehaviour
 
     public void Hit(Inventory inventory, Hotbar hotbar, ToolType currentTool, int toolDamage)
     {
-        // 🔥 ferramenta errada
-        if (requiredTool != ToolType.None && currentTool != requiredTool)
+        bool usingEmptyHand = currentTool == ToolType.None;
+        bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
+
+        // Ferramenta errada continua bloqueada. Mao vazia agora funciona com rendimento baixo.
+        if (!usingCorrectTool && !usingEmptyHand)
         {
             string msg = GetToolMessage();
 
@@ -41,14 +47,15 @@ public class ResourceNode : MonoBehaviour
             return;
         }
 
-        currentHealth -= toolDamage;
+        int appliedDamage = usingCorrectTool ? toolDamage : emptyHandDamage;
+        currentHealth -= Mathf.Max(1, appliedDamage);
 
         if (hitEffect != null)
             Instantiate(hitEffect, transform.position + Vector3.up, Quaternion.identity);
 
         if (currentHealth <= 0)
         {
-            DropResource(inventory, hotbar);
+            DropResource(inventory, hotbar, usingCorrectTool);
             Destroy(gameObject);
         }
     }
@@ -68,9 +75,11 @@ public class ResourceNode : MonoBehaviour
         }
     }
 
-    void DropResource(Inventory inventory, Hotbar hotbar)
+    void DropResource(Inventory inventory, Hotbar hotbar, bool usingCorrectTool)
     {
-        int amount = Random.Range(minDrop, maxDrop + 1);
+        int minAmount = usingCorrectTool ? minDrop : emptyHandMinDrop;
+        int maxAmount = usingCorrectTool ? maxDrop : emptyHandMaxDrop;
+        int amount = Random.Range(minAmount, maxAmount + 1);
 
         inventory.AddItem(itemName, amount, itemData);
 

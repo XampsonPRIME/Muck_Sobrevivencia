@@ -26,9 +26,11 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
     {
         currentItem = item;
 
-        if (icon != null && item.itemData.icon != null)
+        Sprite displayIcon = item != null ? item.GetDisplayIcon() : null;
+
+        if (icon != null && displayIcon != null)
         {
-            icon.sprite = item.itemData.icon;
+            icon.sprite = displayIcon;
             icon.enabled = true;
         }
         else if (icon != null)
@@ -105,7 +107,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
 
         hotbar.AddItem(
             currentItem.itemName,
-            currentItem.itemData.icon,
+            currentItem.GetDisplayIcon(),
             currentItem.itemData
         );
     }

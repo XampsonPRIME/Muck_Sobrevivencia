@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 public class PlayerInteraction : MonoBehaviour
 {
     public float interactDistance = 4f;
+    public float interactRadius = 0.45f;
     public Transform cameraHolder;
 
     public Inventory inventory;
@@ -22,14 +23,19 @@ public class PlayerInteraction : MonoBehaviour
     [Header("Mao")]
     public GameObject axePrefab;
     public GameObject pickaxePrefab;
+    public GameObject bottlePrefab;
+    public Vector3 axeHandScale = new(0.39f, 0.39f, 0.39f);
+    public Vector3 pickaxeHandScale = new(0.39f, 0.39f, 0.39f);
 
     GameObject currentEquippedObject;
     HotbarSlot selectedSlot;
     float consumeTimer;
+    bool wasDeadLastFrame;
 
     [Header("Start Item")]
     public bool startWithAxe = true;
     public bool startWithPickaxe = true;
+    public bool startWithBottle = true;
 
     void Awake()
     {
@@ -90,11 +96,45 @@ public class PlayerInteraction : MonoBehaviour
             hotbar.AddItem(pickaxe.itemName, pickaxe.icon, pickaxe);
         }
 
+        if (startWithBottle && bottlePrefab != null)
+        {
+            Item bottle = bottlePrefab.GetComponent<Item>();
+            inventory.AddItem(bottle.itemName, 1, bottle);
+            hotbar.AddItem(bottle.itemName, bottle.icon, bottle);
+        }
+
         SelectSlot(0);
+
+        if (hotbar != null && hotbar.slots != null)
+        {
+            foreach (HotbarSlot slot in hotbar.slots)
+            {
+                if (slot != null && slot.isBottle)
+                    slot.SetBottleState(false);
+            }
+        }
     }
 
     void Update()
     {
+        if (GameState.IsPlayerDead)
+        {
+            if (!wasDeadLastFrame)
+            {
+                wasDeadLastFrame = true;
+                UnequipCurrentItem();
+            }
+
+            consumeTimer = 0f;
+            return;
+        }
+
+        if (wasDeadLastFrame)
+        {
+            wasDeadLastFrame = false;
+            ReequipSelectedSlot();
+        }
+
         HandleHotbarSelection();
 
         if (GameState.IsInventoryOpen)
@@ -102,7 +142,8 @@ public class PlayerInteraction : MonoBehaviour
 
         HandleConsumableUse();
 
-        if (selectedSlot != null && selectedSlot.isConsumable)
+        bool bottleSelected = selectedSlot != null && selectedSlot.isBottle;
+        if (selectedSlot != null && selectedSlot.isConsumable && !bottleSelected)
             return;
 
         if (controls.Player.Attack.WasPressedThisFrame())
@@ -144,15 +185,57 @@ public class PlayerInteraction : MonoBehaviour
             return;
 
         string consumedItemName = selectedSlot.ItemName;
+        int selectedAmount = selectedSlot.GetAmount();
+        Item consumedItemData = selectedSlot.GetItemData();
+        ConsumableItem consumable = consumedItemData != null ? consumedItemData.GetComponent<ConsumableItem>() : null;
+        BottleItem bottle = consumedItemData != null ? consumedItemData.GetComponent<BottleItem>() : null;
+        bool isFilledBottle = selectedSlot.isBottle && selectedSlot.bottleIsFilled;
+        Item replacementItem = bottle == null && consumable != null ? consumable.itemAfterConsume : null;
+
+        if (bottle != null && !bottle.CanDrink(isFilledBottle))
+        {
+            if (MessageSystem.Instance != null)
+                MessageSystem.Instance.ShowMessage("A garrafa esta vazia. Encha antes de beber.");
+
+            return;
+        }
 
         if (playerMovement != null)
         {
             playerMovement.Heal(selectedSlot.healthRestore);
             playerMovement.RestoreHunger(selectedSlot.hungerRestore);
+            playerMovement.RestoreThirst(selectedSlot.thirstRestore);
+        }
+
+        if (bottle != null)
+        {
+            selectedSlot.SetBottleState(false);
+            inventory?.SetBottleState(selectedSlot.ItemName, true, false);
+
+            if (MessageSystem.Instance != null)
+                MessageSystem.Instance.ShowMessage($"Consumiu {consumedItemName}");
+
+            return;
         }
 
         inventory?.RemoveItem(selectedSlot.ItemName, 1);
-        selectedSlot.RemoveOne();
+
+        if (replacementItem != null && selectedAmount == 1)
+        {
+            inventory?.AddItem(replacementItem.itemName, 1, replacementItem);
+            selectedSlot.SetItem(replacementItem.itemName, replacementItem.icon, replacementItem, 1);
+            EquipConsumable(selectedSlot);
+        }
+        else
+        {
+            selectedSlot.RemoveOne();
+
+            if (replacementItem != null)
+            {
+                inventory?.AddItem(replacementItem.itemName, 1, replacementItem);
+                hotbar?.AddItem(replacementItem.itemName, replacementItem.icon, replacementItem);
+            }
+        }
 
         if (selectedSlot.IsEmpty())
             UnequipCurrentItem();
@@ -163,11 +246,17 @@ public class PlayerInteraction : MonoBehaviour
 
     void TryPickupFromRay()
     {
-        if (!TryGetInteractionRay(out Ray ray))
+        if (!TryFindInteractionHit(out RaycastHit hit))
             return;
 
-        if (!Physics.Raycast(ray, out RaycastHit hit, interactDistance))
+        RiverWaterSource riverWater = hit.collider.GetComponent<RiverWaterSource>() ??
+                                      hit.collider.GetComponentInParent<RiverWaterSource>();
+
+        if (riverWater != null)
+        {
+            TryFillSelectedBottle();
             return;
+        }
 
         Item item = hit.collider.GetComponent<Item>() ??
                     hit.collider.GetComponentInParent<Item>() ??
@@ -194,13 +283,20 @@ public class PlayerInteraction : MonoBehaviour
         if (Time.time < nextHitTime || GameState.IsInventoryOpen)
             return;
 
+        if (!TryFindInteractionHit(out RaycastHit hit))
+            return;
+
+        RiverWaterSource riverWater = hit.collider.GetComponent<RiverWaterSource>() ??
+                                      hit.collider.GetComponentInParent<RiverWaterSource>();
+
+        if (riverWater != null)
+        {
+            TryFillSelectedBottle();
+            nextHitTime = Time.time + hitRate;
+            return;
+        }
+
         nextHitTime = Time.time + hitRate;
-
-        if (!TryGetInteractionRay(out Ray ray))
-            return;
-
-        if (!Physics.Raycast(ray, out RaycastHit hit, interactDistance))
-            return;
 
         Animator anim = GetPlayerAnimator();
         if (anim != null)
@@ -250,6 +346,52 @@ public class PlayerInteraction : MonoBehaviour
         return true;
     }
 
+    bool TryFindInteractionHit(out RaycastHit bestHit)
+    {
+        bestHit = default;
+
+        if (!TryGetInteractionRay(out Ray ray))
+            return false;
+
+        RaycastHit[] hits = Physics.SphereCastAll(
+            ray,
+            interactRadius,
+            interactDistance,
+            ~0,
+            QueryTriggerInteraction.Collide
+        );
+
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider != null && hit.collider.transform.IsChildOf(transform))
+                continue;
+
+            RiverWaterSource riverWater = hit.collider.GetComponent<RiverWaterSource>() ??
+                                          hit.collider.GetComponentInParent<RiverWaterSource>();
+            if (riverWater != null)
+            {
+                bestHit = hit;
+                return true;
+            }
+        }
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider != null && hit.collider.transform.IsChildOf(transform))
+                continue;
+
+            bestHit = hit;
+            return true;
+        }
+
+        return false;
+    }
+
     void HandleHotbarSelection()
     {
         for (int i = 0; i < hotbarActions.Length; i++)
@@ -260,6 +402,26 @@ public class PlayerInteraction : MonoBehaviour
                 return;
             }
         }
+    }
+
+    void ReequipSelectedSlot()
+    {
+        if (hotbar == null || hotbar.slots == null || hotbar.slots.Length == 0)
+            return;
+
+        if (selectedSlot != null)
+        {
+            for (int i = 0; i < hotbar.slots.Length; i++)
+            {
+                if (hotbar.slots[i] == selectedSlot)
+                {
+                    SelectSlot(i);
+                    return;
+                }
+            }
+        }
+
+        SelectSlot(0);
     }
 
     void SelectSlot(int index)
@@ -314,9 +476,19 @@ public class PlayerInteraction : MonoBehaviour
         consumeTimer = 0f;
 
         GameObject prefab = null;
+        Vector3 handScale = Vector3.one;
 
-        if (type == ToolType.Axe) prefab = axePrefab;
-        if (type == ToolType.Pickaxe) prefab = pickaxePrefab;
+        if (type == ToolType.Axe)
+        {
+            prefab = axePrefab;
+            handScale = axeHandScale;
+        }
+
+        if (type == ToolType.Pickaxe)
+        {
+            prefab = pickaxePrefab;
+            handScale = pickaxeHandScale;
+        }
 
         if (prefab == null)
         {
@@ -324,7 +496,7 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        EquipObjectInHand(prefab, Vector3.zero, Vector3.zero, Vector3.one, false);
+        EquipObjectInHand(prefab, Vector3.zero, Vector3.zero, handScale, false);
     }
 
     void EquipConsumable(HotbarSlot slot)
@@ -346,6 +518,44 @@ public class PlayerInteraction : MonoBehaviour
             slot.handLocalScale,
             true
         );
+    }
+
+    public bool TryFillSelectedBottle()
+    {
+        if (selectedSlot == null || selectedSlot.IsEmpty())
+        {
+            if (MessageSystem.Instance != null)
+                MessageSystem.Instance.ShowMessage("Selecione uma garrafa vazia.");
+
+            return false;
+        }
+
+        Item selectedItem = selectedSlot.GetItemData();
+        BottleItem bottle = selectedItem != null ? selectedItem.GetComponent<BottleItem>() : null;
+        if (bottle == null)
+        {
+            if (MessageSystem.Instance != null)
+                MessageSystem.Instance.ShowMessage("Selecione uma garrafa vazia.");
+
+            return false;
+        }
+
+        if (selectedSlot.bottleIsFilled)
+        {
+            if (MessageSystem.Instance != null)
+                MessageSystem.Instance.ShowMessage("A garrafa ja esta cheia.");
+
+            return false;
+        }
+
+        selectedSlot.SetBottleState(true);
+        inventory?.SetBottleState(selectedSlot.ItemName, false, true);
+        EquipConsumable(selectedSlot);
+
+        if (MessageSystem.Instance != null)
+            MessageSystem.Instance.ShowMessage("Garrafa enchida");
+
+        return true;
     }
 
     GameObject FindConsumablePrefab(HotbarSlot slot)
@@ -403,9 +613,7 @@ public class PlayerInteraction : MonoBehaviour
         currentEquippedObject.transform.localRotation = Quaternion.Euler(localEulerAngles);
         currentEquippedObject.transform.localScale = localScale;
 
-        if (!stripGameplayComponents)
-            return;
-
+        // Equipped visuals should never block raycasts or behave like world pickups/resources.
         foreach (Collider col in currentEquippedObject.GetComponentsInChildren<Collider>(true))
             Destroy(col);
 
@@ -419,7 +627,16 @@ public class PlayerInteraction : MonoBehaviour
             Destroy(node);
 
         foreach (ConsumableItem consumable in currentEquippedObject.GetComponentsInChildren<ConsumableItem>(true))
-            Destroy(consumable);
+        {
+            if (stripGameplayComponents)
+                Destroy(consumable);
+        }
+
+        foreach (BottleItem bottle in currentEquippedObject.GetComponentsInChildren<BottleItem>(true))
+        {
+            if (stripGameplayComponents)
+                Destroy(bottle);
+        }
     }
 
     Animator GetPlayerAnimator()

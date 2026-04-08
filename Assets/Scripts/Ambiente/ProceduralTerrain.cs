@@ -376,11 +376,46 @@ public class ProceduralTerrain : MonoBehaviour
                 if (x < 0 || z < 0 || x >= width || z >= depth) continue;
 
                 int index = (int)z * (width + 1) + (int)x;
-                Vector3 pos = vertices[index];
+                Vector3 pos = AlignRockSpawnToGround(vertices[index] + transform.position);
 
-                Instantiate(GetRandomRock(), pos, Quaternion.identity, transform);
+                GameObject rock = Instantiate(GetRandomRock(), pos, Quaternion.identity, transform);
+                AlignRockBaseToGround(rock, pos);
             }
         }
+    }
+
+    Vector3 AlignRockSpawnToGround(Vector3 worldPos)
+    {
+        Collider terrainCollider = GetComponent<Collider>();
+
+        if (terrainCollider != null)
+        {
+            Ray ray = new Ray(worldPos + Vector3.up * 50f, Vector3.down);
+
+            if (terrainCollider.Raycast(ray, out RaycastHit hit, 100f))
+                return hit.point;
+        }
+
+        if (Physics.Raycast(worldPos + Vector3.up * 50f, Vector3.down, out RaycastHit fallbackHit, 100f, ~0, QueryTriggerInteraction.Ignore))
+            return fallbackHit.point;
+
+        return worldPos;
+    }
+
+    void AlignRockBaseToGround(GameObject rock, Vector3 groundPoint)
+    {
+        Renderer[] renderers = rock.GetComponentsInChildren<Renderer>();
+
+        if (renderers.Length == 0)
+            return;
+
+        Bounds bounds = renderers[0].bounds;
+
+        for (int i = 1; i < renderers.Length; i++)
+            bounds.Encapsulate(renderers[i].bounds);
+
+        float groundOffset = groundPoint.y - bounds.min.y;
+        rock.transform.position += Vector3.up * groundOffset;
     }
 
     GameObject GetRandomRock()

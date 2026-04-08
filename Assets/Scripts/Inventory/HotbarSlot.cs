@@ -18,11 +18,14 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
     public bool isConsumable;
     public float healthRestore;
     public float hungerRestore;
+    public float thirstRestore;
     public float consumeHoldTime;
     public string prefabName;
     public Vector3 handLocalPosition;
     public Vector3 handLocalEulerAngles;
     public Vector3 handLocalScale = Vector3.one;
+    public bool isBottle;
+    public bool bottleIsFilled;
     public bool isSelected = false;
 
     public void OnPointerClick(PointerEventData eventData)
@@ -48,9 +51,6 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         if (IsEmpty())
         {
             itemName = name;
-            icon.sprite = sprite;
-            icon.enabled = true;
-
             ApplyItemData(sourceItem);
         }
 
@@ -74,10 +74,6 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         itemName = name;
         itemData = data;
         amount = newAmount;
-
-        icon.sprite = sprite;
-        icon.enabled = true;
-
         ApplyItemData(data);
 
         UpdateUI();
@@ -122,11 +118,14 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         isConsumable = false;
         healthRestore = 0f;
         hungerRestore = 0f;
+        thirstRestore = 0f;
         consumeHoldTime = 0f;
         prefabName = "";
         handLocalPosition = Vector3.zero;
         handLocalEulerAngles = Vector3.zero;
         handLocalScale = Vector3.one;
+        isBottle = false;
+        bottleIsFilled = false;
         isSelected = false;
     }
 
@@ -146,21 +145,76 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         isConsumable = false;
         healthRestore = 0f;
         hungerRestore = 0f;
+        thirstRestore = 0f;
         consumeHoldTime = 0f;
         handLocalPosition = Vector3.zero;
         handLocalEulerAngles = Vector3.zero;
         handLocalScale = Vector3.one;
+        isBottle = false;
+        bottleIsFilled = false;
 
         ConsumableItem consumable = sourceItem != null ? sourceItem.GetComponent<ConsumableItem>() : null;
-        if (consumable == null) return;
+        if (consumable == null)
+        {
+            RefreshIcon();
+            return;
+        }
 
         isConsumable = true;
         healthRestore = consumable.healthRestore;
         hungerRestore = consumable.hungerRestore;
+        thirstRestore = consumable.thirstRestore;
         consumeHoldTime = consumable.consumeHoldTime;
         handLocalPosition = consumable.handLocalPosition;
         handLocalEulerAngles = consumable.handLocalEulerAngles;
         handLocalScale = consumable.handLocalScale;
+
+        BottleItem bottle = sourceItem.GetComponent<BottleItem>();
+        if (bottle != null)
+        {
+            isBottle = true;
+            bottleIsFilled = false;
+            thirstRestore = 0f;
+        }
+
+        RefreshIcon();
+    }
+
+    public void SetBottleState(bool isFilled)
+    {
+        if (!isBottle || itemData == null)
+            return;
+
+        bottleIsFilled = isFilled;
+
+        BottleItem bottle = itemData.GetComponent<BottleItem>();
+        ConsumableItem consumable = itemData.GetComponent<ConsumableItem>();
+        if (bottle == null)
+            return;
+
+        thirstRestore = isFilled ? bottle.filledThirstRestore : 0f;
+        consumeHoldTime = isFilled ? bottle.filledConsumeHoldTime : (consumable != null ? consumable.consumeHoldTime : consumeHoldTime);
+
+        if (icon != null)
+            RefreshIcon();
+    }
+
+    void RefreshIcon()
+    {
+        if (icon == null)
+            return;
+
+        Sprite sprite = itemData != null ? itemData.icon : null;
+
+        if (isBottle && itemData != null)
+        {
+            BottleItem bottle = itemData.GetComponent<BottleItem>();
+            if (bottle != null)
+                sprite = bottle.GetIcon(bottleIsFilled);
+        }
+
+        icon.sprite = sprite;
+        icon.enabled = sprite != null;
     }
 
     public void OnBeginDrag(PointerEventData eventData)

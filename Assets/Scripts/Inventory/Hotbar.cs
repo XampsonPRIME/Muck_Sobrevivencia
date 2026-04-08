@@ -44,4 +44,18 @@ public class Hotbar : MonoBehaviour
 
         currentIndex = index;
     }
+
+    public void ClearAll()
+    {
+        if (slots == null)
+            return;
+
+        foreach (HotbarSlot slot in slots)
+        {
+            if (slot != null)
+                slot.ClearSlot();
+        }
+
+        currentIndex = 0;
+    }
 }

@@ -45,5 +45,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldGenerator
   chunkPrefab: {fileID: 2439320072105877589, guid: 6d0ba0d1a046945849a72af4b1647083, type: 3}
-  chunkSize: 10
-  viewDistance: 4
+  riverSystemPrefab: {fileID: 8092647746334637374, guid: 95d69613cc0d4150a8fbe6af8ae8eb4d, type: 3}
+  distantMountainsPrefab: {fileID: 7134208135321251005, guid: 1c3cb949af4a4b2eb0a5ecf17ce8baaf, type: 3}
+  enableDistantMountains: 1
+  chunkSize: 50
+  viewDistance: 2
+  maxChunkCreationsPerFrame: 1
