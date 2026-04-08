@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections.Generic;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
@@ -44,6 +45,9 @@ public class PlayerMovement : MonoBehaviour
     public float hungerDrainWalk = 0.12f;
     public float hungerDrainRun = 0.3f;
     public float hungerDamageRate = 1.5f;
+    [Range(0f, 1f)] public float lowHungerWarningThreshold = 0.5f;
+    [Range(0f, 1f)] public float criticalHungerWarningThreshold = 0.05f;
+    [Range(0f, 1f)] public float lowHungerWarningResetThreshold = 0.6f;
 
     [Header("Sede")]
     public float maxThirst = 100f;
@@ -52,6 +56,9 @@ public class PlayerMovement : MonoBehaviour
     public float thirstDrainWalk = 0.25f;
     public float thirstDrainRun = 0.6f;
     public float thirstDamageRate = 2f;
+    [Range(0f, 1f)] public float lowThirstWarningThreshold = 0.5f;
+    [Range(0f, 1f)] public float criticalThirstWarningThreshold = 0.05f;
+    [Range(0f, 1f)] public float lowThirstWarningResetThreshold = 0.6f;
 
     [Header("Agua")]
     public float waterMovementMultiplier = 0.55f;
@@ -59,6 +66,9 @@ public class PlayerMovement : MonoBehaviour
     public float visualWaterSink = 0.85f;
     public float cameraWaterSink = 0.18f;
     public float waterDetectionOffset = 0.15f;
+
+    [Header("Respawn")]
+    public float respawnInvulnerabilityDuration = 3f;
 
     CharacterController controller;
     PlayerControls controls;
@@ -78,6 +88,11 @@ public class PlayerMovement : MonoBehaviour
     bool isRunning;
     bool sprintLocked;
     bool isInWater;
+    bool lowHungerWarningShown;
+    bool criticalHungerWarningShown;
+    bool lowThirstWarningShown;
+    bool criticalThirstWarningShown;
+    float respawnInvulnerabilityEndTime;
     Vector3 spawnPosition;
     Quaternion spawnRotation;
     GameObject deathMessageInstance;
@@ -135,6 +150,22 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        if (GameState.IsInLobby)
+        {
+            moveInput = Vector2.zero;
+            lookInput = Vector2.zero;
+            HandleModelVisibility();
+            return;
+        }
+
+        if (GameState.IsPaused)
+        {
+            moveInput = Vector2.zero;
+            lookInput = Vector2.zero;
+            HandleModelVisibility();
+            return;
+        }
+
         if (GameState.IsPlayerDead)
         {
             if (respawnAction.WasPressedThisFrame())
@@ -174,6 +205,34 @@ public class PlayerMovement : MonoBehaviour
         ApplyCameraPose();
     }
 
+    public void ApplySavedState(Vector3 position, Quaternion rotation, bool savedThirdPerson, float savedHealth, float savedStamina, float savedHunger, float savedThirst)
+    {
+        thirdPerson = savedThirdPerson;
+        moveInput = Vector2.zero;
+        lookInput = Vector2.zero;
+        isRunning = false;
+        yVelocity = 0f;
+
+        if (controller != null)
+            controller.enabled = false;
+
+        transform.SetPositionAndRotation(position, rotation);
+
+        if (controller != null)
+            controller.enabled = true;
+
+        currentHealth = Mathf.Clamp(savedHealth, 0f, maxHealth);
+        currentStamina = Mathf.Clamp(savedStamina, 0f, maxStamina);
+        currentHunger = Mathf.Clamp(savedHunger, 0f, maxHunger);
+        currentThirst = Mathf.Clamp(savedThirst, 0f, maxThirst);
+
+        spawnPosition = position;
+        spawnRotation = rotation;
+        yRotation = transform.eulerAngles.y;
+        xRotation = thirdPerson ? thirdPersonPitch : 0f;
+        ApplyCameraPose();
+    }
+
     void HandleHunger()
     {
         if (GameState.IsPlayerDead)
@@ -188,6 +247,8 @@ public class PlayerMovement : MonoBehaviour
         currentHunger -= hungerDrain * Time.deltaTime;
         currentHunger = Mathf.Clamp(currentHunger, 0, maxHunger);
 
+        HandleLowHungerWarning();
+
         if (currentHunger <= 0)
         {
             TakeDamage(hungerDamageRate * Time.deltaTime);
@@ -198,6 +259,28 @@ public class PlayerMovement : MonoBehaviour
     {
         currentHunger += amount;
         currentHunger = Mathf.Clamp(currentHunger, 0, maxHunger);
+    }
+
+    void HandleLowHungerWarning()
+    {
+        if (maxHunger <= 0f)
+            return;
+
+        float hungerPercent = currentHunger / maxHunger;
+
+        if (!lowHungerWarningShown && hungerPercent <= lowHungerWarningThreshold)
+        {
+            lowHungerWarningShown = true;
+            MessageSystem.Instance?.ShowMessage("Estou com fome");
+        }
+
+        if (lowHungerWarningShown && hungerPercent >= lowHungerWarningResetThreshold)
+            lowHungerWarningShown = false;
+
+        if (!criticalHungerWarningShown && hungerPercent <= criticalHungerWarningThreshold)
+            MessageSystem.Instance?.ShowMessage("Vou morrer de fome!");
+
+        criticalHungerWarningShown = hungerPercent <= criticalHungerWarningThreshold;
     }
 
     public void RestoreThirst(float amount)
@@ -220,8 +303,32 @@ public class PlayerMovement : MonoBehaviour
         currentThirst -= thirstDrain * Time.deltaTime;
         currentThirst = Mathf.Clamp(currentThirst, 0, maxThirst);
 
+        HandleLowThirstWarning();
+
         if (currentThirst <= 0)
             TakeDamage(thirstDamageRate * Time.deltaTime);
+    }
+
+    void HandleLowThirstWarning()
+    {
+        if (maxThirst <= 0f)
+            return;
+
+        float thirstPercent = currentThirst / maxThirst;
+
+        if (!lowThirstWarningShown && thirstPercent <= lowThirstWarningThreshold)
+        {
+            lowThirstWarningShown = true;
+            MessageSystem.Instance?.ShowMessage("Estou com cede");
+        }
+
+        if (lowThirstWarningShown && thirstPercent >= lowThirstWarningResetThreshold)
+            lowThirstWarningShown = false;
+
+        if (!criticalThirstWarningShown && thirstPercent <= criticalThirstWarningThreshold)
+            MessageSystem.Instance?.ShowMessage("Vou morrer de cede!");
+
+        criticalThirstWarningShown = thirstPercent <= criticalThirstWarningThreshold;
     }
 
     public void Heal(float amount)
@@ -238,6 +345,9 @@ public class PlayerMovement : MonoBehaviour
     public void TakeDamage(float amount)
     {
         if (GameState.IsPlayerDead)
+            return;
+
+        if (Time.time < respawnInvulnerabilityEndTime)
             return;
 
         currentHealth -= amount;
@@ -257,6 +367,11 @@ public class PlayerMovement : MonoBehaviour
         lookInput = Vector2.zero;
         isRunning = false;
         yVelocity = 0f;
+
+        List<InventoryItem> droppedItems = inventory != null ? inventory.CreateSnapshot() : null;
+        if (droppedItems != null && droppedItems.Count > 0)
+            DeathLoot.Spawn(transform.position, droppedItems);
+
         inventory?.ClearAll();
         hotbar?.ClearAll();
 
@@ -278,6 +393,10 @@ public class PlayerMovement : MonoBehaviour
         currentHunger = maxHunger;
         currentThirst = maxThirst;
         currentStamina = maxStamina;
+        lowHungerWarningShown = false;
+        criticalHungerWarningShown = false;
+        lowThirstWarningShown = false;
+        criticalThirstWarningShown = false;
         moveInput = Vector2.zero;
         lookInput = Vector2.zero;
         isRunning = false;
@@ -287,6 +406,7 @@ public class PlayerMovement : MonoBehaviour
         transform.SetPositionAndRotation(spawnPosition, spawnRotation);
         controller.enabled = true;
 
+        respawnInvulnerabilityEndTime = Time.time + respawnInvulnerabilityDuration;
         yRotation = transform.eulerAngles.y;
         xRotation = thirdPerson ? thirdPersonPitch : 0f;
         ApplyCameraPose();

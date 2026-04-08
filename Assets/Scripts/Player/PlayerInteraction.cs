@@ -6,6 +6,7 @@ public class PlayerInteraction : MonoBehaviour
     public float interactDistance = 4f;
     public float interactRadius = 0.45f;
     public Transform cameraHolder;
+    public bool invertHotbarScroll = false;
 
     public Inventory inventory;
     public Hotbar hotbar;
@@ -117,6 +118,18 @@ public class PlayerInteraction : MonoBehaviour
 
     void Update()
     {
+        if (GameState.IsInLobby)
+        {
+            consumeTimer = 0f;
+            return;
+        }
+
+        if (GameState.IsPaused)
+        {
+            consumeTimer = 0f;
+            return;
+        }
+
         if (GameState.IsPlayerDead)
         {
             if (!wasDeadLastFrame)
@@ -189,6 +202,7 @@ public class PlayerInteraction : MonoBehaviour
         Item consumedItemData = selectedSlot.GetItemData();
         ConsumableItem consumable = consumedItemData != null ? consumedItemData.GetComponent<ConsumableItem>() : null;
         BottleItem bottle = consumedItemData != null ? consumedItemData.GetComponent<BottleItem>() : null;
+        MagicSpellConsumable magicConsumable = consumedItemData != null ? consumedItemData.GetComponent<MagicSpellConsumable>() : null;
         bool isFilledBottle = selectedSlot.isBottle && selectedSlot.bottleIsFilled;
         Item replacementItem = bottle == null && consumable != null ? consumable.itemAfterConsume : null;
 
@@ -205,6 +219,26 @@ public class PlayerInteraction : MonoBehaviour
             playerMovement.Heal(selectedSlot.healthRestore);
             playerMovement.RestoreHunger(selectedSlot.hungerRestore);
             playerMovement.RestoreThirst(selectedSlot.thirstRestore);
+        }
+
+        if (magicConsumable != null)
+        {
+            PlayerMagic playerMagic;
+
+            if (playerMovement != null)
+                playerMagic = playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+            else
+                playerMagic = GetComponent<PlayerMagic>() ?? gameObject.AddComponent<PlayerMagic>();
+
+            playerMagic.UnlockAreaMagic(magicConsumable.magicName);
+
+            inventory?.RemoveItem(selectedSlot.ItemName, 1);
+            selectedSlot.RemoveOne();
+
+            if (selectedSlot.IsEmpty())
+                UnequipCurrentItem();
+
+            return;
         }
 
         if (bottle != null)
@@ -258,6 +292,39 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
+        DeathLoot deathLoot = hit.collider.GetComponent<DeathLoot>() ??
+                              hit.collider.GetComponentInParent<DeathLoot>();
+
+        if (deathLoot != null)
+        {
+            deathLoot.Collect(inventory, hotbar);
+
+            InventoryUI inventoryUi = FindFirstObjectByType<InventoryUI>();
+            if (inventoryUi != null)
+                inventoryUi.Refresh();
+
+            if (MessageSystem.Instance != null)
+                MessageSystem.Instance.ShowMessage("Recuperou seu loot");
+
+            ReequipSelectedSlot();
+            return;
+        }
+
+        MagicSpellPickup magicPickup = hit.collider.GetComponent<MagicSpellPickup>() ??
+                                       hit.collider.GetComponentInParent<MagicSpellPickup>();
+
+        if (magicPickup != null)
+        {
+            magicPickup.Collect(inventory, hotbar);
+
+            InventoryUI inventoryUi = FindFirstObjectByType<InventoryUI>();
+            if (inventoryUi != null)
+                inventoryUi.Refresh();
+
+            ReequipSelectedSlot();
+            return;
+        }
+
         Item item = hit.collider.GetComponent<Item>() ??
                     hit.collider.GetComponentInParent<Item>() ??
                     hit.collider.GetComponentInChildren<Item>();
@@ -280,7 +347,7 @@ public class PlayerInteraction : MonoBehaviour
 
     void Attack()
     {
-        if (Time.time < nextHitTime || GameState.IsInventoryOpen)
+        if (Time.time < nextHitTime || GameState.IsInventoryOpen || GameState.IsPaused)
             return;
 
         if (!TryFindInteractionHit(out RaycastHit hit))
@@ -320,6 +387,15 @@ public class PlayerInteraction : MonoBehaviour
         if (miniKrug != null)
         {
             miniKrug.Hit(toolDamage, playerMovement);
+            return;
+        }
+
+        BossEnemy bossEnemy = hit.collider.GetComponent<BossEnemy>() ??
+                              hit.collider.GetComponentInParent<BossEnemy>();
+
+        if (bossEnemy != null)
+        {
+            bossEnemy.Hit(toolDamage, playerMovement);
             return;
         }
 
@@ -394,6 +470,31 @@ public class PlayerInteraction : MonoBehaviour
 
     void HandleHotbarSelection()
     {
+        if (hotbar != null && hotbar.slots != null && hotbar.slots.Length > 0)
+        {
+            Vector2 scrollValue = Mouse.current != null ? Mouse.current.scroll.ReadValue() : Vector2.zero;
+            if (Mathf.Abs(scrollValue.y) > 0.01f)
+            {
+                int direction = scrollValue.y > 0f ? -1 : 1;
+                if (invertHotbarScroll)
+                    direction *= -1;
+
+                int currentIndex = 0;
+                for (int i = 0; i < hotbar.slots.Length; i++)
+                {
+                    if (hotbar.slots[i] == selectedSlot)
+                    {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+
+                int nextIndex = (currentIndex + direction + hotbar.slots.Length) % hotbar.slots.Length;
+                SelectSlot(nextIndex);
+                return;
+            }
+        }
+
         for (int i = 0; i < hotbarActions.Length; i++)
         {
             if (hotbarActions[i].WasPressedThisFrame())
@@ -429,6 +530,8 @@ public class PlayerInteraction : MonoBehaviour
         if (hotbar == null || hotbar.slots.Length <= index)
             return;
 
+        hotbar.SetSelectedIndex(index);
+
         foreach (HotbarSlot slot in hotbar.slots)
             slot.isSelected = false;
 
@@ -455,6 +558,11 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         UnequipCurrentItem();
+    }
+
+    public void SelectSlotIndex(int index)
+    {
+        SelectSlot(index);
     }
 
     void UnequipCurrentItem()
@@ -636,6 +744,12 @@ public class PlayerInteraction : MonoBehaviour
         {
             if (stripGameplayComponents)
                 Destroy(bottle);
+        }
+
+        foreach (MagicSpellConsumable magic in currentEquippedObject.GetComponentsInChildren<MagicSpellConsumable>(true))
+        {
+            if (stripGameplayComponents)
+                Destroy(magic);
         }
     }
 

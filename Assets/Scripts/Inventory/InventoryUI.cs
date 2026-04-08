@@ -39,6 +39,9 @@ public class InventoryUI : MonoBehaviour
 
     void Update()
     {
+        if (GameState.IsPaused || GameState.IsInLobby)
+            return;
+
         if (toggleInventoryAction.WasPressedThisFrame())
             Toggle();
     }

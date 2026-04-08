@@ -9,6 +9,9 @@ public class StaminaUI : MonoBehaviour
 
     void Update()
     {
+        if (player == null || staminaFill == null)
+            return;
+
         float current = player.currentStamina;
         float max = player.maxStamina;
 
@@ -17,6 +20,6 @@ public class StaminaUI : MonoBehaviour
 
     void Start()
     {
-        player = FindObjectOfType<PlayerMovement>();
+        player = FindFirstObjectByType<PlayerMovement>();
     }
 }

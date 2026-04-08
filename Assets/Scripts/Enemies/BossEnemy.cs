@@ -2,43 +2,54 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class MiniKrug : MonoBehaviour
+public class BossEnemy : MonoBehaviour
 {
     [Header("Vida")]
-    public int maxHealth = 2;
+    public int maxHealth = 150;
 
     [Header("Combate")]
-    public float contactDamage = 8f;
-    public float attackRange = 1.25f;
-    public float attackCooldown = 1f;
-    public float moveSpeed = 4f;
-    public float rotationSpeed = 10f;
-    public float targetRefreshInterval = 0.4f;
+    public float contactDamage = 28f;
+    public float attackRange = 2.4f;
+    public float attackCooldown = 1.3f;
+    public float moveSpeed = 2.6f;
+    public float returnSpeed = 3.1f;
+    public float rotationSpeed = 7f;
+    public float detectionRange = 18f;
+    public float targetRefreshInterval = 0.35f;
 
-    [Header("Drop")]
-    public int minGoldDrop = 5;
-    public int maxGoldDrop = 10;
-    public int xpReward = 20;
+    [Header("Territorio")]
+    public float maxChaseDistanceFromSpawn = 9f;
+    public float patrolRadius = 3.5f;
+    public float patrolPointReachDistance = 0.8f;
+    public float patrolRefreshInterval = 2.8f;
+
+    [Header("Recompensa")]
+    public int minGoldDrop = 25;
+    public int maxGoldDrop = 45;
+    public int xpReward = 250;
 
     [Header("Chao")]
-    public float groundRayHeight = 10f;
-    public float maxGroundRayDistance = 25f;
+    public float groundRayHeight = 12f;
+    public float maxGroundRayDistance = 30f;
     public LayerMask groundMask = ~0;
 
     [Header("Feedback")]
-    public Vector3 uiWorldOffset = new Vector3(0f, 1.4f, 0f);
-    public float healthUiVisibleDuration = 2f;
-    public float damagePopupLifetime = 0.8f;
-    public float damagePopupRiseSpeed = 1.4f;
+    public Vector3 uiWorldOffset = new Vector3(0f, 2.4f, 0f);
+    public float healthUiVisibleDuration = 3f;
+    public float damagePopupLifetime = 0.9f;
+    public float damagePopupRiseSpeed = 1.8f;
 
     int currentHealth;
     float nextAttackTime;
     float nextTargetRefreshTime;
+    float nextPatrolRefreshTime;
     float healthUiHideTime;
+
+    Vector3 spawnPosition;
+    Vector3 patrolTarget;
 
     PlayerMovement targetPlayer;
     PlayerMovement lastAttacker;
-    MiniKrugSpawnPoint spawnPoint;
     Canvas worldCanvas;
     Image healthFillImage;
     TextMeshProUGUI healthText;
@@ -46,11 +57,17 @@ public class MiniKrug : MonoBehaviour
     void Start()
     {
         currentHealth = maxHealth;
+        spawnPosition = transform.position;
+        patrolTarget = spawnPosition;
         EnsureMainCollider();
+        EnsureStablePhysics();
         SnapToGround();
+        spawnPosition = transform.position;
+        patrolTarget = spawnPosition;
         EnsureCombatUI();
         UpdateHealthUI(false);
         RefreshTarget();
+        PickPatrolTarget(true);
     }
 
     void Update()
@@ -61,21 +78,13 @@ public class MiniKrug : MonoBehaviour
         if (Time.time >= nextTargetRefreshTime || targetPlayer == null)
             RefreshTarget();
 
-        FollowTarget();
+        UpdateMovement();
         TryAttackPlayer();
         UpdateUIFacing();
     }
 
-    public void SetSpawnData(MiniKrugSpawnPoint owner)
-    {
-        spawnPoint = owner;
-    }
-
     public void Hit(int damage, PlayerMovement attacker)
     {
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
-            EnsureCombatUI();
-
         int finalDamage = Mathf.Max(1, damage);
         currentHealth -= finalDamage;
         lastAttacker = attacker;
@@ -87,19 +96,87 @@ public class MiniKrug : MonoBehaviour
             Die();
     }
 
-    void FollowTarget()
+    void UpdateMovement()
     {
-        if (targetPlayer == null)
-            return;
+        Vector3 targetPosition;
+        float speed;
 
-        Vector3 toTarget = targetPlayer.transform.position - transform.position;
+        if (ShouldChaseTarget(out targetPosition))
+        {
+            speed = moveSpeed;
+        }
+        else
+        {
+            targetPosition = GetPatrolTarget();
+            speed = returnSpeed;
+        }
+
+        MoveTowards(targetPosition, speed);
+    }
+
+    bool ShouldChaseTarget(out Vector3 chaseTargetPosition)
+    {
+        chaseTargetPosition = transform.position;
+
+        if (targetPlayer == null)
+            return false;
+
+        Vector3 toPlayerFromSpawn = targetPlayer.transform.position - spawnPosition;
+        toPlayerFromSpawn.y = 0f;
+
+        Vector3 toPlayerFromBoss = targetPlayer.transform.position - transform.position;
+        toPlayerFromBoss.y = 0f;
+
+        if (toPlayerFromBoss.magnitude > detectionRange)
+            return false;
+
+        Vector3 clamped = Vector3.ClampMagnitude(toPlayerFromSpawn, maxChaseDistanceFromSpawn);
+        chaseTargetPosition = spawnPosition + clamped;
+
+        if (TryGetGroundPosition(chaseTargetPosition, out Vector3 groundedTarget))
+            chaseTargetPosition = groundedTarget;
+
+        return true;
+    }
+
+    Vector3 GetPatrolTarget()
+    {
+        Vector3 toPatrol = patrolTarget - transform.position;
+        toPatrol.y = 0f;
+
+        if (toPatrol.magnitude <= patrolPointReachDistance || Time.time >= nextPatrolRefreshTime)
+            PickPatrolTarget();
+
+        return patrolTarget;
+    }
+
+    void PickPatrolTarget(bool immediate = false)
+    {
+        nextPatrolRefreshTime = Time.time + patrolRefreshInterval;
+
+        Vector2 circle = Random.insideUnitCircle * patrolRadius;
+        Vector3 candidate = spawnPosition + new Vector3(circle.x, 0f, circle.y);
+
+        if (TryGetGroundPosition(candidate, out Vector3 groundedTarget))
+            patrolTarget = groundedTarget;
+        else
+            patrolTarget = spawnPosition;
+
+        if (immediate && TryGetGroundPosition(transform.position, out Vector3 groundedCurrent))
+            transform.position = groundedCurrent;
+    }
+
+    void MoveTowards(Vector3 targetPosition, float speed)
+    {
+        Vector3 toTarget = targetPosition - transform.position;
         toTarget.y = 0f;
 
         if (toTarget.sqrMagnitude <= 0.0001f)
             return;
 
         Vector3 direction = toTarget.normalized;
-        Vector3 nextPos = transform.position + direction * moveSpeed * Time.deltaTime;
+        float moveDistance = Mathf.Min(speed * Time.deltaTime, toTarget.magnitude);
+        Vector3 nextPos = transform.position + direction * moveDistance;
 
         if (TryGetGroundPosition(nextPos, out Vector3 groundedPos))
             nextPos = groundedPos;
@@ -135,7 +212,7 @@ public class MiniKrug : MonoBehaviour
 
         foreach (PlayerMovement candidate in players)
         {
-            if (candidate == null)
+            if (candidate == null || GameState.IsPlayerDead)
                 continue;
 
             float distance = (candidate.transform.position - transform.position).sqrMagnitude;
@@ -186,18 +263,60 @@ public class MiniKrug : MonoBehaviour
 
     void SnapToGround()
     {
-        if (TryGetGroundPosition(transform.position, out Vector3 groundedPosition))
-            transform.position = groundedPosition;
+        if (!TryGetGroundPosition(transform.position, out Vector3 groundedPosition))
+            return;
+
+        transform.position = groundedPosition;
+        AlignBaseToGround(groundedPosition.y);
+    }
+
+    void AlignBaseToGround(float groundY)
+    {
+        bool foundBase = false;
+        float lowestY = float.MaxValue;
+
+        Collider[] colliders = GetComponentsInChildren<Collider>(true);
+        foreach (Collider col in colliders)
+        {
+            if (col == null)
+                continue;
+
+            float candidate = col.bounds.min.y;
+            if (candidate < lowestY)
+            {
+                lowestY = candidate;
+                foundBase = true;
+            }
+        }
+
+        if (!foundBase)
+        {
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer == null)
+                    continue;
+
+                float candidate = renderer.bounds.min.y;
+                if (candidate < lowestY)
+                {
+                    lowestY = candidate;
+                    foundBase = true;
+                }
+            }
+        }
+
+        if (!foundBase)
+            return;
+
+        transform.position += Vector3.up * (groundY - lowestY);
     }
 
     void Die()
     {
+        DropMagicPickup();
         AwardExperienceIfKilledByPlayer();
         DropGoldIfKilledByPlayer();
-
-        if (spawnPoint != null)
-            spawnPoint.NotifyMiniKrugDeath(this);
-
         Destroy(gameObject);
     }
 
@@ -208,7 +327,7 @@ public class MiniKrug : MonoBehaviour
 
         PlayerProgression progression = lastAttacker.GetComponent<PlayerProgression>();
         if (progression != null)
-            progression.AddExperience(xpReward, "MiniKrug");
+            progression.AddExperience(xpReward, "Boss");
     }
 
     void DropGoldIfKilledByPlayer()
@@ -226,12 +345,19 @@ public class MiniKrug : MonoBehaviour
         MessageSystem.Instance?.ShowMessage($"+{amount} gold");
     }
 
+    void DropMagicPickup()
+    {
+        GameObject pickupObject = new GameObject("MagicSpellPickup");
+        pickupObject.transform.position = transform.position + Vector3.up * 0.2f;
+        pickupObject.AddComponent<MagicSpellPickup>();
+    }
+
     void EnsureCombatUI()
     {
         if (worldCanvas != null)
             return;
 
-        GameObject canvasObject = new GameObject("CombatUI");
+        GameObject canvasObject = new GameObject("BossCombatUI");
         canvasObject.transform.SetParent(transform, false);
         canvasObject.transform.localPosition = uiWorldOffset;
 
@@ -244,15 +370,15 @@ public class MiniKrug : MonoBehaviour
         canvasObject.AddComponent<GraphicRaycaster>();
 
         RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
-        canvasRect.sizeDelta = new Vector2(1.8f, 0.7f);
+        canvasRect.sizeDelta = new Vector2(2.4f, 0.85f);
         canvasObject.transform.localScale = Vector3.one * 0.01f;
 
         GameObject bgObject = CreateUiObject("HealthBg", canvasObject.transform);
         Image bgImage = bgObject.AddComponent<Image>();
-        bgImage.color = new Color(0.08f, 0.08f, 0.08f, 0.9f);
+        bgImage.color = new Color(0.08f, 0.08f, 0.08f, 0.92f);
         RectTransform bgRect = bgObject.GetComponent<RectTransform>();
-        bgRect.anchorMin = new Vector2(0.2f, 0.55f);
-        bgRect.anchorMax = new Vector2(0.8f, 0.8f);
+        bgRect.anchorMin = new Vector2(0.12f, 0.52f);
+        bgRect.anchorMax = new Vector2(0.88f, 0.82f);
         bgRect.offsetMin = Vector2.zero;
         bgRect.offsetMax = Vector2.zero;
 
@@ -271,14 +397,15 @@ public class MiniKrug : MonoBehaviour
         GameObject textObject = CreateUiObject("HealthText", canvasObject.transform);
         healthText = textObject.AddComponent<TextMeshProUGUI>();
         healthText.alignment = TextAlignmentOptions.Center;
-        healthText.fontSize = 18f;
+        healthText.fontSize = 20f;
+        healthText.fontStyle = FontStyles.Bold;
         healthText.color = Color.white;
         RectTransform textRect = textObject.GetComponent<RectTransform>();
         textRect.anchorMin = new Vector2(0f, 0f);
         textRect.anchorMax = new Vector2(1f, 0.5f);
         textRect.offsetMin = Vector2.zero;
         textRect.offsetMax = Vector2.zero;
-        textRect.anchoredPosition = new Vector2(0f, 2f);
+        textRect.anchoredPosition = new Vector2(0f, 4f);
 
         canvasObject.SetActive(false);
     }
@@ -290,7 +417,7 @@ public class MiniKrug : MonoBehaviour
 
         float normalizedHealth = maxHealth > 0 ? Mathf.Clamp01((float)currentHealth / maxHealth) : 0f;
         healthFillImage.fillAmount = normalizedHealth;
-        healthFillImage.color = Color.Lerp(new Color(0.7f, 0.08f, 0.08f), new Color(0.2f, 0.9f, 0.25f), normalizedHealth);
+        healthFillImage.color = Color.Lerp(new Color(0.75f, 0.08f, 0.08f), new Color(0.2f, 0.9f, 0.25f), normalizedHealth);
         healthText.text = $"{Mathf.Max(0, currentHealth)}/{maxHealth}";
         worldCanvas.gameObject.SetActive(visible);
     }
@@ -325,17 +452,17 @@ public class MiniKrug : MonoBehaviour
             return;
 
         GameObject popupObject = CreateUiObject($"Damage_{damage}", worldCanvas.transform);
-        popupObject.transform.localPosition = new Vector3(Random.Range(-0.12f, 0.12f), 0.22f, 0f);
+        popupObject.transform.localPosition = new Vector3(Random.Range(-0.16f, 0.16f), 0.28f, 0f);
 
         TextMeshProUGUI popupText = popupObject.AddComponent<TextMeshProUGUI>();
         popupText.text = damage.ToString();
         popupText.alignment = TextAlignmentOptions.Center;
-        popupText.fontSize = 24f;
+        popupText.fontSize = 28f;
         popupText.fontStyle = FontStyles.Bold;
-        popupText.color = new Color(1f, 0.93f, 0.35f, 1f);
+        popupText.color = new Color(1f, 0.8f, 0.28f, 1f);
 
         RectTransform rect = popupObject.GetComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(90f, 40f);
+        rect.sizeDelta = new Vector2(100f, 46f);
 
         DamagePopup popup = popupObject.AddComponent<DamagePopup>();
         popup.Initialize(damagePopupLifetime, damagePopupRiseSpeed);
@@ -355,9 +482,20 @@ public class MiniKrug : MonoBehaviour
         if (col == null)
         {
             CapsuleCollider capsule = gameObject.AddComponent<CapsuleCollider>();
-            capsule.center = new Vector3(0f, 0.42f, 0f);
-            capsule.radius = 0.38f;
-            capsule.height = 0.9f;
+            capsule.center = new Vector3(0f, 1.2f, 0f);
+            capsule.radius = 0.85f;
+            capsule.height = 2.4f;
         }
+    }
+
+    void EnsureStablePhysics()
+    {
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb == null)
+            return;
+
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
     }
 }

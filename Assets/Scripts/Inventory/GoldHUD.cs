@@ -5,14 +5,17 @@ using UnityEngine.UI;
 public class GoldHUD : MonoBehaviour
 {
     public Vector2 panelAnchorPosition = new Vector2(28f, -72f);
-    public Vector2 panelSize = new Vector2(280f, 164f);
+    public Vector2 panelSize = new Vector2(320f, 240f);
 
     Inventory inventory;
     DayNightCycle cycle;
+    PlayerProgression progression;
 
     RectTransform rootRect;
     TextMeshProUGUI dayValueText;
     TextMeshProUGUI hourValueText;
+    TextMeshProUGUI levelValueText;
+    TextMeshProUGUI xpValueText;
     TextMeshProUGUI goldValueText;
     Image goldIcon;
 
@@ -30,6 +33,7 @@ public class GoldHUD : MonoBehaviour
     {
         inventory = FindFirstObjectByType<Inventory>();
         cycle = FindFirstObjectByType<DayNightCycle>();
+        progression = FindFirstObjectByType<PlayerProgression>();
         EnsureUI();
         HideOriginalClockTexts();
         Refresh();
@@ -42,6 +46,18 @@ public class GoldHUD : MonoBehaviour
 
         if (cycle == null)
             cycle = FindFirstObjectByType<DayNightCycle>();
+
+        if (progression == null)
+        {
+            progression = FindFirstObjectByType<PlayerProgression>();
+
+            if (progression == null)
+            {
+                PlayerMovement player = FindFirstObjectByType<PlayerMovement>();
+                if (player != null)
+                    progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
+            }
+        }
 
         EnsureUI();
 
@@ -92,14 +108,23 @@ public class GoldHUD : MonoBehaviour
 
         dayValueText = EnsureText(rootObject.transform, "DayValue", new Vector2(18f, -18f), new Vector2(236f, 34f));
         hourValueText = EnsureText(rootObject.transform, "HourValue", new Vector2(18f, -64f), new Vector2(236f, 34f));
-        goldIcon = EnsureIcon(rootObject.transform, "GoldIcon", new Vector2(18f, -112f), new Vector2(44f, 44f));
-        goldValueText = EnsureText(rootObject.transform, "GoldValue", new Vector2(72f, -116f), new Vector2(180f, 36f));
+        levelValueText = EnsureText(rootObject.transform, "LevelValue", new Vector2(18f, -110f), new Vector2(260f, 34f));
+        xpValueText = EnsureText(rootObject.transform, "XpValue", new Vector2(18f, -152f), new Vector2(260f, 34f));
+        goldIcon = EnsureIcon(rootObject.transform, "GoldIcon", new Vector2(18f, -194f), new Vector2(44f, 44f));
+        goldValueText = EnsureText(rootObject.transform, "GoldValue", new Vector2(72f, -198f), new Vector2(210f, 36f));
 
         dayValueText.fontSize = 30f;
         dayValueText.color = Color.white;
 
         hourValueText.fontSize = 30f;
         hourValueText.color = Color.white;
+
+        levelValueText.fontSize = 28f;
+        levelValueText.fontStyle = FontStyles.Bold;
+        levelValueText.color = new Color(0.72f, 0.9f, 1f, 1f);
+
+        xpValueText.fontSize = 26f;
+        xpValueText.color = new Color(0.86f, 0.96f, 1f, 1f);
 
         goldValueText.fontSize = 30f;
         goldValueText.fontStyle = FontStyles.Bold;
@@ -191,7 +216,7 @@ public class GoldHUD : MonoBehaviour
 
     void Refresh()
     {
-        if (dayValueText == null || hourValueText == null || goldValueText == null)
+        if (dayValueText == null || hourValueText == null || goldValueText == null || levelValueText == null || xpValueText == null)
             return;
 
         int goldAmount = 0;
@@ -206,6 +231,20 @@ public class GoldHUD : MonoBehaviour
         {
             dayValueText.text = $"Dia: {cycle.CurrentDay}";
             hourValueText.text = $"Hora: {cycle.CurrentTimeFormatted}";
+        }
+
+        if (progression != null)
+        {
+            int requiredXp = progression.GetXpRequiredForNextLevel();
+            levelValueText.text = $"Nivel: {progression.currentLevel}";
+            xpValueText.text = requiredXp > 0
+                ? $"XP: {progression.currentXp}/{requiredXp}"
+                : "XP: MAX";
+        }
+        else
+        {
+            levelValueText.text = "Nivel: 1";
+            xpValueText.text = "XP: 0/0";
         }
 
         goldValueText.text = $"Gold: {goldAmount}";

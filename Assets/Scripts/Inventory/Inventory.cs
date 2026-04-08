@@ -55,6 +55,39 @@ public class Inventory : MonoBehaviour
         return true;
     }
 
+    public void AddInventoryItem(InventoryItem item)
+    {
+        if (item == null || item.itemData == null || item.quantity <= 0)
+            return;
+
+        InventoryItem existing = items.Find(i => i.CanStackWith(item));
+
+        if (existing != null)
+        {
+            existing.quantity += item.quantity;
+            existing.itemData = item.itemData;
+        }
+        else
+        {
+            items.Add(item.Clone());
+        }
+    }
+
+    public List<InventoryItem> CreateSnapshot()
+    {
+        List<InventoryItem> snapshot = new List<InventoryItem>(items.Count);
+
+        foreach (InventoryItem item in items)
+        {
+            if (item == null)
+                continue;
+
+            snapshot.Add(item.Clone());
+        }
+
+        return snapshot;
+    }
+
     public void ClearAll()
     {
         items.Clear();

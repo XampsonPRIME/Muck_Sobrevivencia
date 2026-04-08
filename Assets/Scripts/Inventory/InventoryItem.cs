@@ -87,4 +87,40 @@ public class InventoryItem
         BottleItem bottle = itemData.GetComponent<BottleItem>();
         return bottle != null ? bottle.GetIcon(bottleIsFilled) : itemData.icon;
     }
+
+    public InventoryItem Clone()
+    {
+        InventoryItem clone = new InventoryItem(itemName, quantity, itemData)
+        {
+            itemType = itemType,
+            toolType = toolType,
+            isConsumable = isConsumable,
+            healthRestore = healthRestore,
+            hungerRestore = hungerRestore,
+            thirstRestore = thirstRestore,
+            consumeHoldTime = consumeHoldTime,
+            prefabName = prefabName,
+            handLocalPosition = handLocalPosition,
+            handLocalEulerAngles = handLocalEulerAngles,
+            handLocalScale = handLocalScale,
+            isBottle = isBottle,
+            bottleIsFilled = bottleIsFilled
+        };
+
+        return clone;
+    }
+
+    public bool CanStackWith(InventoryItem other)
+    {
+        if (other == null)
+            return false;
+
+        if (itemName != other.itemName)
+            return false;
+
+        if (isBottle || other.isBottle)
+            return isBottle == other.isBottle && bottleIsFilled == other.bottleIsFilled;
+
+        return true;
+    }
 }

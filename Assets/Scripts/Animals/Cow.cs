@@ -424,7 +424,7 @@ public class Cow : MonoBehaviour
 
         Collider partCollider = part.GetComponent<Collider>();
         if (partCollider != null)
-            DestroyObject(partCollider);
+            DestroyRuntimeObject(partCollider);
 
         Renderer renderer = part.GetComponent<Renderer>();
         if (renderer != null && material != null)
@@ -433,7 +433,7 @@ public class Cow : MonoBehaviour
         return part;
     }
 
-    void DestroyObject(Object target)
+    void DestroyRuntimeObject(Object target)
     {
         if (Application.isPlaying)
             Destroy(target);

@@ -11,7 +11,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
     InventoryItem currentItem;
 
     float lastClickTime;
-    float doubleClickDelay = 0.3f;
+   
     public string itemName;
     public Item itemData;
 

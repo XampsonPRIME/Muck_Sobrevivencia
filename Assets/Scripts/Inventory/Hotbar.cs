@@ -4,6 +4,7 @@ public class Hotbar : MonoBehaviour
 {
     public HotbarSlot[] slots;
     int currentIndex = 0;
+    public int SelectedIndex => currentIndex;
 
     public void AddItem(string itemName, Sprite icon, Item itemData)
     {
@@ -57,5 +58,53 @@ public class Hotbar : MonoBehaviour
         }
 
         currentIndex = 0;
+    }
+
+    public void AddInventoryItem(InventoryItem inventoryItem)
+    {
+        if (inventoryItem == null || inventoryItem.itemData == null || slots == null)
+            return;
+
+        for (int i = 0; i < slots.Length; i++)
+        {
+            HotbarSlot slot = slots[i];
+            if (slot == null || slot.IsEmpty())
+                continue;
+
+            bool sameBottleState = !inventoryItem.isBottle || slot.bottleIsFilled == inventoryItem.bottleIsFilled;
+            if (slot.ItemName != inventoryItem.itemName || !sameBottleState)
+                continue;
+
+            slot.SetItem(
+                inventoryItem.itemName,
+                inventoryItem.GetDisplayIcon(),
+                inventoryItem.itemData,
+                slot.GetAmount() + inventoryItem.quantity
+            );
+
+            if (inventoryItem.isBottle)
+                slot.SetBottleState(inventoryItem.bottleIsFilled);
+
+            return;
+        }
+
+        for (int i = 0; i < slots.Length; i++)
+        {
+            HotbarSlot slot = slots[i];
+            if (slot == null || !slot.IsEmpty())
+                continue;
+
+            slot.SetItem(
+                inventoryItem.itemName,
+                inventoryItem.GetDisplayIcon(),
+                inventoryItem.itemData,
+                inventoryItem.quantity
+            );
+
+            if (inventoryItem.isBottle)
+                slot.SetBottleState(inventoryItem.bottleIsFilled);
+
+            return;
+        }
     }
 }

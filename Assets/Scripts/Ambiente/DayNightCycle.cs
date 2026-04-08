@@ -54,6 +54,8 @@ public class DayNightCycle : MonoBehaviour
 
     public int CurrentDay => currentDay;
 
+    public float CurrentNormalizedTime => timeOfDay;
+
     public string CurrentTimeFormatted => string.Format("{0:00}:{1:00}", CurrentHour, CurrentMinute);
 
     public bool IsNight => CurrentHour >= 18 || CurrentHour < 6;
@@ -212,5 +214,13 @@ public class DayNightCycle : MonoBehaviour
     {
         if (Instance == this)
             Instance = null;
+    }
+
+    public void LoadState(int savedDay, float savedNormalizedTime)
+    {
+        currentDay = Mathf.Max(1, savedDay);
+        timeOfDay = Mathf.Repeat(savedNormalizedTime, 1f);
+        warnedNight = IsNight;
+        ApplyCycleVisuals();
     }
 }
