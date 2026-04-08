@@ -188,7 +188,7 @@ public class LobbyUI : MonoBehaviour
         statusText.alignment = TextAlignmentOptions.Center;
         statusText.fontSize = 22f;
         statusText.color = new Color(0.76f, 0.82f, 0.9f, 1f);
-        statusText.enableWordWrapping = true;
+        statusText.textWrappingMode = TextWrappingModes.Normal;
         statusText.overflowMode = TextOverflowModes.Overflow;
         statusText.text = "Solo";
     }
@@ -383,7 +383,7 @@ public class LobbyUI : MonoBehaviour
         text.fontSize = 28f;
         text.alignment = TextAlignmentOptions.MidlineLeft;
         text.color = new Color(0.94f, 0.97f, 1f, 1f);
-        text.enableWordWrapping = false;
+        text.textWrappingMode = TextWrappingModes.NoWrap;
 
         GameObject placeholderObject = CreateUiObject("Placeholder", viewportObject.transform);
         RectTransform placeholderRect = placeholderObject.AddComponent<RectTransform>();
@@ -397,7 +397,7 @@ public class LobbyUI : MonoBehaviour
         placeholderText.fontSize = 28f;
         placeholderText.alignment = TextAlignmentOptions.MidlineLeft;
         placeholderText.color = new Color(0.63f, 0.7f, 0.78f, 0.85f);
-        placeholderText.enableWordWrapping = false;
+        placeholderText.textWrappingMode = TextWrappingModes.NoWrap;
 
         inputField.textViewport = viewportRect;
         inputField.textComponent = text;
