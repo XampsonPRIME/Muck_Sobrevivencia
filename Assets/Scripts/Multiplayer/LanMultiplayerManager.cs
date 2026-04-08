@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
 using UnityEngine;
@@ -123,6 +124,7 @@ public class LanMultiplayerManager : MonoBehaviour
     public bool IsMultiplayerActive => Mode == SessionMode.Host || Mode == SessionMode.Client;
     public bool IsSessionReady => State == SessionState.Ready;
     public string StatusMessage { get; private set; } = "Solo";
+    public string LastErrorMessage { get; private set; }
     public int CurrentPort { get; private set; } = 7777;
     public string CurrentAddress { get; private set; } = "127.0.0.1";
     public int WorldSeed => worldSeed;
@@ -220,6 +222,7 @@ public class LanMultiplayerManager : MonoBehaviour
         Mode = SessionMode.Solo;
         State = SessionState.Ready;
         StatusMessage = "Solo";
+        LastErrorMessage = null;
         return true;
     }
 
@@ -243,6 +246,7 @@ public class LanMultiplayerManager : MonoBehaviour
             CurrentAddress = GetLocalIpv4Address();
             Mode = SessionMode.Host;
             State = SessionState.Ready;
+            LastErrorMessage = null;
             StatusMessage = $"Host ativo em {CurrentAddress}:{CurrentPort}";
             knownStates.Clear();
 
@@ -286,6 +290,7 @@ public class LanMultiplayerManager : MonoBehaviour
         CurrentPort = Mathf.Max(1, port);
         Mode = SessionMode.Client;
         State = SessionState.Connecting;
+        LastErrorMessage = null;
         StatusMessage = $"Conectando em {CurrentAddress}:{CurrentPort}...";
         knownStates.Clear();
 
@@ -535,7 +540,7 @@ public class LanMultiplayerManager : MonoBehaviour
             IAsyncResult result = client.BeginConnect(address, port, null, null);
             bool connected = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(5));
             if (!connected || !client.Connected)
-                throw new IOException("Tempo esgotado ao conectar.");
+                throw new IOException($"Tempo esgotado ao conectar em {address}:{port}. Verifique se o IP esta correto, se o host clicou em Hospedar e se a porta nao esta bloqueada.");
 
             client.EndConnect(result);
             client.NoDelay = true;
@@ -562,7 +567,8 @@ public class LanMultiplayerManager : MonoBehaviour
             {
             }
 
-            EnqueueMainThread(() => SetError($"Falha na conexao: {ex.Message}"));
+            string connectionError = BuildConnectionErrorMessage(address, port, ex);
+            EnqueueMainThread(() => SetError(connectionError));
         }
     }
 
@@ -1276,6 +1282,35 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         State = SessionState.Error;
         StatusMessage = message;
+        LastErrorMessage = message;
+        Debug.LogError($"[LanMultiplayer] {message}");
+    }
+
+    string BuildConnectionErrorMessage(string address, int port, Exception exception)
+    {
+        if (exception is SocketException socketException)
+        {
+            switch (socketException.SocketErrorCode)
+            {
+                case SocketError.ConnectionRefused:
+                    return $"Falha na conexao: {address}:{port} recusou a conexao. O host provavelmente nao esta hospedando ou a porta esta bloqueada.";
+                case SocketError.TimedOut:
+                    return $"Falha na conexao: tempo esgotado em {address}:{port}. Verifique o IP do Tailscale, firewall e se o host esta online.";
+                case SocketError.HostNotFound:
+                case SocketError.NoData:
+                    return $"Falha na conexao: host {address} nao encontrado.";
+                case SocketError.NetworkUnreachable:
+                case SocketError.HostUnreachable:
+                    return $"Falha na conexao: nao foi possivel alcancar {address}:{port}. Verifique a conexao do Tailscale.";
+            }
+
+            return $"Falha na conexao: erro de socket {socketException.SocketErrorCode} em {address}:{port}. {socketException.Message}";
+        }
+
+        if (exception is IOException)
+            return $"Falha na conexao: {exception.Message}";
+
+        return $"Falha na conexao em {address}:{port}: {exception.GetType().Name}: {exception.Message}";
     }
 
     LanNetworkEntity ResolveNetworkEntity(Component target)
@@ -1396,10 +1431,45 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         try
         {
+            string firstLanAddress = null;
+
+            NetworkInterface[] interfaces = NetworkInterface.GetAllNetworkInterfaces();
+            foreach (NetworkInterface networkInterface in interfaces)
+            {
+                if (networkInterface == null || networkInterface.OperationalStatus != OperationalStatus.Up)
+                    continue;
+
+                IPInterfaceProperties properties = networkInterface.GetIPProperties();
+                foreach (UnicastIPAddressInformation unicastAddress in properties.UnicastAddresses)
+                {
+                    IPAddress address = unicastAddress.Address;
+                    if (address == null || address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address))
+                        continue;
+
+                    string ip = address.ToString();
+
+                    // Tailscale uses the CGNAT 100.64.0.0/10 range. Prefer it for remote LAN sessions.
+                    if (IsTailscaleAddress(address) || networkInterface.Name.Contains("Tailscale") || networkInterface.Description.Contains("Tailscale"))
+                        return ip;
+
+                    if (firstLanAddress == null)
+                        firstLanAddress = ip;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(firstLanAddress))
+                return firstLanAddress;
+        }
+        catch
+        {
+        }
+
+        try
+        {
             IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (IPAddress address in host.AddressList)
             {
-                if (address.AddressFamily == AddressFamily.InterNetwork)
+                if (address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address))
                     return address.ToString();
             }
         }
@@ -1408,5 +1478,14 @@ public class LanMultiplayerManager : MonoBehaviour
         }
 
         return "127.0.0.1";
+    }
+
+    bool IsTailscaleAddress(IPAddress address)
+    {
+        byte[] bytes = address.GetAddressBytes();
+        if (bytes == null || bytes.Length != 4)
+            return false;
+
+        return bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127;
     }
 }

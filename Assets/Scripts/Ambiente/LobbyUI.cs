@@ -181,13 +181,15 @@ public class LobbyUI : MonoBehaviour
         RectTransform statusRect = statusObject.AddComponent<RectTransform>();
         statusRect.anchorMin = new Vector2(0.5f, 0.5f);
         statusRect.anchorMax = new Vector2(0.5f, 0.5f);
-        statusRect.sizeDelta = new Vector2(1100f, 120f);
-        statusRect.anchoredPosition = new Vector2(0f, -540f);
+        statusRect.sizeDelta = new Vector2(1280f, 200f);
+        statusRect.anchoredPosition = new Vector2(0f, -560f);
 
         statusText = statusObject.AddComponent<TextMeshProUGUI>();
         statusText.alignment = TextAlignmentOptions.Center;
-        statusText.fontSize = 24f;
+        statusText.fontSize = 22f;
         statusText.color = new Color(0.76f, 0.82f, 0.9f, 1f);
+        statusText.enableWordWrapping = true;
+        statusText.overflowMode = TextOverflowModes.Overflow;
         statusText.text = "Solo";
     }
 
@@ -208,7 +210,12 @@ public class LobbyUI : MonoBehaviour
         }
 
         if (statusText != null && LanMultiplayerManager.Instance != null)
+        {
             statusText.text = LanMultiplayerManager.Instance.StatusMessage;
+            statusText.color = LanMultiplayerManager.Instance.State == LanMultiplayerManager.SessionState.Error
+                ? new Color(1f, 0.55f, 0.55f, 1f)
+                : new Color(0.76f, 0.82f, 0.9f, 1f);
+        }
 
         if (waitingForSession && LanMultiplayerManager.Instance != null)
         {
