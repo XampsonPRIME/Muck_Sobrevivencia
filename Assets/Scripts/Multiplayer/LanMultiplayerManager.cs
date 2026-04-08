@@ -7,6 +7,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class LanMultiplayerManager : MonoBehaviour
 {
@@ -58,6 +59,7 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         public string playerId;
         public int worldSeed;
+        public string sceneName;
     }
 
     [Serializable]
@@ -103,6 +105,12 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         public int currentDay;
         public float normalizedTimeOfDay;
+    }
+
+    [Serializable]
+    class LanSceneChange
+    {
+        public string sceneName;
     }
 
     class PeerConnection
@@ -151,6 +159,7 @@ public class LanMultiplayerManager : MonoBehaviour
     bool hasLastLocalPosition;
     volatile bool isShuttingDown;
     int worldSeed;
+    bool isApplyingRemoteSceneChange;
 
     const float StateSendInterval = 0.05f;
     const float WorldSyncInterval = 1f;
@@ -175,6 +184,7 @@ public class LanMultiplayerManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        SceneManager.sceneLoaded += HandleSceneLoaded;
     }
 
     void Update()
@@ -212,6 +222,7 @@ public class LanMultiplayerManager : MonoBehaviour
         if (Instance == this)
             Instance = null;
 
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
         ShutdownSession();
     }
 
@@ -657,6 +668,11 @@ public class LanMultiplayerManager : MonoBehaviour
                     ApplyWorldState(JsonUtility.FromJson<LanWorldState>(packet.payload));
                 break;
 
+            case "scene":
+                if (!isHostSide)
+                    ApplySceneChange(JsonUtility.FromJson<LanSceneChange>(packet.payload));
+                break;
+
             case "hit_request":
                 if (isHostSide)
                     HandleHitRequest(packet.payload);
@@ -688,7 +704,8 @@ public class LanMultiplayerManager : MonoBehaviour
         SendPacket(connection, CreatePacket("welcome", new LanWelcome
         {
             playerId = connection.playerId,
-            worldSeed = worldSeed
+            worldSeed = worldSeed,
+            sceneName = SceneManager.GetActiveScene().name
         }));
 
         foreach (KeyValuePair<string, LanPlayerState> state in knownStates)
@@ -710,6 +727,21 @@ public class LanMultiplayerManager : MonoBehaviour
         StatusMessage = $"Conectado em {CurrentAddress}:{CurrentPort}";
         hasLastLocalPosition = false;
         ClearRemoteReplicas();
+        ApplySceneChange(new LanSceneChange { sceneName = welcome.sceneName });
+    }
+
+    void ApplySceneChange(LanSceneChange sceneChange)
+    {
+        if (sceneChange == null || string.IsNullOrWhiteSpace(sceneChange.sceneName))
+            return;
+
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (activeScene.name == sceneChange.sceneName)
+            return;
+
+        isApplyingRemoteSceneChange = true;
+        StatusMessage = $"Carregando cena {sceneChange.sceneName}...";
+        SceneManager.LoadScene(sceneChange.sceneName);
     }
 
     void HandleHitRequest(string payload)
@@ -1207,6 +1239,36 @@ public class LanMultiplayerManager : MonoBehaviour
                 health = 0,
                 destroyed = true
             }));
+        }
+    }
+
+    void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        ResolveLocalPlayer();
+
+        if (Mode == SessionMode.Client && isApplyingRemoteSceneChange)
+        {
+            isApplyingRemoteSceneChange = false;
+            ClearRemoteReplicas();
+            StatusMessage = $"Conectado em {CurrentAddress}:{CurrentPort}";
+        }
+
+        if (Mode != SessionMode.Host || !IsMultiplayerActive)
+            return;
+
+        LanPacket scenePacket = CreatePacket("scene", new LanSceneChange
+        {
+            sceneName = scene.name
+        });
+
+        BroadcastPacket(scenePacket);
+
+        foreach (KeyValuePair<string, PeerConnection> entry in hostPeers)
+        {
+            if (entry.Value == null || string.IsNullOrWhiteSpace(entry.Value.playerId))
+                continue;
+
+            SyncWorldEntitiesTo(entry.Value);
         }
     }
 
