@@ -101,6 +101,17 @@ public class LanMultiplayerManager : MonoBehaviour
     }
 
     [Serializable]
+    class LanEnemyState
+    {
+        public string entityId;
+        public string entityKind;
+        public Vector3 position;
+        public Quaternion rotation;
+        public int health;
+        public bool destroyed;
+    }
+
+    [Serializable]
     class LanWorldState
     {
         public int currentDay;
@@ -111,6 +122,13 @@ public class LanMultiplayerManager : MonoBehaviour
     class LanSceneChange
     {
         public string sceneName;
+    }
+
+    [Serializable]
+    class LanDamageEvent
+    {
+        public string playerId;
+        public float damage;
     }
 
     class PeerConnection
@@ -133,6 +151,7 @@ public class LanMultiplayerManager : MonoBehaviour
     public bool IsSessionReady => State == SessionState.Ready;
     public string StatusMessage { get; private set; } = "Solo";
     public string LastErrorMessage { get; private set; }
+    public string SessionId { get; private set; }
     public int CurrentPort { get; private set; } = 7777;
     public string CurrentAddress { get; private set; } = "127.0.0.1";
     public int WorldSeed => worldSeed;
@@ -160,9 +179,11 @@ public class LanMultiplayerManager : MonoBehaviour
     volatile bool isShuttingDown;
     int worldSeed;
     bool isApplyingRemoteSceneChange;
+    float nextEnemySyncTime;
 
     const float StateSendInterval = 0.05f;
     const float WorldSyncInterval = 1f;
+    const float EnemySyncInterval = 0.08f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -210,6 +231,12 @@ public class LanMultiplayerManager : MonoBehaviour
             nextWorldSyncTime = Time.unscaledTime + WorldSyncInterval;
             BroadcastWorldState();
         }
+
+        if (Mode == SessionMode.Host && Time.unscaledTime >= nextEnemySyncTime)
+        {
+            nextEnemySyncTime = Time.unscaledTime + EnemySyncInterval;
+            BroadcastEnemyStates();
+        }
     }
 
     void OnApplicationQuit()
@@ -230,6 +257,7 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         ShutdownSession();
         worldSeed = Environment.TickCount;
+        SessionId = null;
         Mode = SessionMode.Solo;
         State = SessionState.Ready;
         StatusMessage = "Solo";
@@ -238,6 +266,11 @@ public class LanMultiplayerManager : MonoBehaviour
     }
 
     public bool StartHost(int port)
+    {
+        return StartHost(port, null);
+    }
+
+    public bool StartHost(int port, int? savedWorldSeed)
     {
         ShutdownSession();
         ResolveLocalPlayer();
@@ -252,17 +285,19 @@ public class LanMultiplayerManager : MonoBehaviour
         {
             localPlayerId = CreatePlayerId();
             localPlayerName = BuildPlayerName();
-            worldSeed = Environment.TickCount;
+            SessionId = Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant();
+            worldSeed = savedWorldSeed.HasValue ? savedWorldSeed.Value : Environment.TickCount;
             CurrentPort = Mathf.Max(1, port);
             CurrentAddress = GetLocalIpv4Address();
             Mode = SessionMode.Host;
             State = SessionState.Ready;
             LastErrorMessage = null;
-            StatusMessage = $"Host ativo em {CurrentAddress}:{CurrentPort}";
+            StatusMessage = $"Host ativo em {CurrentAddress}:{CurrentPort} [{SessionId}]";
             knownStates.Clear();
 
             hostListener = new TcpListener(IPAddress.Any, CurrentPort);
             hostListener.Start();
+            UpdateDiscoveryAnnouncement();
 
             acceptThread = new Thread(AcceptLoop)
             {
@@ -284,6 +319,117 @@ public class LanMultiplayerManager : MonoBehaviour
         }
     }
 
+    public List<LanSavedEntityState> CaptureSavedWorldEntities()
+    {
+        List<LanSavedEntityState> results = new List<LanSavedEntityState>();
+        HashSet<string> liveIds = new HashSet<string>();
+
+        ResourceNode[] resourceNodes = FindObjectsByType<ResourceNode>(FindObjectsSortMode.None);
+        for (int i = 0; i < resourceNodes.Length; i++)
+        {
+            LanNetworkEntity entity = resourceNodes[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(resourceNodes[i]);
+
+            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
+                continue;
+
+            liveIds.Add(entity.EntityId);
+            results.Add(new LanSavedEntityState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(ResourceNode),
+                health = resourceNodes[i].CurrentHealth,
+                destroyed = false
+            });
+        }
+
+        Cow[] cows = FindObjectsByType<Cow>(FindObjectsSortMode.None);
+        for (int i = 0; i < cows.Length; i++)
+        {
+            LanNetworkEntity entity = cows[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(cows[i]);
+
+            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
+                continue;
+
+            liveIds.Add(entity.EntityId);
+            results.Add(new LanSavedEntityState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(Cow),
+                health = cows[i].CurrentHealth,
+                destroyed = false
+            });
+        }
+
+        BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
+        for (int i = 0; i < bosses.Length; i++)
+        {
+            LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(bosses[i]);
+
+            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
+                continue;
+
+            liveIds.Add(entity.EntityId);
+            results.Add(new LanSavedEntityState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(BossEnemy),
+                health = bosses[i].CurrentHealth,
+                destroyed = false
+            });
+        }
+
+        foreach (KeyValuePair<string, string> entry in destroyedEntities)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Key) || string.IsNullOrWhiteSpace(entry.Value) || liveIds.Contains(entry.Key))
+                continue;
+
+            results.Add(new LanSavedEntityState
+            {
+                entityId = entry.Key,
+                entityKind = entry.Value,
+                health = 0,
+                destroyed = true
+            });
+        }
+
+        return results;
+    }
+
+    public void RestoreSavedWorldEntities(List<LanSavedEntityState> savedEntities)
+    {
+        destroyedEntities.Clear();
+        pendingEntityUpdates.Clear();
+
+        if (savedEntities == null)
+            return;
+
+        for (int i = 0; i < savedEntities.Count; i++)
+        {
+            LanSavedEntityState state = savedEntities[i];
+            if (state == null || string.IsNullOrWhiteSpace(state.entityId) || string.IsNullOrWhiteSpace(state.entityKind))
+                continue;
+
+            if (state.destroyed)
+                destroyedEntities[state.entityId] = state.entityKind;
+
+            ApplyEntityUpdate(new LanEntityUpdate
+            {
+                entityId = state.entityId,
+                entityKind = state.entityKind,
+                health = Mathf.Max(0, state.health),
+                destroyed = state.destroyed
+            });
+        }
+
+        FlushPendingEntityUpdates();
+    }
+
     public bool StartClient(string address, int port)
     {
         ShutdownSession();
@@ -297,6 +443,7 @@ public class LanMultiplayerManager : MonoBehaviour
 
         localPlayerId = CreatePlayerId();
         localPlayerName = BuildPlayerName();
+        SessionId = null;
         CurrentAddress = string.IsNullOrWhiteSpace(address) ? "127.0.0.1" : address.Trim();
         CurrentPort = Mathf.Max(1, port);
         Mode = SessionMode.Client;
@@ -668,6 +815,11 @@ public class LanMultiplayerManager : MonoBehaviour
                     ApplyWorldState(JsonUtility.FromJson<LanWorldState>(packet.payload));
                 break;
 
+            case "enemy_state":
+                if (!isHostSide)
+                    ApplyEnemyState(JsonUtility.FromJson<LanEnemyState>(packet.payload));
+                break;
+
             case "scene":
                 if (!isHostSide)
                     ApplySceneChange(JsonUtility.FromJson<LanSceneChange>(packet.payload));
@@ -686,6 +838,11 @@ public class LanMultiplayerManager : MonoBehaviour
             case "reward":
                 if (!isHostSide)
                     ApplyRewardLocally(JsonUtility.FromJson<LanReward>(packet.payload));
+                break;
+
+            case "damage":
+                if (!isHostSide)
+                    ApplyDamageLocally(JsonUtility.FromJson<LanDamageEvent>(packet.payload));
                 break;
         }
     }
@@ -712,8 +869,10 @@ public class LanMultiplayerManager : MonoBehaviour
             SendPacket(connection, CreatePacket("state", state.Value));
 
         SyncWorldEntitiesTo(connection);
+        SyncEnemyStatesTo(connection);
         BroadcastWorldState();
         StatusMessage = $"{connection.playerName} entrou na sessao";
+        UpdateDiscoveryAnnouncement();
     }
 
     void HandleWelcomePacket(string payload)
@@ -758,6 +917,35 @@ public class LanMultiplayerManager : MonoBehaviour
         PlayerMovement attacker = ResolveAttacker(attackerPlayerId);
         if (attacker == null && attackerPlayerId == localPlayerId)
             attacker = localPlayer;
+
+        if (entityKind == nameof(MiniKrug))
+        {
+            MiniKrug miniKrug = FindEntity<MiniKrug>(entityId);
+            if (miniKrug == null)
+                return;
+
+            miniKrug.ApplyNetworkHit(damage, out int goldAmount, out int xpAmount, out int remainingHealth, out bool destroyed);
+            BroadcastPacket(CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entityId,
+                entityKind = entityKind,
+                position = miniKrug != null ? miniKrug.transform.position : Vector3.zero,
+                rotation = miniKrug != null ? miniKrug.transform.rotation : Quaternion.identity,
+                health = remainingHealth,
+                destroyed = destroyed
+            }));
+
+            if (goldAmount > 0 || xpAmount > 0)
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    goldAmount = goldAmount,
+                    xpAmount = xpAmount,
+                    message = $"+{goldAmount} gold"
+                });
+
+            return;
+        }
 
         if (entityKind == nameof(ResourceNode))
         {
@@ -894,6 +1082,31 @@ public class LanMultiplayerManager : MonoBehaviour
         }
     }
 
+    void ApplyEnemyState(LanEnemyState state)
+    {
+        if (state == null || string.IsNullOrWhiteSpace(state.entityId) || string.IsNullOrWhiteSpace(state.entityKind))
+            return;
+
+        if (state.entityKind == nameof(MiniKrug))
+        {
+            MiniKrug miniKrug = FindEntity<MiniKrug>(state.entityId);
+            if (miniKrug == null && !state.destroyed)
+                miniKrug = CreateRemoteMiniKrug(state);
+
+            if (miniKrug != null)
+                miniKrug.ApplyNetworkState(state.position, state.rotation, state.health, state.destroyed);
+
+            return;
+        }
+
+        if (state.entityKind == nameof(BossEnemy))
+        {
+            BossEnemy boss = FindEntity<BossEnemy>(state.entityId);
+            if (boss != null)
+                boss.ApplyNetworkState(state.position, state.rotation, state.health, state.destroyed);
+        }
+    }
+
     void ApplyRewardLocally(LanReward reward)
     {
         if (reward == null || reward.playerId != localPlayerId)
@@ -936,6 +1149,15 @@ public class LanMultiplayerManager : MonoBehaviour
         InventoryUI inventoryUI = FindFirstObjectByType<InventoryUI>();
         if (inventoryUI != null)
             inventoryUI.Refresh();
+    }
+
+    void ApplyDamageLocally(LanDamageEvent damageEvent)
+    {
+        if (damageEvent == null || damageEvent.playerId != localPlayerId)
+            return;
+
+        ResolveLocalPlayer();
+        localPlayer?.TakeDamage(damageEvent.damage);
     }
 
     void HandleStatePacket(PeerConnection connection, string payload, bool isHostSide)
@@ -1017,6 +1239,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 BroadcastPacket(CreatePacket("leave", new LanLeave { playerId = connection.playerId }), connection.playerId);
                 RemoveReplica(connection.playerId);
                 StatusMessage = $"{connection.playerName} saiu da sessao";
+                UpdateDiscoveryAnnouncement();
             }
 
             hostPeers.Remove(connection.addressLabel);
@@ -1119,6 +1342,45 @@ public class LanMultiplayerManager : MonoBehaviour
 
         reward.playerId = playerId;
         SendToPlayer(playerId, CreatePacket("reward", reward));
+    }
+
+    void BroadcastEnemyStates()
+    {
+        MiniKrug[] miniKrugs = FindObjectsByType<MiniKrug>(FindObjectsSortMode.None);
+        for (int i = 0; i < miniKrugs.Length; i++)
+        {
+            LanNetworkEntity entity = miniKrugs[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(miniKrugs[i]);
+
+            BroadcastPacket(CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(MiniKrug),
+                position = miniKrugs[i].transform.position,
+                rotation = miniKrugs[i].transform.rotation,
+                health = miniKrugs[i].CurrentHealth,
+                destroyed = false
+            }));
+        }
+
+        BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
+        for (int i = 0; i < bosses.Length; i++)
+        {
+            LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(bosses[i]);
+
+            BroadcastPacket(CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(BossEnemy),
+                position = bosses[i].transform.position,
+                rotation = bosses[i].transform.rotation,
+                health = bosses[i].CurrentHealth,
+                destroyed = false
+            }));
+        }
     }
 
     void FlushPendingEntityUpdates()
@@ -1242,6 +1504,48 @@ public class LanMultiplayerManager : MonoBehaviour
         }
     }
 
+    void SyncEnemyStatesTo(PeerConnection connection)
+    {
+        if (connection == null)
+            return;
+
+        MiniKrug[] miniKrugs = FindObjectsByType<MiniKrug>(FindObjectsSortMode.None);
+        for (int i = 0; i < miniKrugs.Length; i++)
+        {
+            LanNetworkEntity entity = miniKrugs[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(miniKrugs[i]);
+
+            SendPacket(connection, CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(MiniKrug),
+                position = miniKrugs[i].transform.position,
+                rotation = miniKrugs[i].transform.rotation,
+                health = miniKrugs[i].CurrentHealth,
+                destroyed = false
+            }));
+        }
+
+        BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
+        for (int i = 0; i < bosses.Length; i++)
+        {
+            LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(bosses[i]);
+
+            SendPacket(connection, CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(BossEnemy),
+                position = bosses[i].transform.position,
+                rotation = bosses[i].transform.rotation,
+                health = bosses[i].CurrentHealth,
+                destroyed = false
+            }));
+        }
+    }
+
     void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         ResolveLocalPlayer();
@@ -1269,7 +1573,123 @@ public class LanMultiplayerManager : MonoBehaviour
                 continue;
 
             SyncWorldEntitiesTo(entry.Value);
+            SyncEnemyStatesTo(entry.Value);
         }
+
+        UpdateDiscoveryAnnouncement();
+    }
+
+    void UpdateDiscoveryAnnouncement()
+    {
+        if (Mode != SessionMode.Host || !IsMultiplayerActive || string.IsNullOrWhiteSpace(SessionId))
+        {
+            LanSessionDiscovery.Instance?.StopAnnouncing();
+            return;
+        }
+
+        int playerCount = 1;
+
+        foreach (KeyValuePair<string, PeerConnection> entry in hostPeers)
+        {
+            if (entry.Value != null && !string.IsNullOrWhiteSpace(entry.Value.playerId))
+                playerCount++;
+        }
+
+        string sceneName = SceneManager.GetActiveScene().name;
+        string hostName = string.IsNullOrWhiteSpace(localPlayerName) ? BuildPlayerName() : localPlayerName;
+        LanSessionDiscovery.Instance?.StartAnnouncing(SessionId, hostName, CurrentPort, sceneName, playerCount);
+    }
+
+    MiniKrug CreateRemoteMiniKrug(LanEnemyState state)
+    {
+        GameObject miniKrugPrefab = Resources.Load<GameObject>("Enemies/MiniKrug");
+        if (miniKrugPrefab == null)
+            return null;
+
+        GameObject miniKrugObject = Instantiate(miniKrugPrefab, state.position, state.rotation);
+        miniKrugObject.name = miniKrugPrefab.name;
+        LanNetworkEntity.Ensure(miniKrugObject.transform, state.entityId);
+
+        MiniKrug miniKrug = miniKrugObject.GetComponent<MiniKrug>();
+        if (miniKrug == null)
+            miniKrug = miniKrugObject.AddComponent<MiniKrug>();
+
+        return miniKrug;
+    }
+
+    public bool TryFindClosestEnemyTarget(Vector3 origin, out Transform targetTransform, out string targetPlayerId)
+    {
+        targetTransform = null;
+        targetPlayerId = null;
+
+        float bestDistance = float.MaxValue;
+
+        if (localPlayer != null && !GameState.IsPlayerDead)
+        {
+            float distance = (localPlayer.transform.position - origin).sqrMagnitude;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                targetTransform = localPlayer.transform;
+                targetPlayerId = localPlayerId;
+            }
+        }
+
+        foreach (KeyValuePair<string, RemotePlayerReplica> entry in remoteReplicas)
+        {
+            if (entry.Value == null)
+                continue;
+
+            float distance = (entry.Value.transform.position - origin).sqrMagnitude;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                targetTransform = entry.Value.transform;
+                targetPlayerId = entry.Key;
+            }
+        }
+
+        return targetTransform != null && !string.IsNullOrWhiteSpace(targetPlayerId);
+    }
+
+    public void ApplyEnemyDamage(string targetPlayerId, float damage)
+    {
+        if (string.IsNullOrWhiteSpace(targetPlayerId) || damage <= 0f)
+            return;
+
+        if (targetPlayerId == localPlayerId)
+        {
+            ResolveLocalPlayer();
+            localPlayer?.TakeDamage(damage);
+            return;
+        }
+
+        SendToPlayer(targetPlayerId, CreatePacket("damage", new LanDamageEvent
+        {
+            playerId = targetPlayerId,
+            damage = damage
+        }));
+    }
+
+    public void NotifyEnemyDestroyed(Component enemy)
+    {
+        if (enemy == null || Mode != SessionMode.Host)
+            return;
+
+        LanNetworkEntity entity = ResolveNetworkEntity(enemy);
+        string entityKind = GetEntityKind(enemy);
+        if (entity == null || string.IsNullOrWhiteSpace(entityKind))
+            return;
+
+        BroadcastPacket(CreatePacket("enemy_state", new LanEnemyState
+        {
+            entityId = entity.EntityId,
+            entityKind = entityKind,
+            position = enemy.transform.position,
+            rotation = enemy.transform.rotation,
+            health = 0,
+            destroyed = true
+        }));
     }
 
     void ShutdownSession()
@@ -1302,10 +1722,12 @@ public class LanMultiplayerManager : MonoBehaviour
         pendingEntityUpdates.Clear();
         State = SessionState.Idle;
         Mode = SessionMode.None;
+        SessionId = null;
         StatusMessage = "Solo";
         hasLastLocalPosition = false;
         cachedAnimSpeed = 0f;
         isShuttingDown = false;
+        LanSessionDiscovery.Instance?.StopAnnouncing();
     }
 
     void ClearRemoteReplicas()
@@ -1386,6 +1808,9 @@ public class LanMultiplayerManager : MonoBehaviour
         if (target.GetComponentInParent<Cow>() is Cow cow)
             return LanNetworkEntity.Ensure(cow);
 
+        if (target.GetComponentInParent<MiniKrug>() is MiniKrug miniKrug)
+            return LanNetworkEntity.Ensure(miniKrug);
+
         if (target.GetComponentInParent<BossEnemy>() is BossEnemy boss)
             return LanNetworkEntity.Ensure(boss);
 
@@ -1402,6 +1827,9 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (target.GetComponentInParent<Cow>() != null)
             return nameof(Cow);
+
+        if (target.GetComponentInParent<MiniKrug>() != null)
+            return nameof(MiniKrug);
 
         if (target.GetComponentInParent<BossEnemy>() != null)
             return nameof(BossEnemy);

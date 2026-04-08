@@ -404,7 +404,7 @@ public class PauseMenu : MonoBehaviour
         infoText.alignment = TextAlignmentOptions.Center;
         infoText.fontSize = 24f;
         infoText.color = new Color(0.84f, 0.9f, 0.98f, 1f);
-        infoText.text = "Sessao: Solo\nIP do host: -\nPorta: -";
+        infoText.text = "Sessao: Solo\nID: -\nIP do host: -\nPorta: -";
         return infoText;
     }
 
@@ -416,13 +416,14 @@ public class PauseMenu : MonoBehaviour
         LanMultiplayerManager manager = LanMultiplayerManager.Instance;
         if (manager == null || !manager.IsMultiplayerActive)
         {
-            SetSessionInfoText("Sessao: Solo\nIP do host: -\nPorta: -");
+            SetSessionInfoText("Sessao: Solo\nID: -\nIP do host: -\nPorta: -");
             return;
         }
 
         string sessionLabel = manager.Mode == LanMultiplayerManager.SessionMode.Host ? "Host LAN" : "Cliente LAN";
         string hostAddress = string.IsNullOrWhiteSpace(manager.CurrentAddress) ? "-" : manager.CurrentAddress;
-        SetSessionInfoText($"Sessao: {sessionLabel}\nIP do host: {hostAddress}\nPorta: {manager.CurrentPort}");
+        string sessionId = string.IsNullOrWhiteSpace(manager.SessionId) ? "-" : manager.SessionId;
+        SetSessionInfoText($"Sessao: {sessionLabel}\nID: {sessionId}\nIP do host: {hostAddress}\nPorta: {manager.CurrentPort}");
     }
 
     void SetSessionInfoText(string text)

@@ -31,6 +31,23 @@ public class BossSpawnPoint : MonoBehaviour
         if (spawnedBoss != null || bossPrefab == null)
             return;
 
+        BossEnemy[] existingBosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
+        if (existingBosses.Length > 0)
+        {
+            BossEnemy primaryBoss = existingBosses[0];
+            spawnedBoss = primaryBoss.gameObject;
+            spawnedBoss.name = bossPrefab.name;
+            LanNetworkEntity.Ensure(primaryBoss.transform, BuildBossEntityId());
+
+            for (int i = 1; i < existingBosses.Length; i++)
+            {
+                if (existingBosses[i] != null)
+                    Destroy(existingBosses[i].gameObject);
+            }
+
+            return;
+        }
+
         Vector3 spawnPosition = GetGroundedSpawnPosition();
         spawnedBoss = Instantiate(bossPrefab, spawnPosition + Vector3.up * 0.5f, transform.rotation);
         spawnedBoss.name = bossPrefab.name;

@@ -377,6 +377,10 @@ public class PlayerInteraction : MonoBehaviour
 
         if (miniKrug != null)
         {
+            if (LanMultiplayerManager.Instance != null &&
+                LanMultiplayerManager.Instance.TryHandleGameplayHit(miniKrug, playerMovement, currentTool, toolDamage))
+                return;
+
             miniKrug.Hit(toolDamage, playerMovement);
             return;
         }

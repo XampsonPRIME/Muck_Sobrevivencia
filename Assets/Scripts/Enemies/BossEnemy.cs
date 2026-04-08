@@ -49,7 +49,8 @@ public class BossEnemy : MonoBehaviour
     Vector3 spawnPosition;
     Vector3 patrolTarget;
 
-    PlayerMovement targetPlayer;
+    Transform targetTransform;
+    string targetPlayerId;
     PlayerMovement lastAttacker;
     Canvas worldCanvas;
     Image healthFillImage;
@@ -172,7 +173,13 @@ public class BossEnemy : MonoBehaviour
         if (worldCanvas == null || healthFillImage == null || healthText == null)
             EnsureCombatUI();
 
-        if (Time.time >= nextTargetRefreshTime || targetPlayer == null)
+        if (ShouldUseNetworkAuthority())
+        {
+            UpdateUIFacing();
+            return;
+        }
+
+        if (Time.time >= nextTargetRefreshTime || targetTransform == null)
             RefreshTarget();
 
         UpdateMovement();
@@ -220,6 +227,12 @@ public class BossEnemy : MonoBehaviour
             Destroy(gameObject);
     }
 
+    public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkHealth, bool destroyed)
+    {
+        transform.SetPositionAndRotation(networkPosition, networkRotation);
+        ApplyNetworkState(networkHealth, destroyed);
+    }
+
     void UpdateMovement()
     {
         Vector3 targetPosition;
@@ -242,13 +255,13 @@ public class BossEnemy : MonoBehaviour
     {
         chaseTargetPosition = transform.position;
 
-        if (targetPlayer == null)
+        if (targetTransform == null)
             return false;
 
-        Vector3 toPlayerFromSpawn = targetPlayer.transform.position - spawnPosition;
+        Vector3 toPlayerFromSpawn = targetTransform.position - spawnPosition;
         toPlayerFromSpawn.y = 0f;
 
-        Vector3 toPlayerFromBoss = targetPlayer.transform.position - transform.position;
+        Vector3 toPlayerFromBoss = targetTransform.position - transform.position;
         toPlayerFromBoss.y = 0f;
 
         if (toPlayerFromBoss.magnitude > detectionRange)
@@ -313,22 +326,39 @@ public class BossEnemy : MonoBehaviour
 
     void TryAttackPlayer()
     {
-        if (targetPlayer == null || Time.time < nextAttackTime)
+        if (targetTransform == null || Time.time < nextAttackTime)
             return;
 
-        Vector3 toPlayer = targetPlayer.transform.position - transform.position;
+        Vector3 toPlayer = targetTransform.position - transform.position;
         toPlayer.y = 0f;
 
         if (toPlayer.magnitude > attackRange)
             return;
 
-        targetPlayer.TakeDamage(contactDamage);
+        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+            LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
+        else
+        {
+            PlayerMovement targetPlayer = targetTransform.GetComponent<PlayerMovement>();
+            targetPlayer?.TakeDamage(contactDamage);
+        }
+
         nextAttackTime = Time.time + attackCooldown;
     }
 
     void RefreshTarget()
     {
         nextTargetRefreshTime = Time.time + targetRefreshInterval;
+
+        if (LanMultiplayerManager.Instance != null &&
+            LanMultiplayerManager.Instance.IsMultiplayerActive &&
+            LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Host &&
+            LanMultiplayerManager.Instance.TryFindClosestEnemyTarget(transform.position, out Transform networkTarget, out string playerId))
+        {
+            targetTransform = networkTarget;
+            targetPlayerId = playerId;
+            return;
+        }
 
         PlayerMovement[] players = LanMultiplayerManager.GetGameplayPlayers();
         float bestDistance = float.MaxValue;
@@ -347,7 +377,8 @@ public class BossEnemy : MonoBehaviour
             }
         }
 
-        targetPlayer = closestPlayer;
+        targetTransform = closestPlayer != null ? closestPlayer.transform : null;
+        targetPlayerId = null;
     }
 
     bool TryGetGroundPosition(Vector3 position, out Vector3 groundedPosition)
@@ -621,5 +652,12 @@ public class BossEnemy : MonoBehaviour
         rb.isKinematic = true;
         rb.useGravity = false;
         rb.constraints = RigidbodyConstraints.FreezeRotation;
+    }
+
+    bool ShouldUseNetworkAuthority()
+    {
+        return LanMultiplayerManager.Instance != null &&
+               LanMultiplayerManager.Instance.IsMultiplayerActive &&
+               LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client;
     }
 }

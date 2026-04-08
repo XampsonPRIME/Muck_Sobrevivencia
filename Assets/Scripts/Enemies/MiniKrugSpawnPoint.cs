@@ -26,6 +26,9 @@ public class MiniKrugSpawnPoint : MonoBehaviour
 
     void Start()
     {
+        if (!ShouldRunAuthority())
+            return;
+
         if (miniKrugPrefab == null)
             miniKrugPrefab = FindMiniKrugPrefab();
 
@@ -37,6 +40,9 @@ public class MiniKrugSpawnPoint : MonoBehaviour
 
     void Update()
     {
+        if (!ShouldRunAuthority())
+            return;
+
         DayNightCycle cycle = DayNightCycle.Instance;
         if (cycle == null)
             return;
@@ -97,6 +103,7 @@ public class MiniKrugSpawnPoint : MonoBehaviour
                 miniKrug = miniKrugObject.AddComponent<MiniKrug>();
 
             miniKrug.SetSpawnData(this);
+            LanNetworkEntity.Ensure(miniKrug);
             activeMiniKrugs.Add(miniKrug);
         }
     }
@@ -166,7 +173,10 @@ public class MiniKrugSpawnPoint : MonoBehaviour
         foreach (MiniKrug miniKrug in activeMiniKrugs)
         {
             if (miniKrug != null)
+            {
+                LanMultiplayerManager.Instance?.NotifyEnemyDestroyed(miniKrug);
                 Destroy(miniKrug.gameObject);
+            }
         }
 
         activeMiniKrugs.Clear();
@@ -175,5 +185,13 @@ public class MiniKrugSpawnPoint : MonoBehaviour
     void CleanupDeadEntries()
     {
         activeMiniKrugs.RemoveAll(miniKrug => miniKrug == null);
+    }
+
+    bool ShouldRunAuthority()
+    {
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance ?? FindFirstObjectByType<LanMultiplayerManager>();
+        return manager == null ||
+               !manager.IsMultiplayerActive ||
+               manager.Mode == LanMultiplayerManager.SessionMode.Host;
     }
 }

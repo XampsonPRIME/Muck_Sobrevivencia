@@ -178,6 +178,13 @@ public class PlayerMagic : MonoBehaviour
             MiniKrug miniKrug = hit.GetComponent<MiniKrug>() ?? hit.GetComponentInParent<MiniKrug>();
             if (miniKrug != null && hitMiniKrugs.Add(miniKrug))
             {
+                if (LanMultiplayerManager.Instance != null &&
+                    LanMultiplayerManager.Instance.TryHandleGameplayHit(miniKrug, playerMovement, ToolType.Axe, areaMagicDamage))
+                {
+                    affectedCount++;
+                    continue;
+                }
+
                 miniKrug.Hit(areaMagicDamage, playerMovement);
                 affectedCount++;
                 continue;

@@ -35,8 +35,10 @@ public class MiniKrug : MonoBehaviour
     float nextAttackTime;
     float nextTargetRefreshTime;
     float healthUiHideTime;
+    public int CurrentHealth => currentHealth;
 
-    PlayerMovement targetPlayer;
+    Transform targetTransform;
+    string targetPlayerId;
     PlayerMovement lastAttacker;
     MiniKrugSpawnPoint spawnPoint;
     Canvas worldCanvas;
@@ -58,7 +60,13 @@ public class MiniKrug : MonoBehaviour
         if (worldCanvas == null || healthFillImage == null || healthText == null)
             EnsureCombatUI();
 
-        if (Time.time >= nextTargetRefreshTime || targetPlayer == null)
+        if (ShouldUseNetworkAuthority())
+        {
+            UpdateUIFacing();
+            return;
+        }
+
+        if (Time.time >= nextTargetRefreshTime || targetTransform == null)
             RefreshTarget();
 
         FollowTarget();
@@ -87,12 +95,47 @@ public class MiniKrug : MonoBehaviour
             Die();
     }
 
+    public void ApplyNetworkHit(int damage, out int goldAmount, out int xpAmount, out int remainingHealth, out bool destroyed)
+    {
+        if (worldCanvas == null || healthFillImage == null || healthText == null)
+            EnsureCombatUI();
+
+        int finalDamage = Mathf.Max(1, damage);
+        currentHealth -= finalDamage;
+        ShowDamagePopup(finalDamage);
+        ShowHealthUITemporarily();
+        UpdateHealthUI(true);
+
+        destroyed = currentHealth <= 0;
+        goldAmount = destroyed ? Random.Range(minGoldDrop, maxGoldDrop + 1) : 0;
+        xpAmount = destroyed ? xpReward : 0;
+        remainingHealth = Mathf.Max(0, currentHealth);
+
+        if (destroyed)
+        {
+            if (spawnPoint != null)
+                spawnPoint.NotifyMiniKrugDeath(this);
+
+            Destroy(gameObject);
+        }
+    }
+
+    public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkHealth, bool destroyed)
+    {
+        transform.SetPositionAndRotation(networkPosition, networkRotation);
+        currentHealth = Mathf.Max(0, networkHealth);
+        UpdateHealthUI(!destroyed);
+
+        if (destroyed)
+            Destroy(gameObject);
+    }
+
     void FollowTarget()
     {
-        if (targetPlayer == null)
+        if (targetTransform == null)
             return;
 
-        Vector3 toTarget = targetPlayer.transform.position - transform.position;
+        Vector3 toTarget = targetTransform.position - transform.position;
         toTarget.y = 0f;
 
         if (toTarget.sqrMagnitude <= 0.0001f)
@@ -112,22 +155,39 @@ public class MiniKrug : MonoBehaviour
 
     void TryAttackPlayer()
     {
-        if (targetPlayer == null || Time.time < nextAttackTime)
+        if (targetTransform == null || Time.time < nextAttackTime)
             return;
 
-        Vector3 toPlayer = targetPlayer.transform.position - transform.position;
+        Vector3 toPlayer = targetTransform.position - transform.position;
         toPlayer.y = 0f;
 
         if (toPlayer.magnitude > attackRange)
             return;
 
-        targetPlayer.TakeDamage(contactDamage);
+        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+            LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
+        else
+        {
+            PlayerMovement targetPlayer = targetTransform.GetComponent<PlayerMovement>();
+            targetPlayer?.TakeDamage(contactDamage);
+        }
+
         nextAttackTime = Time.time + attackCooldown;
     }
 
     void RefreshTarget()
     {
         nextTargetRefreshTime = Time.time + targetRefreshInterval;
+
+        if (LanMultiplayerManager.Instance != null &&
+            LanMultiplayerManager.Instance.IsMultiplayerActive &&
+            LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Host &&
+            LanMultiplayerManager.Instance.TryFindClosestEnemyTarget(transform.position, out Transform networkTarget, out string playerId))
+        {
+            targetTransform = networkTarget;
+            targetPlayerId = playerId;
+            return;
+        }
 
         PlayerMovement[] players = LanMultiplayerManager.GetGameplayPlayers();
         float bestDistance = float.MaxValue;
@@ -146,7 +206,8 @@ public class MiniKrug : MonoBehaviour
             }
         }
 
-        targetPlayer = closestPlayer;
+        targetTransform = closestPlayer != null ? closestPlayer.transform : null;
+        targetPlayerId = null;
     }
 
     bool TryGetGroundPosition(Vector3 position, out Vector3 groundedPosition)
@@ -359,5 +420,12 @@ public class MiniKrug : MonoBehaviour
             capsule.radius = 0.38f;
             capsule.height = 0.9f;
         }
+    }
+
+    bool ShouldUseNetworkAuthority()
+    {
+        return LanMultiplayerManager.Instance != null &&
+               LanMultiplayerManager.Instance.IsMultiplayerActive &&
+               LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client;
     }
 }
