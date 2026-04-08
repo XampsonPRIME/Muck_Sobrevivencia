@@ -204,9 +204,9 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         if (icon == null)
             return;
 
-        Sprite sprite = itemData != null ? itemData.icon : null;
+        Sprite sprite = itemData.icon != null ? itemData.icon : null;
 
-        if (isBottle && itemData != null)
+        if (isBottle && itemData.icon != null)
         {
             BottleItem bottle = itemData.GetComponent<BottleItem>();
             if (bottle != null)

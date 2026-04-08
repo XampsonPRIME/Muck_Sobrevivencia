@@ -1364,6 +1364,22 @@ public class LanMultiplayerManager : MonoBehaviour
                 return entity;
         }
 
+        if (typeof(T) == typeof(BossEnemy))
+        {
+            T[] bosses = FindObjectsByType<T>(FindObjectsSortMode.None);
+            if (bosses.Length == 1 && bosses[0] != null)
+            {
+                LanNetworkEntity networkEntity = bosses[0].GetComponent<LanNetworkEntity>();
+                if (networkEntity == null || networkEntity.EntityId != entityId)
+                {
+                    LanNetworkEntity.Ensure(bosses[0], entityId);
+                    Debug.LogWarning($"[LanMultiplayer] Boss entity id fallback applied. Using '{entityId}' for the only boss in scene.");
+                }
+
+                return bosses[0];
+            }
+        }
+
         return null;
     }
 
