@@ -1,0 +1,157 @@
+name: Deploy Linux Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      scene_set:
+        description: Scene set loaded by the dedicated server
+        required: true
+        default: Overworld
+        type: choice
+        options:
+          - Overworld
+          - BossFight
+      port:
+        description: Game server TCP port
+        required: true
+        default: "7777"
+        type: string
+      deploy:
+        description: Deploy to DigitalOcean after building
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Linux Server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-LinuxServer-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-LinuxServer-
+            Library-
+
+      - name: Build Linux dedicated server
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          projectPath: .
+          unityVersion: auto
+          targetPlatform: StandaloneLinux64
+          buildMethod: LinuxServerBuild.BuildFromCommandLine
+          customParameters: -buildOutput build/LinuxServer
+
+      - name: Create LinuxServer archive
+        run: tar -czf LinuxServer.tar.gz -C build LinuxServer
+
+      - name: Upload LinuxServer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinuxServer
+          path: LinuxServer.tar.gz
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to DigitalOcean
+    needs: build
+    if: ${{ github.event_name == 'push' || inputs.deploy }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download LinuxServer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: LinuxServer
+
+      - name: Prepare SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/do_key
+          chmod 600 ~/.ssh/do_key
+          ssh-keyscan -H "${{ secrets.DO_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload archive to droplet
+        run: scp -i ~/.ssh/do_key LinuxServer.tar.gz "${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/root/LinuxServer.tar.gz"
+
+      - name: Deploy and restart service
+        env:
+          PORT_VALUE: ${{ github.event_name == 'push' && '7777' || inputs.port }}
+          SCENE_SET_VALUE: ${{ github.event_name == 'push' && 'Overworld' || inputs.scene_set }}
+        run: |
+          ssh -i ~/.ssh/do_key "${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}" <<EOF_SSH
+          set -euo pipefail
+
+          SERVICE_NAME="muck-server"
+          REMOTE_DIR="/opt/muck-server"
+          PORT="$PORT_VALUE"
+          SCENE_SET="$SCENE_SET_VALUE"
+
+          systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+          rm -rf "$REMOTE_DIR"
+          mkdir -p "$REMOTE_DIR"
+          tar -xzf /root/LinuxServer.tar.gz -C "$REMOTE_DIR"
+          find "$REMOTE_DIR" -name '._*' -delete
+
+          if ! find "$REMOTE_DIR" -maxdepth 1 -name '*.x86_64' | grep -q .; then
+            FIRST_DIR="$(find "$REMOTE_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1 || true)"
+            if [ -n "$FIRST_DIR" ]; then
+              shopt -s dotglob nullglob
+              mv "$FIRST_DIR"/* "$REMOTE_DIR"/
+              shopt -u dotglob nullglob
+              rmdir "$FIRST_DIR" 2>/dev/null || true
+            fi
+          fi
+
+          EXECUTABLE_PATH="$(find "$REMOTE_DIR" -maxdepth 1 -name '*.x86_64' | head -n 1 || true)"
+          if [ -z "$EXECUTABLE_PATH" ]; then
+            echo "No .x86_64 executable found in $REMOTE_DIR" >&2
+            exit 1
+          fi
+
+          chmod +x "$EXECUTABLE_PATH"
+
+          cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<SERVICE
+          [Unit]
+          Description=Muck Linux Dedicated Server
+          After=network.target
+
+          [Service]
+          Type=simple
+          WorkingDirectory=$REMOTE_DIR
+          ExecStart=$EXECUTABLE_PATH -batchmode -nographics -server -port $PORT -sceneSet $SCENE_SET
+          Restart=always
+          RestartSec=5
+          User=root
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+
+          systemctl daemon-reload
+          systemctl enable "$SERVICE_NAME"
+          systemctl restart "$SERVICE_NAME"
+          systemctl --no-pager --full status "$SERVICE_NAME"
+          ss -ltnp | grep ":$PORT" || true
+          EOF_SSH
