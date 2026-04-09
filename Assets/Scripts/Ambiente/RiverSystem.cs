@@ -136,9 +136,9 @@ public class RiverSystem : MonoBehaviour
         if (playerTransform != null)
             return playerTransform;
 
-        PlayerMovement movement = LanMultiplayerManager.FindGameplayPlayer();
-        if (movement != null)
-            return movement.transform;
+        Transform focusTransform = LanMultiplayerManager.FindWorldFocusTransform();
+        if (focusTransform != null)
+            return focusTransform;
 
         GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
         return playerObject != null ? playerObject.transform : null;

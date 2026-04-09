@@ -25,8 +25,7 @@ public class WorldGenerator : MonoBehaviour
 
     void Start()
     {
-        PlayerMovement playerMovement = LanMultiplayerManager.FindGameplayPlayer();
-        player = playerMovement != null ? playerMovement.transform : null;
+        player = LanMultiplayerManager.FindWorldFocusTransform();
     }
 
     void Update()
@@ -60,7 +59,7 @@ public class WorldGenerator : MonoBehaviour
 
     void InitializeWorld()
     {
-        player = LanMultiplayerManager.FindGameplayPlayer()?.transform;
+        player = LanMultiplayerManager.FindWorldFocusTransform();
         riverSystem = FindFirstObjectByType<RiverSystem>();
 
         if (riverSystem == null)

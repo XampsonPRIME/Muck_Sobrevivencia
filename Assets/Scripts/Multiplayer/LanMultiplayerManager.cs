@@ -11,12 +11,20 @@ using UnityEngine.SceneManagement;
 
 public class LanMultiplayerManager : MonoBehaviour
 {
+    static bool dedicatedProcessRequested;
+    static bool dedicatedStartupConsumed;
+    static int dedicatedStartupPort = 7777;
+    static int? dedicatedStartupWorldSeed;
+    static string dedicatedStartupScene;
+    static string dedicatedStartupSceneSetId;
+
     public enum SessionMode
     {
         None,
         Solo,
         Host,
-        Client
+        Client,
+        DedicatedServer
     }
 
     public enum SessionState
@@ -60,6 +68,9 @@ public class LanMultiplayerManager : MonoBehaviour
         public string playerId;
         public int worldSeed;
         public string sceneName;
+        public string sceneSetId;
+        public string activeSceneName;
+        public string[] sceneNames;
     }
 
     [Serializable]
@@ -122,6 +133,9 @@ public class LanMultiplayerManager : MonoBehaviour
     class LanSceneChange
     {
         public string sceneName;
+        public string sceneSetId;
+        public string activeSceneName;
+        public string[] sceneNames;
     }
 
     [Serializable]
@@ -144,10 +158,14 @@ public class LanMultiplayerManager : MonoBehaviour
     }
 
     public static LanMultiplayerManager Instance { get; private set; }
+    public static bool IsDedicatedProcessRequested => dedicatedProcessRequested;
+    public static bool IsDedicatedRuntime => Instance != null && Instance.Mode == SessionMode.DedicatedServer;
 
     public SessionMode Mode { get; private set; } = SessionMode.None;
     public SessionState State { get; private set; } = SessionState.Idle;
-    public bool IsMultiplayerActive => Mode == SessionMode.Host || Mode == SessionMode.Client;
+    public bool IsMultiplayerActive => Mode == SessionMode.Host || Mode == SessionMode.Client || Mode == SessionMode.DedicatedServer;
+    public bool IsServerAuthority => Mode == SessionMode.Host || Mode == SessionMode.DedicatedServer;
+    public bool HasLocalGameplayPlayer => localPlayer != null;
     public bool IsSessionReady => State == SessionState.Ready;
     public string StatusMessage { get; private set; } = "Solo";
     public string LastErrorMessage { get; private set; }
@@ -158,6 +176,7 @@ public class LanMultiplayerManager : MonoBehaviour
 
     readonly ConcurrentQueue<Action> mainThreadActions = new ConcurrentQueue<Action>();
     readonly Dictionary<string, RemotePlayerReplica> remoteReplicas = new Dictionary<string, RemotePlayerReplica>();
+    readonly Dictionary<string, Transform> serverPlayerTargets = new Dictionary<string, Transform>();
     readonly Dictionary<string, LanPlayerState> knownStates = new Dictionary<string, LanPlayerState>();
     readonly Dictionary<string, PeerConnection> hostPeers = new Dictionary<string, PeerConnection>();
     readonly Dictionary<string, string> destroyedEntities = new Dictionary<string, string>();
@@ -179,11 +198,88 @@ public class LanMultiplayerManager : MonoBehaviour
     volatile bool isShuttingDown;
     int worldSeed;
     bool isApplyingRemoteSceneChange;
+    MultiplayerSceneSetState pendingRemoteSceneSet;
     float nextEnemySyncTime;
 
     const float StateSendInterval = 0.05f;
     const float WorldSyncInterval = 1f;
     const float EnemySyncInterval = 0.08f;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    static void DetectStartupMode()
+    {
+        dedicatedProcessRequested = false;
+        dedicatedStartupConsumed = false;
+        dedicatedStartupPort = 7777;
+        dedicatedStartupWorldSeed = null;
+        dedicatedStartupScene = null;
+        dedicatedStartupSceneSetId = null;
+
+        string[] args;
+
+        try
+        {
+            args = Environment.GetCommandLineArgs();
+        }
+        catch
+        {
+            return;
+        }
+
+        if (args == null || args.Length == 0)
+            return;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            string arg = args[i];
+            if (string.IsNullOrWhiteSpace(arg))
+                continue;
+
+            if (string.Equals(arg, "-dedicatedServer", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "-server", StringComparison.OrdinalIgnoreCase))
+            {
+                dedicatedProcessRequested = true;
+                continue;
+            }
+
+            if ((string.Equals(arg, "-port", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(arg, "--port", StringComparison.OrdinalIgnoreCase)) &&
+                i + 1 < args.Length &&
+                int.TryParse(args[i + 1], out int parsedPort))
+            {
+                dedicatedStartupPort = Mathf.Clamp(parsedPort, 1, 65535);
+                i++;
+                continue;
+            }
+
+            if ((string.Equals(arg, "-scene", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(arg, "--scene", StringComparison.OrdinalIgnoreCase)) &&
+                i + 1 < args.Length)
+            {
+                dedicatedStartupScene = args[i + 1];
+                i++;
+                continue;
+            }
+
+            if ((string.Equals(arg, "-sceneSet", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(arg, "--sceneSet", StringComparison.OrdinalIgnoreCase)) &&
+                i + 1 < args.Length)
+            {
+                dedicatedStartupSceneSetId = args[i + 1];
+                i++;
+                continue;
+            }
+
+            if ((string.Equals(arg, "-worldSeed", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(arg, "--worldSeed", StringComparison.OrdinalIgnoreCase)) &&
+                i + 1 < args.Length &&
+                int.TryParse(args[i + 1], out int parsedSeed))
+            {
+                dedicatedStartupWorldSeed = parsedSeed;
+                i++;
+            }
+        }
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -206,6 +302,13 @@ public class LanMultiplayerManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += HandleSceneLoaded;
+        SceneManager.sceneUnloaded += HandleSceneUnloaded;
+
+        if (dedicatedProcessRequested && !dedicatedStartupConsumed)
+        {
+            dedicatedStartupConsumed = true;
+            StartDedicatedServer(dedicatedStartupPort, dedicatedStartupWorldSeed, dedicatedStartupScene, dedicatedStartupSceneSetId);
+        }
     }
 
     void Update()
@@ -216,23 +319,24 @@ public class LanMultiplayerManager : MonoBehaviour
         FlushPendingEntityUpdates();
 
         ResolveLocalPlayer();
+        TryFinalizeRemoteSceneChange();
 
-        if (!IsSessionReady || localPlayer == null)
+        if (!IsSessionReady)
             return;
 
-        if (Time.unscaledTime >= nextStateSendTime)
+        if (localPlayer != null && Time.unscaledTime >= nextStateSendTime)
         {
             nextStateSendTime = Time.unscaledTime + StateSendInterval;
             SendLocalPlayerState();
         }
 
-        if (Mode == SessionMode.Host && Time.unscaledTime >= nextWorldSyncTime)
+        if (IsServerAuthority && Time.unscaledTime >= nextWorldSyncTime)
         {
             nextWorldSyncTime = Time.unscaledTime + WorldSyncInterval;
             BroadcastWorldState();
         }
 
-        if (Mode == SessionMode.Host && Time.unscaledTime >= nextEnemySyncTime)
+        if (IsServerAuthority && Time.unscaledTime >= nextEnemySyncTime)
         {
             nextEnemySyncTime = Time.unscaledTime + EnemySyncInterval;
             BroadcastEnemyStates();
@@ -250,6 +354,7 @@ public class LanMultiplayerManager : MonoBehaviour
             Instance = null;
 
         SceneManager.sceneLoaded -= HandleSceneLoaded;
+        SceneManager.sceneUnloaded -= HandleSceneUnloaded;
         ShutdownSession();
     }
 
@@ -268,6 +373,61 @@ public class LanMultiplayerManager : MonoBehaviour
     public bool StartHost(int port)
     {
         return StartHost(port, null);
+    }
+
+    public MultiplayerSceneSetState CaptureCurrentSceneSet()
+    {
+        return MultiplayerSceneSetCatalog.CaptureLoadedScenes();
+    }
+
+    public bool StartDedicatedServer(int port, int? savedWorldSeed = null, string sceneName = null, string sceneSetId = null)
+    {
+        ShutdownSession();
+
+        try
+        {
+            Application.runInBackground = true;
+            GameState.IsInLobby = false;
+            GameState.IsPaused = false;
+            GameState.IsInventoryOpen = false;
+            GameState.IsPlayerDead = false;
+            localPlayer = null;
+            localPlayerId = null;
+            localPlayerName = BuildPlayerName();
+            SessionId = Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant();
+            worldSeed = savedWorldSeed.HasValue ? savedWorldSeed.Value : Environment.TickCount;
+            CurrentPort = Mathf.Max(1, port);
+            CurrentAddress = GetLocalIpv4Address();
+            Mode = SessionMode.DedicatedServer;
+            State = SessionState.Ready;
+            LastErrorMessage = null;
+            MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, sceneName);
+            StatusMessage = $"Servidor dedicado ativo em {CurrentAddress}:{CurrentPort} [{SessionId}]";
+            knownStates.Clear();
+
+            hostListener = new TcpListener(IPAddress.Any, CurrentPort);
+            hostListener.Start();
+
+            acceptThread = new Thread(AcceptLoop)
+            {
+                IsBackground = true,
+                Name = "DedicatedServerAcceptLoop"
+            };
+            acceptThread.Start();
+
+            if (startupSceneSet != null)
+                MultiplayerSceneSetCatalog.ApplyToRuntime(startupSceneSet);
+
+            UpdateDiscoveryAnnouncement();
+            BroadcastWorldState();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShutdownSession();
+            SetError($"Falha ao iniciar servidor dedicado: {ex.Message}");
+            return false;
+        }
     }
 
     public bool StartHost(int port, int? savedWorldSeed)
@@ -463,6 +623,12 @@ public class LanMultiplayerManager : MonoBehaviour
 
     public static PlayerMovement FindGameplayPlayer()
     {
+        if (dedicatedProcessRequested)
+            return null;
+
+        if (Instance != null && Instance.Mode == SessionMode.DedicatedServer)
+            return null;
+
         if (Instance != null && Instance.localPlayer != null && !IsReplica(Instance.localPlayer))
             return Instance.localPlayer;
 
@@ -478,6 +644,12 @@ public class LanMultiplayerManager : MonoBehaviour
 
     public static PlayerMovement[] GetGameplayPlayers()
     {
+        if (dedicatedProcessRequested)
+            return Array.Empty<PlayerMovement>();
+
+        if (Instance != null && Instance.Mode == SessionMode.DedicatedServer)
+            return Array.Empty<PlayerMovement>();
+
         PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
         List<PlayerMovement> filteredPlayers = new List<PlayerMovement>();
 
@@ -495,8 +667,49 @@ public class LanMultiplayerManager : MonoBehaviour
         return component != null && component.GetComponent<RemotePlayerReplica>() != null;
     }
 
+    public static Transform FindWorldFocusTransform()
+    {
+        if (dedicatedProcessRequested && (Instance == null || Instance.Mode == SessionMode.DedicatedServer))
+        {
+            if (Instance != null)
+            {
+                foreach (KeyValuePair<string, Transform> entry in Instance.serverPlayerTargets)
+                {
+                    if (entry.Value != null)
+                        return entry.Value;
+                }
+            }
+
+            return null;
+        }
+
+        if (Instance == null)
+        {
+            PlayerMovement gameplayPlayer = FindGameplayPlayer();
+            return gameplayPlayer != null ? gameplayPlayer.transform : null;
+        }
+
+        if (Instance.localPlayer != null && !IsReplica(Instance.localPlayer))
+            return Instance.localPlayer.transform;
+
+        foreach (KeyValuePair<string, Transform> entry in Instance.serverPlayerTargets)
+        {
+            if (entry.Value != null)
+                return entry.Value;
+        }
+
+        PlayerMovement fallbackPlayer = FindGameplayPlayer();
+        return fallbackPlayer != null ? fallbackPlayer.transform : null;
+    }
+
     void ResolveLocalPlayer()
     {
+        if (Mode == SessionMode.DedicatedServer)
+        {
+            localPlayer = null;
+            return;
+        }
+
         if (localPlayer != null && !IsReplica(localPlayer))
             return;
 
@@ -857,12 +1070,16 @@ public class LanMultiplayerManager : MonoBehaviour
         connection.playerName = string.IsNullOrWhiteSpace(handshake.playerName) ? $"Player {hostPeers.Count + 1}" : handshake.playerName.Trim();
         hostPeers[connection.playerId] = connection;
         hostPeers.Remove(connection.addressLabel);
+        MultiplayerSceneSetState currentSceneSet = CaptureCurrentSceneSet();
 
         SendPacket(connection, CreatePacket("welcome", new LanWelcome
         {
             playerId = connection.playerId,
             worldSeed = worldSeed,
-            sceneName = SceneManager.GetActiveScene().name
+            sceneName = SceneManager.GetActiveScene().name,
+            sceneSetId = currentSceneSet?.sceneSetId,
+            activeSceneName = currentSceneSet?.activeSceneName,
+            sceneNames = currentSceneSet?.sceneNames
         }));
 
         foreach (KeyValuePair<string, LanPlayerState> state in knownStates)
@@ -886,21 +1103,45 @@ public class LanMultiplayerManager : MonoBehaviour
         StatusMessage = $"Conectado em {CurrentAddress}:{CurrentPort}";
         hasLastLocalPosition = false;
         ClearRemoteReplicas();
-        ApplySceneChange(new LanSceneChange { sceneName = welcome.sceneName });
+        ApplySceneChange(new LanSceneChange
+        {
+            sceneName = welcome.sceneName,
+            sceneSetId = welcome.sceneSetId,
+            activeSceneName = welcome.activeSceneName,
+            sceneNames = welcome.sceneNames
+        });
     }
 
     void ApplySceneChange(LanSceneChange sceneChange)
     {
-        if (sceneChange == null || string.IsNullOrWhiteSpace(sceneChange.sceneName))
+        if (sceneChange == null)
             return;
 
-        Scene activeScene = SceneManager.GetActiveScene();
-        if (activeScene.name == sceneChange.sceneName)
+        MultiplayerSceneSetState targetSceneSet = MultiplayerSceneSetCatalog.Normalize(new MultiplayerSceneSetState
+        {
+            sceneSetId = sceneChange.sceneSetId,
+            activeSceneName = string.IsNullOrWhiteSpace(sceneChange.activeSceneName) ? sceneChange.sceneName : sceneChange.activeSceneName,
+            sceneNames = sceneChange.sceneNames != null && sceneChange.sceneNames.Length > 0
+                ? sceneChange.sceneNames
+                : (string.IsNullOrWhiteSpace(sceneChange.sceneName) ? null : new[] { sceneChange.sceneName })
+        });
+
+        if (targetSceneSet == null)
             return;
+
+        if (MultiplayerSceneSetCatalog.LoadedScenesMatch(targetSceneSet))
+        {
+            Scene targetActiveScene = SceneManager.GetSceneByName(targetSceneSet.activeSceneName);
+            if (targetActiveScene.IsValid() && targetActiveScene.isLoaded && SceneManager.GetActiveScene().name != targetSceneSet.activeSceneName)
+                SceneManager.SetActiveScene(targetActiveScene);
+            return;
+        }
 
         isApplyingRemoteSceneChange = true;
-        StatusMessage = $"Carregando cena {sceneChange.sceneName}...";
-        SceneManager.LoadScene(sceneChange.sceneName);
+        pendingRemoteSceneSet = targetSceneSet;
+        StatusMessage = $"Carregando pacote {MultiplayerSceneSetCatalog.BuildDisplayLabel(targetSceneSet)}...";
+        MultiplayerSceneSetCatalog.ApplyToRuntime(targetSceneSet);
+        TryFinalizeRemoteSceneChange();
     }
 
     void HandleHitRequest(string payload)
@@ -1170,6 +1411,7 @@ public class LanMultiplayerManager : MonoBehaviour
             state.playerId = connection.playerId;
 
         knownStates[state.playerId] = state;
+        UpsertServerPlayerTarget(state);
 
         if (state.playerId != localPlayerId)
             UpsertReplica(state);
@@ -1185,6 +1427,7 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
 
         RemoveReplica(leave.playerId);
+        RemoveServerPlayerTarget(leave.playerId);
         knownStates.Remove(leave.playerId);
     }
 
@@ -1219,6 +1462,36 @@ public class LanMultiplayerManager : MonoBehaviour
             Destroy(replica.gameObject);
     }
 
+    void UpsertServerPlayerTarget(LanPlayerState state)
+    {
+        if (state == null || string.IsNullOrWhiteSpace(state.playerId) || state.playerId == localPlayerId)
+            return;
+
+        if (!serverPlayerTargets.TryGetValue(state.playerId, out Transform target) || target == null)
+        {
+            GameObject targetObject = new GameObject($"ServerPlayerTarget_{state.playerId}");
+            targetObject.transform.SetParent(transform, false);
+            target = targetObject.transform;
+            serverPlayerTargets[state.playerId] = target;
+        }
+
+        target.SetPositionAndRotation(state.position, state.rotation);
+    }
+
+    void RemoveServerPlayerTarget(string playerId)
+    {
+        if (string.IsNullOrWhiteSpace(playerId))
+            return;
+
+        if (!serverPlayerTargets.TryGetValue(playerId, out Transform target))
+            return;
+
+        serverPlayerTargets.Remove(playerId);
+
+        if (target != null)
+            Destroy(target.gameObject);
+    }
+
     void HandleDisconnect(PeerConnection connection, bool isHostSide)
     {
         if (connection == null)
@@ -1238,6 +1511,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 knownStates.Remove(connection.playerId);
                 BroadcastPacket(CreatePacket("leave", new LanLeave { playerId = connection.playerId }), connection.playerId);
                 RemoveReplica(connection.playerId);
+                RemoveServerPlayerTarget(connection.playerId);
                 StatusMessage = $"{connection.playerName} saiu da sessao";
                 UpdateDiscoveryAnnouncement();
             }
@@ -1551,21 +1825,12 @@ public class LanMultiplayerManager : MonoBehaviour
         ResolveLocalPlayer();
 
         if (Mode == SessionMode.Client && isApplyingRemoteSceneChange)
-        {
-            isApplyingRemoteSceneChange = false;
-            ClearRemoteReplicas();
-            StatusMessage = $"Conectado em {CurrentAddress}:{CurrentPort}";
-        }
+            TryFinalizeRemoteSceneChange();
 
-        if (Mode != SessionMode.Host || !IsMultiplayerActive)
+        if (!IsServerAuthority || !IsMultiplayerActive)
             return;
 
-        LanPacket scenePacket = CreatePacket("scene", new LanSceneChange
-        {
-            sceneName = scene.name
-        });
-
-        BroadcastPacket(scenePacket);
+        BroadcastCurrentSceneSet();
 
         foreach (KeyValuePair<string, PeerConnection> entry in hostPeers)
         {
@@ -1579,15 +1844,41 @@ public class LanMultiplayerManager : MonoBehaviour
         UpdateDiscoveryAnnouncement();
     }
 
+    void HandleSceneUnloaded(Scene scene)
+    {
+        if (Mode == SessionMode.Client && isApplyingRemoteSceneChange)
+            TryFinalizeRemoteSceneChange();
+
+        if (!IsServerAuthority || !IsMultiplayerActive)
+            return;
+
+        BroadcastCurrentSceneSet();
+        UpdateDiscoveryAnnouncement();
+    }
+
+    void BroadcastCurrentSceneSet()
+    {
+        MultiplayerSceneSetState currentSceneSet = CaptureCurrentSceneSet();
+        LanPacket scenePacket = CreatePacket("scene", new LanSceneChange
+        {
+            sceneName = currentSceneSet?.activeSceneName ?? SceneManager.GetActiveScene().name,
+            sceneSetId = currentSceneSet?.sceneSetId,
+            activeSceneName = currentSceneSet?.activeSceneName,
+            sceneNames = currentSceneSet?.sceneNames
+        });
+
+        BroadcastPacket(scenePacket);
+    }
+
     void UpdateDiscoveryAnnouncement()
     {
-        if (Mode != SessionMode.Host || !IsMultiplayerActive || string.IsNullOrWhiteSpace(SessionId))
+        if (!IsServerAuthority || !IsMultiplayerActive || string.IsNullOrWhiteSpace(SessionId))
         {
             LanSessionDiscovery.Instance?.StopAnnouncing();
             return;
         }
 
-        int playerCount = 1;
+        int playerCount = localPlayer != null ? 1 : 0;
 
         foreach (KeyValuePair<string, PeerConnection> entry in hostPeers)
         {
@@ -1595,9 +1886,28 @@ public class LanMultiplayerManager : MonoBehaviour
                 playerCount++;
         }
 
-        string sceneName = SceneManager.GetActiveScene().name;
+        MultiplayerSceneSetState currentSceneSet = CaptureCurrentSceneSet();
+        string sceneName = MultiplayerSceneSetCatalog.BuildDisplayLabel(currentSceneSet);
         string hostName = string.IsNullOrWhiteSpace(localPlayerName) ? BuildPlayerName() : localPlayerName;
         LanSessionDiscovery.Instance?.StartAnnouncing(SessionId, hostName, CurrentPort, sceneName, playerCount);
+    }
+
+    void TryFinalizeRemoteSceneChange()
+    {
+        if (Mode != SessionMode.Client || pendingRemoteSceneSet == null)
+            return;
+
+        if (!MultiplayerSceneSetCatalog.LoadedScenesMatch(pendingRemoteSceneSet))
+            return;
+
+        Scene targetActiveScene = SceneManager.GetSceneByName(pendingRemoteSceneSet.activeSceneName);
+        if (targetActiveScene.IsValid() && targetActiveScene.isLoaded)
+            SceneManager.SetActiveScene(targetActiveScene);
+
+        isApplyingRemoteSceneChange = false;
+        pendingRemoteSceneSet = null;
+        ClearRemoteReplicas();
+        StatusMessage = $"Conectado em {CurrentAddress}:{CurrentPort}";
     }
 
     MiniKrug CreateRemoteMiniKrug(LanEnemyState state)
@@ -1635,16 +1945,19 @@ public class LanMultiplayerManager : MonoBehaviour
             }
         }
 
-        foreach (KeyValuePair<string, RemotePlayerReplica> entry in remoteReplicas)
+        foreach (KeyValuePair<string, Transform> entry in serverPlayerTargets)
         {
             if (entry.Value == null)
                 continue;
 
-            float distance = (entry.Value.transform.position - origin).sqrMagnitude;
+            if (knownStates.TryGetValue(entry.Key, out LanPlayerState state) && state != null && state.isDead)
+                continue;
+
+            float distance = (entry.Value.position - origin).sqrMagnitude;
             if (distance < bestDistance)
             {
                 bestDistance = distance;
-                targetTransform = entry.Value.transform;
+                targetTransform = entry.Value;
                 targetPlayerId = entry.Key;
             }
         }
@@ -1673,7 +1986,7 @@ public class LanMultiplayerManager : MonoBehaviour
 
     public void NotifyEnemyDestroyed(Component enemy)
     {
-        if (enemy == null || Mode != SessionMode.Host)
+        if (enemy == null || !IsServerAuthority)
             return;
 
         LanNetworkEntity entity = ResolveNetworkEntity(enemy);
@@ -1746,6 +2059,10 @@ public class LanMultiplayerManager : MonoBehaviour
 
         foreach (string playerId in remotePlayerIds)
             knownStates.Remove(playerId);
+
+        List<string> serverTargetIds = new List<string>(serverPlayerTargets.Keys);
+        for (int i = 0; i < serverTargetIds.Count; i++)
+            RemoveServerPlayerTarget(serverTargetIds[i]);
     }
 
     void CloseConnection(PeerConnection connection)
