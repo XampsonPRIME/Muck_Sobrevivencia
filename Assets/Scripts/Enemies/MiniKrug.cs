@@ -4,6 +4,14 @@ using UnityEngine.UI;
 
 public class MiniKrug : MonoBehaviour
 {
+    [Header("Progressao")]
+    public int enemyLevel = 1;
+    public int healthBonusPerLevel = 2;
+    public float contactDamageBonusPerLevel = 1.5f;
+    public float moveSpeedBonusPerLevel = 0.08f;
+    public int goldBonusPerLevel = 1;
+    public int xpBonusPerLevel = 6;
+
     [Header("Vida")]
     public int maxHealth = 2;
 
@@ -35,7 +43,15 @@ public class MiniKrug : MonoBehaviour
     float nextAttackTime;
     float nextTargetRefreshTime;
     float healthUiHideTime;
+    int baseMaxHealth;
+    float baseContactDamage;
+    float baseMoveSpeed;
+    int baseMinGoldDrop;
+    int baseMaxGoldDrop;
+    int baseXpReward;
+    bool baseStatsCached;
     public int CurrentHealth => currentHealth;
+    public int EnemyLevel => enemyLevel;
 
     Transform targetTransform;
     string targetPlayerId;
@@ -45,10 +61,17 @@ public class MiniKrug : MonoBehaviour
     Image healthFillImage;
     TextMeshProUGUI healthText;
 
+    void Awake()
+    {
+        CacheBaseStats();
+        ApplyLevelScaling(enemyLevel);
+    }
+
     void Start()
     {
         currentHealth = maxHealth;
         EnsureMainCollider();
+        EnsureStablePhysics();
         SnapToGround();
         EnsureCombatUI();
         UpdateHealthUI(false);
@@ -77,6 +100,13 @@ public class MiniKrug : MonoBehaviour
     public void SetSpawnData(MiniKrugSpawnPoint owner)
     {
         spawnPoint = owner;
+    }
+
+    public void SetEnemyLevel(int level)
+    {
+        ApplyLevelScaling(level);
+        currentHealth = Mathf.Clamp(currentHealth <= 0 ? maxHealth : currentHealth, 0, maxHealth);
+        UpdateHealthUI(worldCanvas != null && worldCanvas.gameObject.activeSelf);
     }
 
     public void Hit(int damage, PlayerMovement attacker)
@@ -120,14 +150,25 @@ public class MiniKrug : MonoBehaviour
         }
     }
 
-    public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkHealth, bool destroyed)
+    public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkLevel, int networkHealth, bool destroyed)
     {
+        ApplyLevelScaling(networkLevel);
         transform.SetPositionAndRotation(networkPosition, networkRotation);
         currentHealth = Mathf.Max(0, networkHealth);
         UpdateHealthUI(!destroyed);
 
         if (destroyed)
             Destroy(gameObject);
+    }
+
+    public void PlayLocalHitFeedback(int damage)
+    {
+        if (worldCanvas == null || healthFillImage == null || healthText == null)
+            EnsureCombatUI();
+
+        ShowDamagePopup(Mathf.Max(1, damage));
+        ShowHealthUITemporarily();
+        UpdateHealthUI(true);
     }
 
     void FollowTarget()
@@ -228,10 +269,7 @@ public class MiniKrug : MonoBehaviour
 
         foreach (RaycastHit hit in hits)
         {
-            if (hit.collider == null)
-                continue;
-
-            if (hit.collider.transform == transform || hit.collider.transform.IsChildOf(transform))
+            if (!IsValidGroundHit(hit))
                 continue;
 
             if (hit.distance < closestDistance)
@@ -249,6 +287,35 @@ public class MiniKrug : MonoBehaviour
     {
         if (TryGetGroundPosition(transform.position, out Vector3 groundedPosition))
             transform.position = groundedPosition;
+    }
+
+    void CacheBaseStats()
+    {
+        if (baseStatsCached)
+            return;
+
+        baseMaxHealth = Mathf.Max(1, maxHealth);
+        baseContactDamage = Mathf.Max(1f, contactDamage);
+        baseMoveSpeed = Mathf.Max(0.1f, moveSpeed);
+        baseMinGoldDrop = Mathf.Max(0, minGoldDrop);
+        baseMaxGoldDrop = Mathf.Max(baseMinGoldDrop, maxGoldDrop);
+        baseXpReward = Mathf.Max(1, xpReward);
+        baseStatsCached = true;
+    }
+
+    public void ApplyLevelScaling(int level)
+    {
+        CacheBaseStats();
+
+        enemyLevel = Mathf.Max(1, level);
+        int bonusLevels = Mathf.Max(0, enemyLevel - 1);
+
+        maxHealth = baseMaxHealth + bonusLevels * Mathf.Max(0, healthBonusPerLevel);
+        contactDamage = baseContactDamage + bonusLevels * Mathf.Max(0f, contactDamageBonusPerLevel);
+        moveSpeed = baseMoveSpeed + bonusLevels * Mathf.Max(0f, moveSpeedBonusPerLevel);
+        minGoldDrop = baseMinGoldDrop + bonusLevels * Mathf.Max(0, goldBonusPerLevel);
+        maxGoldDrop = Mathf.Max(minGoldDrop, baseMaxGoldDrop + bonusLevels * Mathf.Max(0, goldBonusPerLevel));
+        xpReward = baseXpReward + bonusLevels * Mathf.Max(0, xpBonusPerLevel);
     }
 
     void Die()
@@ -420,6 +487,48 @@ public class MiniKrug : MonoBehaviour
             capsule.radius = 0.38f;
             capsule.height = 0.9f;
         }
+    }
+
+    void EnsureStablePhysics()
+    {
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb == null)
+            rb = gameObject.AddComponent<Rigidbody>();
+
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+    }
+
+    bool IsValidGroundHit(RaycastHit hit)
+    {
+        Collider collider = hit.collider;
+        if (collider == null)
+            return false;
+
+        Transform hitTransform = collider.transform;
+        if (hitTransform == transform || hitTransform.IsChildOf(transform))
+            return false;
+
+        if (hit.normal.y < 0.35f)
+            return false;
+
+        if (collider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<MiniKrug>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<BossEnemy>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<PlayerMovement>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<RemotePlayerReplica>() != null)
+            return false;
+
+        return true;
     }
 
     bool ShouldUseNetworkAuthority()

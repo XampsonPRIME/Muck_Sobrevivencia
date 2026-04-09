@@ -61,8 +61,13 @@ public class Hotbar : MonoBehaviour
 
     public void AddInventoryItem(InventoryItem inventoryItem)
     {
+        TryAddInventoryItem(inventoryItem);
+    }
+
+    public bool TryAddInventoryItem(InventoryItem inventoryItem)
+    {
         if (inventoryItem == null || inventoryItem.itemData == null || slots == null)
-            return;
+            return false;
 
         for (int i = 0; i < slots.Length; i++)
         {
@@ -84,7 +89,7 @@ public class Hotbar : MonoBehaviour
             if (inventoryItem.isBottle)
                 slot.SetBottleState(inventoryItem.bottleIsFilled);
 
-            return;
+            return true;
         }
 
         for (int i = 0; i < slots.Length; i++)
@@ -103,7 +108,9 @@ public class Hotbar : MonoBehaviour
             if (inventoryItem.isBottle)
                 slot.SetBottleState(inventoryItem.bottleIsFilled);
 
-            return;
+            return true;
         }
+
+        return false;
     }
 }

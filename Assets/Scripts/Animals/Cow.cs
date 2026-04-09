@@ -50,6 +50,7 @@ public class Cow : MonoBehaviour
             BuildProceduralModel();
 
         EnsureMainCollider();
+        EnsureStablePhysics();
         SnapToGround();
         LanNetworkEntity.Ensure(this);
         PickNewTarget(true);
@@ -311,10 +312,7 @@ public class Cow : MonoBehaviour
 
         foreach (RaycastHit hit in hits)
         {
-            if (hit.collider == null)
-                continue;
-
-            if (hit.collider.transform == transform || hit.collider.transform.IsChildOf(transform))
+            if (!IsValidGroundHit(hit))
                 continue;
 
             if (hit.distance < closestDistance)
@@ -420,6 +418,48 @@ public class Cow : MonoBehaviour
             box.center = new Vector3(0f, 0.95f, 0f);
             box.size = new Vector3(1.8f, 1.9f, 1f);
         }
+    }
+
+    void EnsureStablePhysics()
+    {
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb == null)
+            rb = gameObject.AddComponent<Rigidbody>();
+
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+    }
+
+    bool IsValidGroundHit(RaycastHit hit)
+    {
+        Collider collider = hit.collider;
+        if (collider == null)
+            return false;
+
+        Transform hitTransform = collider.transform;
+        if (hitTransform == transform || hitTransform.IsChildOf(transform))
+            return false;
+
+        if (hit.normal.y < 0.35f)
+            return false;
+
+        if (collider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<MiniKrug>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<BossEnemy>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<PlayerMovement>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<RemotePlayerReplica>() != null)
+            return false;
+
+        return true;
     }
 
     void EnsureMaterials()

@@ -7,6 +7,7 @@ public class LevelHUD : MonoBehaviour
     public Vector2 size = new Vector2(320f, 70f);
 
     PlayerProgression progression;
+    PlayerMovement trackedPlayer;
     TextMeshProUGUI levelText;
 
     void Start()
@@ -18,8 +19,7 @@ public class LevelHUD : MonoBehaviour
 
     void Update()
     {
-        if (progression == null)
-            ResolveProgression();
+        ResolveProgression();
 
         EnsureUI();
         Refresh();
@@ -28,8 +28,18 @@ public class LevelHUD : MonoBehaviour
     void ResolveProgression()
     {
         PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
-        if (player != null)
+        if (player == null)
+        {
+            trackedPlayer = null;
+            progression = null;
+            return;
+        }
+
+        if (trackedPlayer != player || progression == null)
+        {
+            trackedPlayer = player;
             progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
+        }
     }
 
     void EnsureUI()
@@ -99,10 +109,16 @@ public class LevelHUD : MonoBehaviour
         return text;
     }
 
-    void Refresh()
+    public void Refresh()
     {
-        if (levelText == null || progression == null)
+        if (levelText == null)
             return;
+
+        if (progression == null)
+        {
+            levelText.text = "Nivel 1\n0/0 XP";
+            return;
+        }
 
         int requiredXp = progression.GetXpRequiredForNextLevel();
         string xpLabel = requiredXp > 0

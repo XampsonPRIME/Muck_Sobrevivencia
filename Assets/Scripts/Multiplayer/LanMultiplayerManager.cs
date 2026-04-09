@@ -60,6 +60,7 @@ public class LanMultiplayerManager : MonoBehaviour
         public float animationSpeed;
         public bool thirdPerson;
         public bool isDead;
+        public int level;
     }
 
     [Serializable]
@@ -118,6 +119,7 @@ public class LanMultiplayerManager : MonoBehaviour
         public string entityKind;
         public Vector3 position;
         public Quaternion rotation;
+        public int level;
         public int health;
         public bool destroyed;
     }
@@ -181,6 +183,7 @@ public class LanMultiplayerManager : MonoBehaviour
     readonly Dictionary<string, PeerConnection> hostPeers = new Dictionary<string, PeerConnection>();
     readonly Dictionary<string, string> destroyedEntities = new Dictionary<string, string>();
     readonly Dictionary<string, LanEntityUpdate> pendingEntityUpdates = new Dictionary<string, LanEntityUpdate>();
+    readonly List<LanReward> pendingLocalRewards = new List<LanReward>();
 
     TcpListener hostListener;
     Thread acceptThread;
@@ -199,6 +202,7 @@ public class LanMultiplayerManager : MonoBehaviour
     int worldSeed;
     bool isApplyingRemoteSceneChange;
     MultiplayerSceneSetState pendingRemoteSceneSet;
+    LanWorldState pendingWorldState;
     float nextEnemySyncTime;
 
     const float StateSendInterval = 0.05f;
@@ -319,6 +323,8 @@ public class LanMultiplayerManager : MonoBehaviour
         FlushPendingEntityUpdates();
 
         ResolveLocalPlayer();
+        TryApplyPendingWorldState();
+        TryApplyPendingLocalRewards();
         TryFinalizeRemoteSceneChange();
 
         if (!IsSessionReady)
@@ -762,7 +768,8 @@ public class LanMultiplayerManager : MonoBehaviour
             lookPitch = lookPitch,
             animationSpeed = animationSpeed,
             thirdPerson = localPlayer.thirdPerson,
-            isDead = GameState.IsPlayerDead
+            isDead = GameState.IsPlayerDead,
+            level = GetLocalPlayerLevel()
         };
     }
 
@@ -785,6 +792,12 @@ public class LanMultiplayerManager : MonoBehaviour
             return true;
         }
 
+        if (target is BossEnemy bossEnemy && !bossEnemy.CanBeChallengedBy(attacker))
+        {
+            MessageSystem.Instance?.ShowMessage(bossEnemy.BuildMinimumLevelMessage());
+            return true;
+        }
+
         if (Mode == SessionMode.Client)
         {
             if (serverConnection == null)
@@ -798,6 +811,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 damage = Mathf.Max(1, damage),
                 toolType = (int)toolType
             }));
+            TriggerClientHitFeedback(target, Mathf.Max(1, damage));
             return true;
         }
 
@@ -864,10 +878,17 @@ public class LanMultiplayerManager : MonoBehaviour
 
     void ApplyWorldState(LanWorldState state)
     {
-        if (Mode != SessionMode.Client || state == null || DayNightCycle.Instance == null)
+        if (Mode != SessionMode.Client || state == null)
             return;
 
+        if (DayNightCycle.Instance == null)
+        {
+            pendingWorldState = state;
+            return;
+        }
+
         DayNightCycle.Instance.LoadState(state.currentDay, state.normalizedTimeOfDay);
+        pendingWorldState = null;
     }
 
     void AcceptLoop()
@@ -1172,6 +1193,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = entityKind,
                 position = miniKrug != null ? miniKrug.transform.position : Vector3.zero,
                 rotation = miniKrug != null ? miniKrug.transform.rotation : Quaternion.identity,
+                level = miniKrug != null ? miniKrug.EnemyLevel : 1,
                 health = remainingHealth,
                 destroyed = destroyed
             }));
@@ -1262,6 +1284,17 @@ public class LanMultiplayerManager : MonoBehaviour
             if (boss == null)
                 return;
 
+            int attackerLevel = GetPlayerLevel(attackerPlayerId);
+            if (!boss.CanBeChallengedByLevel(attackerLevel))
+            {
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    message = boss.BuildMinimumLevelMessage()
+                });
+                return;
+            }
+
             boss.ApplyNetworkHit(damage, out int goldAmount, out int xpAmount, out bool unlockMagic, out int remainingHealth, out bool destroyed);
             BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
             {
@@ -1335,7 +1368,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 miniKrug = CreateRemoteMiniKrug(state);
 
             if (miniKrug != null)
-                miniKrug.ApplyNetworkState(state.position, state.rotation, state.health, state.destroyed);
+                miniKrug.ApplyNetworkState(state.position, state.rotation, state.level, state.health, state.destroyed);
 
             return;
         }
@@ -1344,7 +1377,7 @@ public class LanMultiplayerManager : MonoBehaviour
         {
             BossEnemy boss = FindEntity<BossEnemy>(state.entityId);
             if (boss != null)
-                boss.ApplyNetworkState(state.position, state.rotation, state.health, state.destroyed);
+                boss.ApplyNetworkState(state.position, state.rotation, state.level, state.health, state.destroyed);
         }
     }
 
@@ -1354,10 +1387,23 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
 
         ResolveLocalPlayer();
-        Inventory inventory = localPlayer != null ? localPlayer.GetComponent<Inventory>() : null;
-        Hotbar hotbar = localPlayer != null ? localPlayer.GetComponent<Hotbar>() : null;
-        PlayerProgression progression = localPlayer != null ? localPlayer.GetComponent<PlayerProgression>() : null;
-        PlayerMagic magic = localPlayer != null ? localPlayer.GetComponent<PlayerMagic>() : null;
+        if (localPlayer == null)
+        {
+            QueueLocalReward(reward);
+            return;
+        }
+
+        Inventory inventory = localPlayer.GetComponent<Inventory>();
+        Hotbar hotbar = localPlayer.GetComponent<Hotbar>();
+        PlayerProgression progression = localPlayer.GetComponent<PlayerProgression>() ?? localPlayer.gameObject.AddComponent<PlayerProgression>();
+        PlayerMagic magic = localPlayer.GetComponent<PlayerMagic>();
+
+        bool needsInventory = (reward.itemAmount > 0 || reward.goldAmount > 0) && inventory == null;
+        if (needsInventory)
+        {
+            QueueLocalReward(reward);
+            return;
+        }
 
         if (reward.itemAmount > 0 && inventory != null)
         {
@@ -1387,9 +1433,7 @@ public class LanMultiplayerManager : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(reward.message))
             MessageSystem.Instance?.ShowMessage(reward.message);
 
-        InventoryUI inventoryUI = FindFirstObjectByType<InventoryUI>();
-        if (inventoryUI != null)
-            inventoryUI.Refresh();
+        RefreshClientHud();
     }
 
     void ApplyDamageLocally(LanDamageEvent damageEvent)
@@ -1633,6 +1677,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(MiniKrug),
                 position = miniKrugs[i].transform.position,
                 rotation = miniKrugs[i].transform.rotation,
+                level = miniKrugs[i].EnemyLevel,
                 health = miniKrugs[i].CurrentHealth,
                 destroyed = false
             }));
@@ -1651,6 +1696,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(BossEnemy),
                 position = bosses[i].transform.position,
                 rotation = bosses[i].transform.rotation,
+                level = bosses[i].BossLevel,
                 health = bosses[i].CurrentHealth,
                 destroyed = false
             }));
@@ -1796,6 +1842,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(MiniKrug),
                 position = miniKrugs[i].transform.position,
                 rotation = miniKrugs[i].transform.rotation,
+                level = miniKrugs[i].EnemyLevel,
                 health = miniKrugs[i].CurrentHealth,
                 destroyed = false
             }));
@@ -1814,6 +1861,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(BossEnemy),
                 position = bosses[i].transform.position,
                 rotation = bosses[i].transform.rotation,
+                level = bosses[i].BossLevel,
                 health = bosses[i].CurrentHealth,
                 destroyed = false
             }));
@@ -1823,6 +1871,8 @@ public class LanMultiplayerManager : MonoBehaviour
     void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         ResolveLocalPlayer();
+        TryApplyPendingWorldState();
+        TryApplyPendingLocalRewards();
 
         if (Mode == SessionMode.Client && isApplyingRemoteSceneChange)
             TryFinalizeRemoteSceneChange();
@@ -1907,7 +1957,72 @@ public class LanMultiplayerManager : MonoBehaviour
         isApplyingRemoteSceneChange = false;
         pendingRemoteSceneSet = null;
         ClearRemoteReplicas();
+        TryApplyPendingWorldState();
+        TryApplyPendingLocalRewards();
         StatusMessage = $"Conectado em {CurrentAddress}:{CurrentPort}";
+    }
+
+    void TriggerClientHitFeedback(Component target, int damage)
+    {
+        if (target is ResourceNode resourceNode)
+        {
+            resourceNode.PlayHitFeedback();
+            return;
+        }
+
+        if (target is MiniKrug miniKrug)
+        {
+            miniKrug.PlayLocalHitFeedback(damage);
+            return;
+        }
+
+        if (target is BossEnemy bossEnemy)
+            bossEnemy.PlayLocalHitFeedback(damage);
+    }
+
+    void TryApplyPendingWorldState()
+    {
+        if (Mode != SessionMode.Client || pendingWorldState == null || DayNightCycle.Instance == null)
+            return;
+
+        DayNightCycle.Instance.LoadState(pendingWorldState.currentDay, pendingWorldState.normalizedTimeOfDay);
+        pendingWorldState = null;
+    }
+
+    void QueueLocalReward(LanReward reward)
+    {
+        if (reward == null)
+            return;
+
+        pendingLocalRewards.Add(reward);
+    }
+
+    void TryApplyPendingLocalRewards()
+    {
+        if (Mode != SessionMode.Client || pendingLocalRewards.Count == 0)
+            return;
+
+        for (int i = pendingLocalRewards.Count - 1; i >= 0; i--)
+        {
+            LanReward reward = pendingLocalRewards[i];
+            pendingLocalRewards.RemoveAt(i);
+            ApplyRewardLocally(reward);
+        }
+    }
+
+    void RefreshClientHud()
+    {
+        InventoryUI inventoryUI = FindFirstObjectByType<InventoryUI>();
+        if (inventoryUI != null)
+            inventoryUI.Refresh();
+
+        GoldHUD goldHud = FindFirstObjectByType<GoldHUD>();
+        if (goldHud != null)
+            goldHud.Refresh();
+
+        LevelHUD levelHud = FindFirstObjectByType<LevelHUD>();
+        if (levelHud != null)
+            levelHud.Refresh();
     }
 
     MiniKrug CreateRemoteMiniKrug(LanEnemyState state)
@@ -1925,6 +2040,43 @@ public class LanMultiplayerManager : MonoBehaviour
             miniKrug = miniKrugObject.AddComponent<MiniKrug>();
 
         return miniKrug;
+    }
+
+    public bool TryGetSuggestedEnemyLevel(Vector3 origin, out int level)
+    {
+        level = 1;
+        float bestDistance = float.MaxValue;
+        bool foundCandidate = false;
+
+        if (localPlayer != null && !GameState.IsPlayerDead)
+        {
+            float distance = (localPlayer.transform.position - origin).sqrMagnitude;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                level = GetLocalPlayerLevel();
+                foundCandidate = true;
+            }
+        }
+
+        foreach (KeyValuePair<string, Transform> entry in serverPlayerTargets)
+        {
+            if (entry.Value == null)
+                continue;
+
+            if (knownStates.TryGetValue(entry.Key, out LanPlayerState state) && state != null && state.isDead)
+                continue;
+
+            float distance = (entry.Value.position - origin).sqrMagnitude;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                level = GetPlayerLevel(entry.Key);
+                foundCandidate = true;
+            }
+        }
+
+        return foundCandidate;
     }
 
     public bool TryFindClosestEnemyTarget(Vector3 origin, out Transform targetTransform, out string targetPlayerId)
@@ -2000,6 +2152,7 @@ public class LanMultiplayerManager : MonoBehaviour
             entityKind = entityKind,
             position = enemy.transform.position,
             rotation = enemy.transform.rotation,
+            level = GetEnemyLevel(enemy),
             health = 0,
             destroyed = true
         }));
@@ -2199,6 +2352,40 @@ public class LanMultiplayerManager : MonoBehaviour
             return localPlayer;
 
         return null;
+    }
+
+    int GetLocalPlayerLevel()
+    {
+        if (localPlayer == null)
+            ResolveLocalPlayer();
+
+        PlayerProgression progression = localPlayer != null ? localPlayer.GetComponent<PlayerProgression>() : null;
+        return Mathf.Max(1, progression != null ? progression.currentLevel : 1);
+    }
+
+    int GetPlayerLevel(string playerId)
+    {
+        if (string.IsNullOrWhiteSpace(playerId))
+            return 1;
+
+        if (playerId == localPlayerId)
+            return GetLocalPlayerLevel();
+
+        if (knownStates.TryGetValue(playerId, out LanPlayerState state) && state != null)
+            return Mathf.Max(1, state.level);
+
+        return 1;
+    }
+
+    int GetEnemyLevel(Component enemy)
+    {
+        if (enemy is MiniKrug miniKrug)
+            return miniKrug.EnemyLevel;
+
+        if (enemy is BossEnemy bossEnemy)
+            return bossEnemy.BossLevel;
+
+        return 1;
     }
 
     Item ResolveItem(string itemName, string prefabName)

@@ -4,6 +4,16 @@ using UnityEngine.UI;
 
 public class BossEnemy : MonoBehaviour
 {
+    [Header("Progressao")]
+    public string bossDisplayName = "Boss";
+    public int bossLevel = 5;
+    public int minimumPlayerLevel = 5;
+    public int healthBonusPerLevel = 35;
+    public float contactDamageBonusPerLevel = 4f;
+    public float moveSpeedBonusPerLevel = 0.06f;
+    public int goldBonusPerLevel = 5;
+    public int xpBonusPerLevel = 35;
+
     [Header("Vida")]
     public int maxHealth = 150;
 
@@ -44,7 +54,17 @@ public class BossEnemy : MonoBehaviour
     float nextTargetRefreshTime;
     float nextPatrolRefreshTime;
     float healthUiHideTime;
+    int baseMaxHealth;
+    float baseContactDamage;
+    float baseMoveSpeed;
+    int baseMinGoldDrop;
+    int baseMaxGoldDrop;
+    int baseXpReward;
+    bool baseStatsCached;
     public int CurrentHealth => currentHealth;
+    public int BossLevel => bossLevel;
+    public int MinimumPlayerLevel => Mathf.Max(1, minimumPlayerLevel <= 0 ? bossLevel : minimumPlayerLevel);
+    public string DisplayName => string.IsNullOrWhiteSpace(bossDisplayName) ? gameObject.name : bossDisplayName;
 
     Vector3 spawnPosition;
     Vector3 patrolTarget;
@@ -57,6 +77,12 @@ public class BossEnemy : MonoBehaviour
     TextMeshProUGUI healthText;
     static Material bodyMaterial;
     static Material accentMaterial;
+
+    void Awake()
+    {
+        CacheBaseStats();
+        ApplyLevelScaling(bossLevel);
+    }
 
     void Start()
     {
@@ -227,10 +253,38 @@ public class BossEnemy : MonoBehaviour
             Destroy(gameObject);
     }
 
-    public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkHealth, bool destroyed)
+    public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkLevel, int networkHealth, bool destroyed)
     {
+        ApplyLevelScaling(networkLevel);
         transform.SetPositionAndRotation(networkPosition, networkRotation);
         ApplyNetworkState(networkHealth, destroyed);
+    }
+
+    public bool CanBeChallengedBy(PlayerMovement player)
+    {
+        PlayerProgression progression = player != null ? player.GetComponent<PlayerProgression>() : null;
+        int playerLevel = progression != null ? progression.currentLevel : 1;
+        return CanBeChallengedByLevel(playerLevel);
+    }
+
+    public bool CanBeChallengedByLevel(int playerLevel)
+    {
+        return Mathf.Max(1, playerLevel) >= MinimumPlayerLevel;
+    }
+
+    public string BuildMinimumLevelMessage()
+    {
+        return $"{DisplayName} exige nivel {MinimumPlayerLevel}.";
+    }
+
+    public void PlayLocalHitFeedback(int damage)
+    {
+        if (worldCanvas == null || healthFillImage == null || healthText == null)
+            EnsureCombatUI();
+
+        ShowDamagePopup(Mathf.Max(1, damage));
+        ShowHealthUITemporarily();
+        UpdateHealthUI(true);
     }
 
     void UpdateMovement()
@@ -399,10 +453,7 @@ public class BossEnemy : MonoBehaviour
 
         foreach (RaycastHit hit in hits)
         {
-            if (hit.collider == null)
-                continue;
-
-            if (hit.collider.transform == transform || hit.collider.transform.IsChildOf(transform))
+            if (!IsValidGroundHit(hit))
                 continue;
 
             if (hit.distance < closestDistance)
@@ -647,11 +698,42 @@ public class BossEnemy : MonoBehaviour
     {
         Rigidbody rb = GetComponent<Rigidbody>();
         if (rb == null)
-            return;
+            rb = gameObject.AddComponent<Rigidbody>();
 
         rb.isKinematic = true;
         rb.useGravity = false;
         rb.constraints = RigidbodyConstraints.FreezeRotation;
+    }
+
+    bool IsValidGroundHit(RaycastHit hit)
+    {
+        Collider collider = hit.collider;
+        if (collider == null)
+            return false;
+
+        Transform hitTransform = collider.transform;
+        if (hitTransform == transform || hitTransform.IsChildOf(transform))
+            return false;
+
+        if (hit.normal.y < 0.35f)
+            return false;
+
+        if (collider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<MiniKrug>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<BossEnemy>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<PlayerMovement>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<RemotePlayerReplica>() != null)
+            return false;
+
+        return true;
     }
 
     bool ShouldUseNetworkAuthority()
@@ -659,5 +741,37 @@ public class BossEnemy : MonoBehaviour
         return LanMultiplayerManager.Instance != null &&
                LanMultiplayerManager.Instance.IsMultiplayerActive &&
                LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client;
+    }
+
+    void CacheBaseStats()
+    {
+        if (baseStatsCached)
+            return;
+
+        baseMaxHealth = Mathf.Max(1, maxHealth);
+        baseContactDamage = Mathf.Max(1f, contactDamage);
+        baseMoveSpeed = Mathf.Max(0.1f, moveSpeed);
+        baseMinGoldDrop = Mathf.Max(0, minGoldDrop);
+        baseMaxGoldDrop = Mathf.Max(baseMinGoldDrop, maxGoldDrop);
+        baseXpReward = Mathf.Max(1, xpReward);
+        baseStatsCached = true;
+    }
+
+    public void ApplyLevelScaling(int level)
+    {
+        CacheBaseStats();
+
+        bossLevel = Mathf.Max(1, level);
+        if (minimumPlayerLevel <= 0)
+            minimumPlayerLevel = bossLevel;
+
+        int bonusLevels = Mathf.Max(0, bossLevel - 1);
+
+        maxHealth = baseMaxHealth + bonusLevels * Mathf.Max(0, healthBonusPerLevel);
+        contactDamage = baseContactDamage + bonusLevels * Mathf.Max(0f, contactDamageBonusPerLevel);
+        moveSpeed = baseMoveSpeed + bonusLevels * Mathf.Max(0f, moveSpeedBonusPerLevel);
+        minGoldDrop = baseMinGoldDrop + bonusLevels * Mathf.Max(0, goldBonusPerLevel);
+        maxGoldDrop = Mathf.Max(minGoldDrop, baseMaxGoldDrop + bonusLevels * Mathf.Max(0, goldBonusPerLevel));
+        xpReward = baseXpReward + bonusLevels * Mathf.Max(0, xpBonusPerLevel);
     }
 }

@@ -164,7 +164,7 @@ public class DayNightCycle : MonoBehaviour
         // 🌙 aviso de noite
         if (hours >= 18 && hours < 19 && !warnedNight)
         {
-            MessageSystem.Instance.ShowMessage("Está anoitecendo! Prepare-se para os perigos da noite.");
+            MessageSystem.Instance?.ShowMessage("Está anoitecendo! Prepare-se para os perigos da noite.");
             warnedNight = true;
         }
 

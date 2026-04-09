@@ -32,6 +32,7 @@ public class PlayerInteraction : MonoBehaviour
     HotbarSlot selectedSlot;
     float consumeTimer;
     bool wasDeadLastFrame;
+    bool starterItemsInitialized;
 
     [Header("Start Item")]
     public bool startWithAxe = true;
@@ -69,55 +70,15 @@ public class PlayerInteraction : MonoBehaviour
 
     void Start()
     {
-        playerMovement = GetComponent<PlayerMovement>();
-
-        if (inventory == null)
-            inventory = GetComponent<Inventory>();
-
-        if (hotbar == null)
-            hotbar = FindFirstObjectByType<Hotbar>();
-
-        if (cameraHolder == null && playerMovement != null)
-            cameraHolder = playerMovement.cameraHolder;
-
-        if (cameraHolder == null && Camera.main != null)
-            cameraHolder = Camera.main.transform;
-
-        if (startWithAxe && axePrefab != null)
-        {
-            Item axe = axePrefab.GetComponent<Item>();
-            inventory.AddItem(axe.itemName, 1, axe);
-            hotbar.AddItem(axe.itemName, axe.icon, axe);
-        }
-
-        if (startWithPickaxe && pickaxePrefab != null)
-        {
-            Item pickaxe = pickaxePrefab.GetComponent<Item>();
-            inventory.AddItem(pickaxe.itemName, 1, pickaxe);
-            hotbar.AddItem(pickaxe.itemName, pickaxe.icon, pickaxe);
-        }
-
-        if (startWithBottle && bottlePrefab != null)
-        {
-            Item bottle = bottlePrefab.GetComponent<Item>();
-            inventory.AddItem(bottle.itemName, 1, bottle);
-            hotbar.AddItem(bottle.itemName, bottle.icon, bottle);
-        }
-
-        SelectSlot(0);
-
-        if (hotbar != null && hotbar.slots != null)
-        {
-            foreach (HotbarSlot slot in hotbar.slots)
-            {
-                if (slot != null && slot.isBottle)
-                    slot.SetBottleState(false);
-            }
-        }
+        ResolveReferences();
+        EnsureStarterItems();
     }
 
     void Update()
     {
+        ResolveReferences();
+        EnsureStarterItems();
+
         if (GameState.IsInLobby)
         {
             consumeTimer = 0f;
@@ -164,6 +125,78 @@ public class PlayerInteraction : MonoBehaviour
 
         if (controls.Player.Interact.WasPressedThisFrame())
             TryPickupFromRay();
+    }
+
+    void ResolveReferences()
+    {
+        if (playerMovement == null)
+            playerMovement = GetComponent<PlayerMovement>();
+
+        if (inventory == null)
+            inventory = GetComponent<Inventory>();
+
+        if (hotbar == null)
+            hotbar = FindFirstObjectByType<Hotbar>();
+
+        if (cameraHolder == null && playerMovement != null)
+            cameraHolder = playerMovement.cameraHolder;
+
+        if (cameraHolder == null && Camera.main != null)
+            cameraHolder = Camera.main.transform;
+    }
+
+    void EnsureStarterItems()
+    {
+        if (starterItemsInitialized || inventory == null || hotbar == null)
+            return;
+
+        bool starterItemsAdded = false;
+        if (inventory.items.Count == 0 && !HasAnyHotbarItems())
+        {
+            starterItemsAdded |= TryAddStarterItem(startWithAxe, axePrefab);
+            starterItemsAdded |= TryAddStarterItem(startWithPickaxe, pickaxePrefab);
+            starterItemsAdded |= TryAddStarterItem(startWithBottle, bottlePrefab);
+        }
+
+        starterItemsInitialized = true;
+        SelectSlot(0);
+
+        if (!starterItemsAdded || hotbar.slots == null)
+            return;
+
+        foreach (HotbarSlot slot in hotbar.slots)
+        {
+            if (slot != null && slot.isBottle)
+                slot.SetBottleState(false);
+        }
+    }
+
+    bool TryAddStarterItem(bool shouldAdd, GameObject prefab)
+    {
+        if (!shouldAdd || prefab == null || inventory == null || hotbar == null)
+            return false;
+
+        Item item = prefab.GetComponent<Item>();
+        if (item == null)
+            return false;
+
+        inventory.AddItem(item.itemName, 1, item);
+        hotbar.AddItem(item.itemName, item.icon, item);
+        return true;
+    }
+
+    bool HasAnyHotbarItems()
+    {
+        if (hotbar == null || hotbar.slots == null)
+            return false;
+
+        foreach (HotbarSlot slot in hotbar.slots)
+        {
+            if (slot != null && !slot.IsEmpty())
+                return true;
+        }
+
+        return false;
     }
 
     void HandleConsumableUse()
@@ -393,6 +426,12 @@ public class PlayerInteraction : MonoBehaviour
             if (LanMultiplayerManager.Instance != null &&
                 LanMultiplayerManager.Instance.TryHandleGameplayHit(bossEnemy, playerMovement, currentTool, toolDamage))
                 return;
+
+            if (!bossEnemy.CanBeChallengedBy(playerMovement))
+            {
+                MessageSystem.Instance?.ShowMessage(bossEnemy.BuildMinimumLevelMessage());
+                return;
+            }
 
             bossEnemy.Hit(toolDamage, playerMovement);
             return;

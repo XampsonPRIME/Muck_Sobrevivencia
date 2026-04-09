@@ -90,6 +90,9 @@ public class SaveGameManager : MonoBehaviour
 
     float autoSaveTimer;
     MultiplayerSessionSaveData pendingMultiplayerSessionLoad;
+    MultiplayerSessionSaveData pendingClientSessionLoad;
+    string pendingClientSessionSaveKey;
+    string lastAppliedClientSessionSaveKey;
 
     static string SavePath => Path.Combine(Application.persistentDataPath, "savegame.json");
     static string MultiplayerSessionSavePath => Path.Combine(Application.persistentDataPath, "multiplayer_session.json");
@@ -134,21 +137,49 @@ public class SaveGameManager : MonoBehaviour
         if (pendingMultiplayerSessionLoad != null)
             TryApplyPendingMultiplayerSessionLoad();
 
+        if (pendingClientSessionLoad != null)
+            TryApplyPendingClientSessionLoad();
+
         LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager == null || manager.Mode != LanMultiplayerManager.SessionMode.Client || !manager.IsSessionReady)
+        {
+            pendingClientSessionLoad = null;
+            pendingClientSessionSaveKey = null;
+            lastAppliedClientSessionSaveKey = null;
+        }
+
         if (manager != null && manager.IsMultiplayerActive)
         {
-            if (manager.Mode != LanMultiplayerManager.SessionMode.Host || !manager.IsSessionReady)
-                return;
+            if (manager.Mode == LanMultiplayerManager.SessionMode.Host && manager.IsSessionReady)
+            {
+                if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || playerMovement == null)
+                    return;
 
-            if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || playerMovement == null)
-                return;
+                autoSaveTimer += Time.deltaTime;
+                if (autoSaveTimer < autoSaveInterval)
+                    return;
 
-            autoSaveTimer += Time.deltaTime;
-            if (autoSaveTimer < autoSaveInterval)
+                autoSaveTimer = 0f;
+                SaveMultiplayerSession();
                 return;
+            }
 
-            autoSaveTimer = 0f;
-            SaveMultiplayerSession();
+            if (manager.Mode == LanMultiplayerManager.SessionMode.Client && manager.IsSessionReady)
+            {
+                QueueClientSessionLoadIfAvailable(manager);
+
+                if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || playerMovement == null)
+                    return;
+
+                autoSaveTimer += Time.deltaTime;
+                if (autoSaveTimer < autoSaveInterval)
+                    return;
+
+                autoSaveTimer = 0f;
+                SaveClientSession();
+                return;
+            }
+
             return;
         }
 
@@ -171,6 +202,11 @@ public class SaveGameManager : MonoBehaviour
     public bool HasMultiplayerSessionSave()
     {
         return File.Exists(MultiplayerSessionSavePath);
+    }
+
+    public bool HasClientSessionSave(string address, int port)
+    {
+        return File.Exists(GetClientSessionSavePath(address, port));
     }
 
     public void StartNewGame()
@@ -392,6 +428,93 @@ public class SaveGameManager : MonoBehaviour
         return true;
     }
 
+    public bool SaveClientSession(bool showMessage = false)
+    {
+        ResolveReferences();
+
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager == null || manager.Mode != LanMultiplayerManager.SessionMode.Client || !manager.IsSessionReady)
+            return false;
+
+        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused)
+            return false;
+
+        if (playerMovement == null || inventory == null || hotbar == null || progression == null)
+            return false;
+
+        MultiplayerSceneSetState currentSceneSet = manager.CaptureCurrentSceneSet();
+
+        MultiplayerSessionSaveData data = new MultiplayerSessionSaveData
+        {
+            sceneName = SceneManager.GetActiveScene().name,
+            sceneSetId = currentSceneSet?.sceneSetId,
+            activeSceneName = currentSceneSet?.activeSceneName,
+            worldSeed = manager.WorldSeed,
+            playerPosX = playerMovement.transform.position.x,
+            playerPosY = playerMovement.transform.position.y,
+            playerPosZ = playerMovement.transform.position.z,
+            playerRotY = playerMovement.transform.eulerAngles.y,
+            thirdPerson = playerMovement.thirdPerson,
+            health = playerMovement.currentHealth,
+            stamina = playerMovement.currentStamina,
+            hunger = playerMovement.currentHunger,
+            thirst = playerMovement.currentThirst,
+            hasUnlockedAreaMagic = playerMagic != null && playerMagic.hasUnlockedAreaMagic,
+            currentXp = progression.currentXp,
+            currentDay = dayNightCycle != null ? dayNightCycle.CurrentDay : 1,
+            normalizedTimeOfDay = dayNightCycle != null ? dayNightCycle.CurrentNormalizedTime : 0f,
+            selectedHotbarIndex = hotbar.SelectedIndex
+        };
+
+        if (currentSceneSet?.sceneNames != null)
+            data.sceneNames.AddRange(currentSceneSet.sceneNames);
+
+        foreach (InventoryItem item in inventory.items)
+        {
+            if (item == null || item.itemData == null || item.quantity <= 0)
+                continue;
+
+            data.inventory.Add(new SaveInventoryItemData
+            {
+                itemName = item.itemName,
+                prefabName = item.prefabName,
+                quantity = item.quantity,
+                isBottle = item.isBottle,
+                bottleIsFilled = item.bottleIsFilled
+            });
+        }
+
+        if (hotbar.slots != null)
+        {
+            foreach (HotbarSlot slot in hotbar.slots)
+            {
+                if (slot == null || slot.IsEmpty() || slot.GetItemData() == null || slot.GetAmount() <= 0)
+                {
+                    data.hotbar.Add(new SaveHotbarSlotData());
+                    continue;
+                }
+
+                data.hotbar.Add(new SaveHotbarSlotData
+                {
+                    itemName = slot.ItemName,
+                    prefabName = slot.prefabName,
+                    quantity = slot.GetAmount(),
+                    isBottle = slot.isBottle,
+                    bottleIsFilled = slot.bottleIsFilled
+                });
+            }
+        }
+
+        string savePath = GetClientSessionSavePath(manager.CurrentAddress, manager.CurrentPort);
+        File.WriteAllText(savePath, JsonUtility.ToJson(data, true));
+        lastAppliedClientSessionSaveKey = BuildClientSessionSaveKey(manager.CurrentAddress, manager.CurrentPort);
+
+        if (showMessage)
+            MessageSystem.Instance?.ShowMessage("Progresso do servidor salvo");
+
+        return true;
+    }
+
     public bool LoadGame()
     {
         ResolveReferences();
@@ -575,6 +698,30 @@ public class SaveGameManager : MonoBehaviour
         Cursor.visible = false;
     }
 
+    void QueueClientSessionLoadIfAvailable(LanMultiplayerManager manager)
+    {
+        if (manager == null || manager.Mode != LanMultiplayerManager.SessionMode.Client || !manager.IsSessionReady)
+            return;
+
+        string saveKey = BuildClientSessionSaveKey(manager.CurrentAddress, manager.CurrentPort);
+        if (pendingClientSessionLoad != null && pendingClientSessionSaveKey == saveKey)
+            return;
+
+        if (lastAppliedClientSessionSaveKey == saveKey)
+            return;
+
+        string savePath = GetClientSessionSavePath(manager.CurrentAddress, manager.CurrentPort);
+        if (!File.Exists(savePath))
+            return;
+
+        MultiplayerSessionSaveData data = JsonUtility.FromJson<MultiplayerSessionSaveData>(File.ReadAllText(savePath));
+        if (data == null)
+            return;
+
+        pendingClientSessionLoad = data;
+        pendingClientSessionSaveKey = saveKey;
+    }
+
     void TryApplyPendingMultiplayerSessionLoad()
     {
         if (pendingMultiplayerSessionLoad == null)
@@ -633,6 +780,57 @@ public class SaveGameManager : MonoBehaviour
         MessageSystem.Instance?.ShowMessage("Sessao multiplayer carregada");
     }
 
+    void TryApplyPendingClientSessionLoad()
+    {
+        if (pendingClientSessionLoad == null)
+            return;
+
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager == null || manager.Mode != LanMultiplayerManager.SessionMode.Client || !manager.IsSessionReady)
+            return;
+
+        ResolveReferences();
+        if (playerMovement == null || inventory == null || hotbar == null)
+            return;
+
+        progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
+        playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+        progression.LoadProgress(pendingClientSessionLoad.currentXp);
+        playerMagic.LoadState(pendingClientSessionLoad.hasUnlockedAreaMagic);
+
+        Quaternion rotation = Quaternion.Euler(0f, pendingClientSessionLoad.playerRotY, 0f);
+        playerMovement.ApplySavedState(
+            new Vector3(pendingClientSessionLoad.playerPosX, pendingClientSessionLoad.playerPosY, pendingClientSessionLoad.playerPosZ),
+            rotation,
+            pendingClientSessionLoad.thirdPerson,
+            pendingClientSessionLoad.health,
+            pendingClientSessionLoad.stamina,
+            pendingClientSessionLoad.hunger,
+            pendingClientSessionLoad.thirst
+        );
+
+        inventory.ClearAll();
+        RestoreInventory(pendingClientSessionLoad.inventory);
+        RestoreHotbar(pendingClientSessionLoad.hotbar);
+
+        int selectedIndex = hotbar.slots != null && hotbar.slots.Length > 0
+            ? Mathf.Clamp(pendingClientSessionLoad.selectedHotbarIndex, 0, hotbar.slots.Length - 1)
+            : 0;
+
+        hotbar.SetSelectedIndex(selectedIndex);
+        if (playerInteraction != null)
+            playerInteraction.SelectSlotIndex(selectedIndex);
+
+        if (inventoryUI != null)
+            inventoryUI.Refresh();
+
+        lastAppliedClientSessionSaveKey = pendingClientSessionSaveKey;
+        pendingClientSessionLoad = null;
+        pendingClientSessionSaveKey = null;
+        autoSaveTimer = 0f;
+        MessageSystem.Instance?.ShowMessage("Progresso do servidor restaurado");
+    }
+
     MultiplayerSceneSetState BuildSavedSceneSet(MultiplayerSessionSaveData data)
     {
         if (data == null)
@@ -672,6 +870,14 @@ public class SaveGameManager : MonoBehaviour
             return;
         }
 
+        if (LanMultiplayerManager.Instance != null &&
+            LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client &&
+            LanMultiplayerManager.Instance.IsSessionReady)
+        {
+            SaveClientSession();
+            return;
+        }
+
         if (LanMultiplayerManager.Instance == null || !LanMultiplayerManager.Instance.IsMultiplayerActive)
             SaveGame();
     }
@@ -689,7 +895,31 @@ public class SaveGameManager : MonoBehaviour
             return;
         }
 
+        if (LanMultiplayerManager.Instance != null &&
+            LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client &&
+            LanMultiplayerManager.Instance.IsSessionReady)
+        {
+            SaveClientSession();
+            return;
+        }
+
         if (LanMultiplayerManager.Instance == null || !LanMultiplayerManager.Instance.IsMultiplayerActive)
             SaveGame();
+    }
+
+    static string GetClientSessionSavePath(string address, int port)
+    {
+        return Path.Combine(Application.persistentDataPath, $"{BuildClientSessionSaveKey(address, port)}.json");
+    }
+
+    static string BuildClientSessionSaveKey(string address, int port)
+    {
+        string safeAddress = string.IsNullOrWhiteSpace(address) ? "unknown" : address.Trim();
+
+        foreach (char invalidChar in Path.GetInvalidFileNameChars())
+            safeAddress = safeAddress.Replace(invalidChar, '_');
+
+        safeAddress = safeAddress.Replace(':', '_').Replace('/', '_').Replace('\\', '_').Replace('.', '_');
+        return $"multiplayer_client_{safeAddress}_{Mathf.Clamp(port, 1, 65535)}";
     }
 }

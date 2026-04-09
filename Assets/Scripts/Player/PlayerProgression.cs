@@ -13,8 +13,8 @@ public class PlayerProgression : MonoBehaviour
     public int xpPerLevelAfterThree = 1000;
 
     [Header("Bonus por nivel")]
-    public float healthBonusPerLevel = 10f;
-    public float staminaBonusPerLevel = 5f;
+    public float healthBonusPerLevel = 25f;
+    public float staminaBonusPerLevel = 15f;
 
     PlayerMovement playerMovement;
     float baseMaxHealth;

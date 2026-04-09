@@ -56,6 +56,11 @@ public class BossSpawnPoint : MonoBehaviour
 
     void SpawnPlayerIfNeeded()
     {
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance ?? FindFirstObjectByType<LanMultiplayerManager>();
+        if (LanMultiplayerManager.IsDedicatedProcessRequested ||
+            (manager != null && manager.Mode == LanMultiplayerManager.SessionMode.DedicatedServer))
+            return;
+
         if (playerPrefab == null || spawnedPlayer != null || FindFirstObjectByType<PlayerMovement>() != null)
             return;
 
@@ -101,10 +106,50 @@ public class BossSpawnPoint : MonoBehaviour
     {
         Vector3 rayOrigin = position + Vector3.up * groundRayHeight;
 
-        if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, groundRayDistance, groundMask, QueryTriggerInteraction.Ignore))
-            return hit.point;
+        RaycastHit[] hits = Physics.RaycastAll(rayOrigin, Vector3.down, groundRayDistance, groundMask, QueryTriggerInteraction.Ignore);
+        float closestDistance = float.MaxValue;
+        Vector3 groundedPosition = position;
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (!IsValidGroundHit(hit))
+                continue;
+
+            if (hit.distance < closestDistance)
+            {
+                closestDistance = hit.distance;
+                groundedPosition = hit.point;
+            }
+        }
+
+        if (closestDistance < float.MaxValue)
+            return groundedPosition;
 
         return position;
+    }
+
+    bool IsValidGroundHit(RaycastHit hit)
+    {
+        Collider collider = hit.collider;
+        if (collider == null || hit.normal.y < 0.35f)
+            return false;
+
+        if (collider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<MiniKrug>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<BossEnemy>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<PlayerMovement>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<RemotePlayerReplica>() != null)
+            return false;
+
+        return true;
     }
 
     void OnDrawGizmos()

@@ -101,15 +101,22 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
         if (currentItem == null || currentItem.itemData == null)
             return;
 
-        Hotbar hotbar = FindFirstObjectByType<Hotbar>();
-        if (hotbar == null)
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
+        Inventory inventory = player != null ? player.GetComponent<Inventory>() : null;
+        Hotbar hotbar = player != null ? player.GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>() : FindFirstObjectByType<Hotbar>();
+        if (inventory == null || hotbar == null)
             return;
 
-        hotbar.AddItem(
-            currentItem.itemName,
-            currentItem.GetDisplayIcon(),
-            currentItem.itemData
-        );
+        InventoryItem itemToMove = currentItem.Clone();
+        if (!hotbar.TryAddInventoryItem(itemToMove))
+            return;
+
+        if (!inventory.RemoveItem(itemToMove.itemName, itemToMove.quantity))
+            return;
+
+        InventoryUI ui = FindFirstObjectByType<InventoryUI>();
+        if (ui != null)
+            ui.Refresh();
     }
 
     void SwapWithInventorySlot(InventorySlotUI other)

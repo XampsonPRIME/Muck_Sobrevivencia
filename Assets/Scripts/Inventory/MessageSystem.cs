@@ -14,9 +14,13 @@ public class MessageSystem : MonoBehaviour
 
     public void ShowMessage(string message)
     {
+        if (messagePrefab == null || panel == null)
+            return;
+
         GameObject obj = Instantiate(messagePrefab, panel);
 
         MessageItem item = obj.GetComponent<MessageItem>();
-        item.Setup(message);
+        if (item != null)
+            item.Setup(message);
     }
 }

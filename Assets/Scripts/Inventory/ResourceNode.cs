@@ -111,6 +111,12 @@ public class ResourceNode : MonoBehaviour
             Destroy(gameObject);
     }
 
+    public void PlayHitFeedback()
+    {
+        if (hitEffect != null)
+            Instantiate(hitEffect, transform.position + Vector3.up, Quaternion.identity);
+    }
+
     string GetToolMessage()
     {
         switch (requiredTool)

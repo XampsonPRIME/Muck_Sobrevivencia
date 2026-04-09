@@ -148,10 +148,7 @@ public class TerrainChunk : MonoBehaviour
         alreadyGenerated = true;
 
         if (player == null)
-        {
-            PlayerMovement playerMovement = LanMultiplayerManager.FindGameplayPlayer();
-            player = playerMovement != null ? playerMovement.transform : null;
-        }
+            player = LanMultiplayerManager.FindWorldFocusTransform();
 
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
@@ -228,6 +225,9 @@ public class TerrainChunk : MonoBehaviour
 
     bool IsInPlayerPath(Vector3 pos)
     {
+        if (player == null)
+            return false;
+
         Vector3 toObject = (pos - player.position).normalized;
         float dot = Vector3.Dot(player.forward, toObject);
 
@@ -642,11 +642,11 @@ public class TerrainChunk : MonoBehaviour
             Vector3 worldPos = pos + transform.position;
 
             // 🚫 zona ao redor
-            if (Vector3.Distance(worldPos, player.position) < safeRadius)
+            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius)
                 continue;
 
             // 🚫 na frente do player
-            if (Vector3.Distance(worldPos, player.position) < forwardSafeDistance && IsInPlayerPath(worldPos))
+            if (player != null && Vector3.Distance(worldPos, player.position) < forwardSafeDistance && IsInPlayerPath(worldPos))
                 continue;
 
             if (normal.y < 0.85f)

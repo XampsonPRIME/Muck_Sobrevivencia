@@ -10,6 +10,7 @@ public class GoldHUD : MonoBehaviour
     Inventory inventory;
     DayNightCycle cycle;
     PlayerProgression progression;
+    PlayerMovement trackedPlayer;
 
     RectTransform rootRect;
     TextMeshProUGUI dayValueText;
@@ -34,7 +35,7 @@ public class GoldHUD : MonoBehaviour
 
     void Start()
     {
-        cycle = FindFirstObjectByType<DayNightCycle>();
+        cycle = DayNightCycle.Instance ?? FindFirstObjectByType<DayNightCycle>();
         ResolvePlayerReferences();
         EnsureUI();
         HideOriginalClockTexts();
@@ -43,8 +44,7 @@ public class GoldHUD : MonoBehaviour
 
     void Update()
     {
-        if (cycle == null)
-            cycle = FindFirstObjectByType<DayNightCycle>();
+        cycle = DayNightCycle.Instance ?? FindFirstObjectByType<DayNightCycle>();
 
         ResolvePlayerReferences();
 
@@ -203,7 +203,7 @@ public class GoldHUD : MonoBehaviour
             cycle.hourText.gameObject.SetActive(false);
     }
 
-    void Refresh()
+    public void Refresh()
     {
         if (dayValueText == null || hourValueText == null || goldValueText == null || levelValueText == null || xpValueText == null)
             return;
@@ -246,7 +246,20 @@ public class GoldHUD : MonoBehaviour
     {
         PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
         if (player == null)
+        {
+            trackedPlayer = null;
+            inventory = null;
+            progression = null;
             return;
+        }
+
+        if (trackedPlayer != player)
+        {
+            trackedPlayer = player;
+            inventory = player.GetComponent<Inventory>();
+            progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
+            return;
+        }
 
         if (inventory == null)
             inventory = player.GetComponent<Inventory>();

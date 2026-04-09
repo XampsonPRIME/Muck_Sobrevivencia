@@ -203,6 +203,12 @@ public class PlayerMagic : MonoBehaviour
                     continue;
                 }
 
+                if (!bossEnemy.CanBeChallengedBy(playerMovement))
+                {
+                    MessageSystem.Instance?.ShowMessage(bossEnemy.BuildMinimumLevelMessage());
+                    continue;
+                }
+
                 bossEnemy.Hit(areaMagicDamage, playerMovement);
                 affectedCount++;
             }

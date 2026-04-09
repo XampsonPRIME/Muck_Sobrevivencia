@@ -29,12 +29,7 @@ public class InventoryUI : MonoBehaviour
 
     void Start()
     {
-        playerMovement = LanMultiplayerManager.FindGameplayPlayer();
-        if (playerMovement != null)
-        {
-            inventory = playerMovement.GetComponent<Inventory>();
-            playerInteraction = playerMovement.GetComponent<PlayerInteraction>();
-        }
+        ResolveReferences();
 
         if (panel != null)
             panel.SetActive(false);
@@ -42,6 +37,8 @@ public class InventoryUI : MonoBehaviour
 
     void Update()
     {
+        ResolveReferences();
+
         if (GameState.IsPaused || GameState.IsInLobby)
             return;
 
@@ -53,6 +50,8 @@ public class InventoryUI : MonoBehaviour
     {
         if (panel == null)
             return;
+
+        ResolveReferences();
 
         bool isOpen = !panel.activeSelf;
         panel.SetActive(isOpen);
@@ -87,6 +86,8 @@ public class InventoryUI : MonoBehaviour
 
     public void Refresh()
     {
+        ResolveReferences();
+
         if (inventory == null || content == null || slotPrefab == null)
         {
             Debug.LogError("InventoryUI nao configurado!");
@@ -106,5 +107,19 @@ public class InventoryUI : MonoBehaviour
             else
                 Debug.LogError("Slot sem InventorySlotUI!");
         }
+    }
+
+    void ResolveReferences()
+    {
+        PlayerMovement resolvedPlayer = LanMultiplayerManager.FindGameplayPlayer();
+        if (resolvedPlayer == null)
+            return;
+
+        if (playerMovement == resolvedPlayer && inventory != null && playerInteraction != null)
+            return;
+
+        playerMovement = resolvedPlayer;
+        inventory = playerMovement.GetComponent<Inventory>();
+        playerInteraction = playerMovement.GetComponent<PlayerInteraction>();
     }
 }

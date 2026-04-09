@@ -85,13 +85,13 @@ public class MiniKrugSpawnPoint : MonoBehaviour
             return;
         }
 
-        PlayerMovement player = FindClosestPlayerToSpawner();
-        if (player == null)
+        Transform playerTarget = FindClosestTargetTransform();
+        if (playerTarget == null)
             return;
 
         while (activeMiniKrugs.Count < krugsPerWave)
         {
-            Vector3 spawnPos = FindSpawnPositionAroundPlayer(player.transform.position);
+            Vector3 spawnPos = FindSpawnPositionAroundPlayer(playerTarget.position);
 
             GameObject miniKrugObject = Instantiate(
                 miniKrugPrefab,
@@ -102,6 +102,7 @@ public class MiniKrugSpawnPoint : MonoBehaviour
             if (miniKrug == null)
                 miniKrug = miniKrugObject.AddComponent<MiniKrug>();
 
+            miniKrug.SetEnemyLevel(DetermineMiniKrugLevel(spawnPos));
             miniKrug.SetSpawnData(this);
             LanNetworkEntity.Ensure(miniKrug);
             activeMiniKrugs.Add(miniKrug);
@@ -130,6 +131,32 @@ public class MiniKrugSpawnPoint : MonoBehaviour
         return bestPlayer;
     }
 
+    Transform FindClosestTargetTransform()
+    {
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager != null &&
+            manager.IsMultiplayerActive &&
+            manager.IsServerAuthority &&
+            manager.TryFindClosestEnemyTarget(transform.position, out Transform networkTarget, out _))
+        {
+            return networkTarget;
+        }
+
+        PlayerMovement fallbackPlayer = FindClosestPlayerToSpawner();
+        return fallbackPlayer != null ? fallbackPlayer.transform : null;
+    }
+
+    int DetermineMiniKrugLevel(Vector3 spawnPosition)
+    {
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager != null && manager.TryGetSuggestedEnemyLevel(spawnPosition, out int networkLevel))
+            return networkLevel;
+
+        PlayerMovement closestPlayer = FindClosestPlayerToSpawner();
+        PlayerProgression progression = closestPlayer != null ? closestPlayer.GetComponent<PlayerProgression>() : null;
+        return Mathf.Max(1, progression != null ? progression.currentLevel : 1);
+    }
+
     Vector3 FindSpawnPositionAroundPlayer(Vector3 playerPosition)
     {
         Vector2 direction2D = Random.insideUnitCircle.normalized;
@@ -140,10 +167,50 @@ public class MiniKrugSpawnPoint : MonoBehaviour
         Vector3 candidate = playerPosition + new Vector3(direction2D.x, 0f, direction2D.y) * distance;
         candidate.y = playerPosition.y + 15f;
 
-        if (Physics.Raycast(candidate, Vector3.down, out RaycastHit hit, 100f, ~0, QueryTriggerInteraction.Ignore))
-            return hit.point;
+        RaycastHit[] hits = Physics.RaycastAll(candidate, Vector3.down, 100f, ~0, QueryTriggerInteraction.Ignore);
+        float closestDistance = float.MaxValue;
+        Vector3 groundedPosition = new Vector3(candidate.x, playerPosition.y, candidate.z);
 
-        return new Vector3(candidate.x, playerPosition.y, candidate.z);
+        foreach (RaycastHit hit in hits)
+        {
+            if (!IsValidGroundHit(hit))
+                continue;
+
+            if (hit.distance < closestDistance)
+            {
+                closestDistance = hit.distance;
+                groundedPosition = hit.point;
+            }
+        }
+
+        if (closestDistance < float.MaxValue)
+            return groundedPosition;
+
+        return groundedPosition;
+    }
+
+    bool IsValidGroundHit(RaycastHit hit)
+    {
+        Collider collider = hit.collider;
+        if (collider == null || hit.normal.y < 0.35f)
+            return false;
+
+        if (collider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<MiniKrug>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<BossEnemy>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<PlayerMovement>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<RemotePlayerReplica>() != null)
+            return false;
+
+        return true;
     }
 
     GameObject FindMiniKrugPrefab()

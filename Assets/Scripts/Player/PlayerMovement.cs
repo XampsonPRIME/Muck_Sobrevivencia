@@ -25,7 +25,7 @@ public class PlayerMovement : MonoBehaviour
     public Vector3 thirdPersonOffset = new Vector3(0, 2f, -3f);
 
     [Header("Stamina")]
-    public float maxStamina = 100f;
+    public float maxStamina = 500f;
     public float currentStamina;
     public float staminaDrain = 20f;
     public float staminaRecovery = 15f;
@@ -34,11 +34,13 @@ public class PlayerMovement : MonoBehaviour
     public float lowStaminaSpeedMultiplier = 0.45f;
 
     [Header("Vida")]
-    public float maxHealth = 100f;
+    public float maxHealth = 500f;
     public float currentHealth;
+    public float healthRegenPerSecond = 4f;
+    public float healthRegenDelay = 6f;
 
     [Header("Fome")]
-    public float maxHunger = 100f;
+    public float maxHunger = 500f;
     public float currentHunger;
 
     public float hungerDrainIdle = 0.04f;
@@ -50,7 +52,7 @@ public class PlayerMovement : MonoBehaviour
     [Range(0f, 1f)] public float lowHungerWarningResetThreshold = 0.6f;
 
     [Header("Sede")]
-    public float maxThirst = 100f;
+    public float maxThirst = 500f;
     public float currentThirst;
     public float thirstDrainIdle = 0.08f;
     public float thirstDrainWalk = 0.25f;
@@ -93,6 +95,7 @@ public class PlayerMovement : MonoBehaviour
     bool lowThirstWarningShown;
     bool criticalThirstWarningShown;
     float respawnInvulnerabilityEndTime;
+    float lastDamageTime = float.NegativeInfinity;
     Vector3 spawnPosition;
     Quaternion spawnRotation;
     GameObject deathMessageInstance;
@@ -191,6 +194,7 @@ public class PlayerMovement : MonoBehaviour
         HandleModelVisibility();
         HandleHunger();
         HandleThirst();
+        HandleHealthRegeneration();
 
         if (damageTestAction.WasPressedThisFrame())
         {
@@ -331,6 +335,23 @@ public class PlayerMovement : MonoBehaviour
         criticalThirstWarningShown = thirstPercent <= criticalThirstWarningThreshold;
     }
 
+    void HandleHealthRegeneration()
+    {
+        if (GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInLobby)
+            return;
+
+        if (currentHealth >= maxHealth || healthRegenPerSecond <= 0f)
+            return;
+
+        if (currentHunger <= 0f || currentThirst <= 0f)
+            return;
+
+        if (Time.time < lastDamageTime + healthRegenDelay)
+            return;
+
+        Heal(healthRegenPerSecond * Time.deltaTime);
+    }
+
     public void Heal(float amount)
     {
         if (GameState.IsPlayerDead)
@@ -338,8 +359,6 @@ public class PlayerMovement : MonoBehaviour
 
         currentHealth += amount;
         currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
-
-        Debug.Log("Curou: " + currentHealth);
     }
 
     public void TakeDamage(float amount)
@@ -350,6 +369,7 @@ public class PlayerMovement : MonoBehaviour
         if (Time.time < respawnInvulnerabilityEndTime)
             return;
 
+        lastDamageTime = Time.time;
         currentHealth -= amount;
 
         if (currentHealth <= 0)
@@ -401,6 +421,7 @@ public class PlayerMovement : MonoBehaviour
         lookInput = Vector2.zero;
         isRunning = false;
         yVelocity = 0f;
+        lastDamageTime = Time.time;
 
         controller.enabled = false;
         transform.SetPositionAndRotation(spawnPosition, spawnRotation);
