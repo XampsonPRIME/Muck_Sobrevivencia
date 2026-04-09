@@ -192,6 +192,6 @@ public class MiniKrugSpawnPoint : MonoBehaviour
         LanMultiplayerManager manager = LanMultiplayerManager.Instance ?? FindFirstObjectByType<LanMultiplayerManager>();
         return manager == null ||
                !manager.IsMultiplayerActive ||
-               manager.Mode == LanMultiplayerManager.SessionMode.Host;
+               manager.IsServerAuthority;
     }
 }
