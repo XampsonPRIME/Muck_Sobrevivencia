@@ -74,6 +74,7 @@ public class PlayerMovement : MonoBehaviour
     public float spawnRayHeight = 40f;
     public float spawnRayDistance = 120f;
     public float spawnGroundPadding = 0.08f;
+    public float spawnAirDropHeight = 4f;
     public LayerMask spawnGroundMask = ~0;
 
     CharacterController controller;
@@ -713,7 +714,7 @@ public class PlayerMovement : MonoBehaviour
             if (hit.distance < closestDistance)
             {
                 closestDistance = hit.distance;
-                groundedPosition = hit.point + Vector3.up * (controllerHeight * 0.5f + spawnGroundPadding);
+                groundedPosition = hit.point + Vector3.up * (controllerHeight * 0.5f + spawnGroundPadding + spawnAirDropHeight);
             }
         }
 
