@@ -18,6 +18,7 @@ public class DisplaySettingsManager : MonoBehaviour
     const string ResolutionWidthKey = "settings.display_width";
     const string ResolutionHeightKey = "settings.display_height";
     const string FullscreenKey = "settings.display_fullscreen";
+
     const float DefaultUiScale = 1f;
     const float MinUiScale = 0.8f;
     const float MaxUiScale = 1.45f;
@@ -53,7 +54,9 @@ public class DisplaySettingsManager : MonoBehaviour
 
         instance = this;
         DontDestroyOnLoad(gameObject);
+
         SceneManager.sceneLoaded += HandleSceneLoaded;
+
         BuildResolutionOptions();
         ApplyDesktopDefaultsIfNeeded();
         ApplySavedDisplaySettings();
@@ -91,6 +94,7 @@ public class DisplaySettingsManager : MonoBehaviour
             return;
 
         Resolution currentResolution = Screen.currentResolution;
+
         int width = currentResolution.width > 0 ? currentResolution.width : Screen.width;
         int height = currentResolution.height > 0 ? currentResolution.height : Screen.height;
 
@@ -106,8 +110,9 @@ public class DisplaySettingsManager : MonoBehaviour
         if (Application.isMobilePlatform)
             return;
 
-        int width = PlayerPrefs.GetInt(ResolutionWidthKey, Screen.currentResolution.width > 0 ? Screen.currentResolution.width : Screen.width);
-        int height = PlayerPrefs.GetInt(ResolutionHeightKey, Screen.currentResolution.height > 0 ? Screen.currentResolution.height : Screen.height);
+        int width = PlayerPrefs.GetInt(ResolutionWidthKey, Screen.width);
+        int height = PlayerPrefs.GetInt(ResolutionHeightKey, Screen.height);
+
         ApplyResolution(width, height, IsFullscreen, true);
     }
 
@@ -116,17 +121,20 @@ public class DisplaySettingsManager : MonoBehaviour
         resolutionOptions.Clear();
 
         Resolution[] availableResolutions = Screen.resolutions;
+
         for (int i = 0; i < availableResolutions.Length; i++)
         {
             Resolution resolution = availableResolutions[i];
+
             if (resolution.width < 1280 || resolution.height < 720)
                 continue;
 
             bool exists = false;
-            for (int optionIndex = 0; optionIndex < resolutionOptions.Count; optionIndex++)
+
+            for (int j = 0; j < resolutionOptions.Count; j++)
             {
-                ResolutionOption option = resolutionOptions[optionIndex];
-                if (option.width == resolution.width && option.height == resolution.height)
+                if (resolutionOptions[j].width == resolution.width &&
+                    resolutionOptions[j].height == resolution.height)
                 {
                     exists = true;
                     break;
@@ -149,14 +157,15 @@ public class DisplaySettingsManager : MonoBehaviour
             resolutionOptions.Add(new ResolutionOption { width = 1920, height = 1080 });
         }
 
-        resolutionOptions.Sort((left, right) =>
+        resolutionOptions.Sort((a, b) =>
         {
-            int leftPixels = left.width * left.height;
-            int rightPixels = right.width * right.height;
-            if (leftPixels != rightPixels)
-                return leftPixels.CompareTo(rightPixels);
+            int pixelsA = a.width * a.height;
+            int pixelsB = b.width * b.height;
 
-            return left.width.CompareTo(right.width);
+            if (pixelsA != pixelsB)
+                return pixelsA.CompareTo(pixelsB);
+
+            return a.width.CompareTo(b.width);
         });
     }
 
@@ -170,23 +179,13 @@ public class DisplaySettingsManager : MonoBehaviour
 
     public static int GetCurrentResolutionIndex()
     {
-        if (resolutionOptions.Count == 0)
-            BuildResolutionOptions();
-
         int savedWidth = PlayerPrefs.GetInt(ResolutionWidthKey, Screen.width);
         int savedHeight = PlayerPrefs.GetInt(ResolutionHeightKey, Screen.height);
 
         for (int i = 0; i < resolutionOptions.Count; i++)
         {
-            ResolutionOption option = resolutionOptions[i];
-            if (option.width == savedWidth && option.height == savedHeight)
-                return i;
-        }
-
-        for (int i = 0; i < resolutionOptions.Count; i++)
-        {
-            ResolutionOption option = resolutionOptions[i];
-            if (option.width == Screen.width && option.height == Screen.height)
+            if (resolutionOptions[i].width == savedWidth &&
+                resolutionOptions[i].height == savedHeight)
                 return i;
         }
 
@@ -198,11 +197,7 @@ public class DisplaySettingsManager : MonoBehaviour
         if (resolutionOptions.Count == 0)
             BuildResolutionOptions();
 
-        if (resolutionOptions.Count == 0)
-            return;
-
-        int clampedIndex = Mathf.Clamp(index, 0, resolutionOptions.Count - 1);
-        ResolutionOption option = resolutionOptions[clampedIndex];
+        ResolutionOption option = resolutionOptions[Mathf.Clamp(index, 0, resolutionOptions.Count - 1)];
 
         PlayerPrefs.SetInt(ResolutionWidthKey, option.width);
         PlayerPrefs.SetInt(ResolutionHeightKey, option.height);
@@ -218,6 +213,7 @@ public class DisplaySettingsManager : MonoBehaviour
 
         int width = PlayerPrefs.GetInt(ResolutionWidthKey, Screen.width);
         int height = PlayerPrefs.GetInt(ResolutionHeightKey, Screen.height);
+
         instance?.ApplyResolution(width, height, fullscreen, false);
     }
 
@@ -228,9 +224,15 @@ public class DisplaySettingsManager : MonoBehaviour
 
         int safeWidth = Mathf.Max(1280, width);
         int safeHeight = Mathf.Max(720, height);
-        FullScreenMode mode = fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
 
-        if (!force && Screen.width == safeWidth && Screen.height == safeHeight && Screen.fullScreenMode == mode)
+        FullScreenMode mode = fullscreen
+            ? FullScreenMode.ExclusiveFullScreen // 🔥 melhor pra evitar zoom estranho
+            : FullScreenMode.Windowed;
+
+        if (!force &&
+            Screen.width == safeWidth &&
+            Screen.height == safeHeight &&
+            Screen.fullScreenMode == mode)
             return;
 
         Screen.SetResolution(safeWidth, safeHeight, mode);
@@ -239,8 +241,10 @@ public class DisplaySettingsManager : MonoBehaviour
     public static void SetUiScale(float value)
     {
         float clamped = Mathf.Clamp(value, MinUiScale, MaxUiScale);
+
         PlayerPrefs.SetFloat(UiScaleKey, clamped);
         PlayerPrefs.Save();
+
         instance?.RefreshCanvasScaling();
     }
 
@@ -249,55 +253,34 @@ public class DisplaySettingsManager : MonoBehaviour
         if (scaler == null)
             return;
 
-        if (instance == null)
-        {
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = scaler.referenceResolution == Vector2.zero ? new Vector2(1920f, 1080f) : scaler.referenceResolution;
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
-            return;
-        }
-
-        instance.RegisterCanvasScaler(scaler);
-        instance.ApplyToCanvasScaler(scaler);
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
     }
 
     void RefreshCanvasScaling()
     {
         CanvasScaler[] scalers = Resources.FindObjectsOfTypeAll<CanvasScaler>();
-        for (int i = 0; i < scalers.Length; i++)
+
+        foreach (var scaler in scalers)
         {
-            CanvasScaler scaler = scalers[i];
             if (!IsRuntimeCanvasScaler(scaler))
                 continue;
 
-            RegisterCanvasScaler(scaler);
             ApplyToCanvasScaler(scaler);
         }
     }
 
-    void RegisterCanvasScaler(CanvasScaler scaler)
-    {
-        int id = scaler.GetInstanceID();
-        if (baseReferenceResolutions.ContainsKey(id))
-            return;
-
-        Vector2 referenceResolution = scaler.referenceResolution;
-        if (referenceResolution.x <= 0f || referenceResolution.y <= 0f)
-            referenceResolution = new Vector2(1920f, 1080f);
-
-        baseReferenceResolutions[id] = referenceResolution;
-    }
-
     void ApplyToCanvasScaler(CanvasScaler scaler)
     {
-        int id = scaler.GetInstanceID();
-        if (!baseReferenceResolutions.TryGetValue(id, out Vector2 baseResolution))
-            baseResolution = new Vector2(1920f, 1080f);
-
         float uiScale = CurrentUiScale;
+
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = baseResolution / uiScale;
+
+        // ✅ CORREÇÃO PRINCIPAL (sem zoom bug)
+        scaler.referenceResolution = new Vector2(1920f, 1080f) * uiScale;
+
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 0.5f;
     }
@@ -307,17 +290,8 @@ public class DisplaySettingsManager : MonoBehaviour
         if (scaler == null)
             return false;
 
-        GameObject owner = scaler.gameObject;
-        if (owner == null)
-            return false;
+        var scene = scaler.gameObject.scene;
 
-        Scene scene = owner.scene;
-        if (!scene.IsValid() || !scene.isLoaded)
-            return false;
-
-        if ((owner.hideFlags & HideFlags.HideAndDontSave) != 0)
-            return false;
-
-        return true;
+        return scene.IsValid() && scene.isLoaded;
     }
 }
