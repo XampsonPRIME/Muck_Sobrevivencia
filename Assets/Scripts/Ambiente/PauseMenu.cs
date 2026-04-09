@@ -203,6 +203,11 @@ public class PauseMenu : MonoBehaviour
         PlayerPrefs.Save();
     }
 
+    void SetInterfaceScale(float value)
+    {
+        DisplaySettingsManager.SetUiScale(value);
+    }
+
     void EnsureEventSystem()
     {
         if (EventSystem.current != null || FindFirstObjectByType<EventSystem>() != null)
@@ -250,8 +255,7 @@ public class PauseMenu : MonoBehaviour
         canvas.sortingOrder = 460;
 
         CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        DisplaySettingsManager.ConfigureCanvasScaler(scaler);
         graphicRaycaster = canvasObject.AddComponent<GraphicRaycaster>();
 
         overlayObject = CreateUiObject("PauseOverlay", canvas.transform);
@@ -273,7 +277,7 @@ public class PauseMenu : MonoBehaviour
         CreateButton(mainPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -185f), new Color(0.68f, 0.29f, 0.24f, 1f), QuitGame);
         mainSessionInfoText = CreateInfoBlock(mainPanel.transform, new Vector2(0f, -305f));
 
-        settingsPanel = CreatePanel("SettingsPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(640f, 560f));
+        settingsPanel = CreatePanel("SettingsPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(640f, 680f));
         CreateTitle(settingsPanel.transform, "Configuracoes");
         CreateSliderRow(settingsPanel.transform, "Volume", new Vector2(0f, 70f), 0f, 1f, AudioListener.volume, SetMasterVolume);
         CreateSliderRow(
@@ -285,9 +289,10 @@ public class PauseMenu : MonoBehaviour
             playerMovement != null ? playerMovement.mouseSensitivity : PlayerPrefs.GetFloat(MouseSensitivityKey, 2f),
             SetMouseSensitivity
         );
-        settingsSessionInfoText = CreateInfoBlock(settingsPanel.transform, new Vector2(0f, -165f));
+        CreateSliderRow(settingsPanel.transform, "Interface", new Vector2(0f, -150f), 0.8f, 1.45f, DisplaySettingsManager.CurrentUiScale, SetInterfaceScale);
+        settingsSessionInfoText = CreateInfoBlock(settingsPanel.transform, new Vector2(0f, -285f));
         UpdateSessionInfo();
-        CreateButton(settingsPanel.transform, "BackButton", "Voltar", new Vector2(0f, -220f), new Color(0.72f, 0.56f, 0.18f, 1f), ShowMainPanel);
+        CreateButton(settingsPanel.transform, "BackButton", "Voltar", new Vector2(0f, -340f), new Color(0.72f, 0.56f, 0.18f, 1f), ShowMainPanel);
     }
 
     GameObject CreatePanel(string name, Transform parent, Vector2 anchoredPosition, Vector2 size)

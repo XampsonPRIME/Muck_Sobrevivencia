@@ -9,12 +9,15 @@ Shader "Custom/BiomeShader_URP"
 
     SubShader
     {
-        Tags { "RenderPipeline"="UniversalRenderPipeline" "RenderType"="Opaque" }
+        Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" "Queue"="Geometry" }
 
         Pass
         {
-            HLSLPROGRAM
+            Name "ForwardLit"
+            Tags { "LightMode"="UniversalForward" }
 
+            HLSLPROGRAM
+            #pragma target 3.0
             #pragma vertex vert
             #pragma fragment frag
 
@@ -36,35 +39,87 @@ Shader "Custom/BiomeShader_URP"
 
             TEXTURE2D(_SandTex);
             SAMPLER(sampler_SandTex);
-
             TEXTURE2D(_GrassTex);
             SAMPLER(sampler_GrassTex);
-
             TEXTURE2D(_SnowTex);
             SAMPLER(sampler_SnowTex);
 
-            Varyings vert (Attributes v)
+            Varyings vert(Attributes input)
             {
-                Varyings o;
-                o.positionHCS = TransformObjectToHClip(v.positionOS.xyz);
-                o.uv = v.uv * 20;
-                o.color = v.color;
-                return o;
+                Varyings output;
+                VertexPositionInputs positionInputs = GetVertexPositionInputs(input.positionOS.xyz);
+                output.positionHCS = positionInputs.positionCS;
+                output.uv = input.uv * 20.0;
+                output.color = input.color;
+                return output;
             }
 
-            half4 frag (Varyings i) : SV_Target
+            half4 frag(Varyings input) : SV_Target
             {
-                half4 sand = SAMPLE_TEXTURE2D(_SandTex, sampler_SandTex, i.uv);
-                half4 grass = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, i.uv);
-                half4 snow = SAMPLE_TEXTURE2D(_SnowTex, sampler_SnowTex, i.uv);
+                half3 sand = SAMPLE_TEXTURE2D(_SandTex, sampler_SandTex, input.uv).rgb;
+                half3 grass = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, input.uv).rgb;
+                half3 snow = SAMPLE_TEXTURE2D(_SnowTex, sampler_SnowTex, input.uv).rgb;
 
-                float3 mix1 = lerp(sand.rgb, grass.rgb, i.color.g);
-                float3 finalColor = lerp(mix1, snow.rgb, i.color.r);
-
-                return half4(finalColor, 1);
+                half3 mixed = lerp(sand, grass, saturate(input.color.g));
+                mixed = lerp(mixed, snow, saturate(input.color.r));
+                return half4(mixed, 1.0);
             }
-
             ENDHLSL
         }
     }
+
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma target 3.0
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+
+            sampler2D _SandTex;
+            sampler2D _GrassTex;
+            sampler2D _SnowTex;
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+                float4 color : COLOR;
+            };
+
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+                float4 color : COLOR;
+            };
+
+            v2f vert(appdata input)
+            {
+                v2f output;
+                output.vertex = UnityObjectToClipPos(input.vertex);
+                output.uv = input.uv * 20.0;
+                output.color = input.color;
+                return output;
+            }
+
+            fixed4 frag(v2f input) : SV_Target
+            {
+                fixed3 sand = tex2D(_SandTex, input.uv).rgb;
+                fixed3 grass = tex2D(_GrassTex, input.uv).rgb;
+                fixed3 snow = tex2D(_SnowTex, input.uv).rgb;
+
+                fixed3 mixed = lerp(sand, grass, saturate(input.color.g));
+                mixed = lerp(mixed, snow, saturate(input.color.r));
+                return fixed4(mixed, 1.0);
+            }
+            ENDCG
+        }
+    }
+
+    Fallback "Standard"
 }

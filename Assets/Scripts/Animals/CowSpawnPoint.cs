@@ -91,6 +91,7 @@ public class CowSpawnPoint : MonoBehaviour
             cow.hoofMaterial = hoofMaterial != null ? hoofMaterial : cow.hoofMaterial;
             cow.wanderRadius = cowWanderRadius;
             cow.SetSpawnData(this, transform.position);
+            LanNetworkEntity.Ensure(cow, BuildCowEntityId(spawnIndex));
 
             activeCows.Add(cow);
         }
@@ -107,6 +108,11 @@ public class CowSpawnPoint : MonoBehaviour
             hash = (hash * 31) + spawnIndex;
             return hash;
         }
+    }
+
+    string BuildCowEntityId(int spawnIndex)
+    {
+        return $"CowSpawn|{Mathf.RoundToInt(transform.position.x * 100f)}|{Mathf.RoundToInt(transform.position.z * 100f)}|{spawnIndex}";
     }
 
     void CleanupDeadEntries()

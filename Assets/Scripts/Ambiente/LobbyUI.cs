@@ -84,8 +84,7 @@ public class LobbyUI : MonoBehaviour
         canvas.sortingOrder = 500;
 
         CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        DisplaySettingsManager.ConfigureCanvasScaler(scaler);
         graphicRaycaster = canvasObject.AddComponent<GraphicRaycaster>();
 
         GameObject overlayObject = CreateUiObject("Overlay", canvas.transform);
