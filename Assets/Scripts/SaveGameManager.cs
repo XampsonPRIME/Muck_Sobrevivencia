@@ -38,6 +38,7 @@ public class SaveGameData
     public float hunger;
     public float thirst;
     public bool hasUnlockedAreaMagic;
+    public bool hasSilverLoadoutGranted;
     public int currentXp;
     public int currentDay;
     public float normalizedTimeOfDay;
@@ -64,6 +65,7 @@ public class MultiplayerSessionSaveData
     public float hunger;
     public float thirst;
     public bool hasUnlockedAreaMagic;
+    public bool hasSilverLoadoutGranted;
     public int currentXp;
     public int currentDay;
     public float normalizedTimeOfDay;
@@ -291,6 +293,7 @@ public class SaveGameManager : MonoBehaviour
             hunger = playerMovement.currentHunger,
             thirst = playerMovement.currentThirst,
             hasUnlockedAreaMagic = playerMagic != null && playerMagic.hasUnlockedAreaMagic,
+            hasSilverLoadoutGranted = progression.HasSilverLoadoutGranted,
             currentXp = progression.currentXp,
             currentDay = dayNightCycle != null ? dayNightCycle.CurrentDay : 1,
             normalizedTimeOfDay = dayNightCycle != null ? dayNightCycle.CurrentNormalizedTime : 0f,
@@ -374,6 +377,7 @@ public class SaveGameManager : MonoBehaviour
             hunger = playerMovement.currentHunger,
             thirst = playerMovement.currentThirst,
             hasUnlockedAreaMagic = playerMagic != null && playerMagic.hasUnlockedAreaMagic,
+            hasSilverLoadoutGranted = progression.HasSilverLoadoutGranted,
             currentXp = progression.currentXp,
             currentDay = dayNightCycle != null ? dayNightCycle.CurrentDay : 1,
             normalizedTimeOfDay = dayNightCycle != null ? dayNightCycle.CurrentNormalizedTime : 0f,
@@ -460,6 +464,7 @@ public class SaveGameManager : MonoBehaviour
             hunger = playerMovement.currentHunger,
             thirst = playerMovement.currentThirst,
             hasUnlockedAreaMagic = playerMagic != null && playerMagic.hasUnlockedAreaMagic,
+            hasSilverLoadoutGranted = progression.HasSilverLoadoutGranted,
             currentXp = progression.currentXp,
             currentDay = dayNightCycle != null ? dayNightCycle.CurrentDay : 1,
             normalizedTimeOfDay = dayNightCycle != null ? dayNightCycle.CurrentNormalizedTime : 0f,
@@ -533,7 +538,7 @@ public class SaveGameManager : MonoBehaviour
         GameState.IsPaused = false;
         progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
         playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
-        progression.LoadProgress(data.currentXp);
+        progression.LoadProgress(data.currentXp, data.hasSilverLoadoutGranted);
         playerMagic.LoadState(data.hasUnlockedAreaMagic);
 
         Quaternion rotation = Quaternion.Euler(0f, data.playerRotY, 0f);
@@ -579,6 +584,55 @@ public class SaveGameManager : MonoBehaviour
     {
         if (HasMultiplayerSessionSave())
             File.Delete(MultiplayerSessionSavePath);
+    }
+
+    public bool ResetCurrentPlayerProgress(bool showMessage = true)
+    {
+        ResolveReferences();
+
+        if (playerMovement == null || inventory == null || hotbar == null)
+            return false;
+
+        progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
+        playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+
+        inventory.ClearAll();
+        hotbar.ClearAll();
+        progression.LoadProgress(0, false);
+        playerMagic.LoadState(false);
+        playerMovement.ResetToFreshStart();
+        playerInteraction?.ResetStarterLoadout();
+
+        int selectedIndex = hotbar.slots != null && hotbar.slots.Length > 0 ? 0 : -1;
+        if (selectedIndex >= 0)
+        {
+            hotbar.SetSelectedIndex(selectedIndex);
+            playerInteraction?.SelectSlotIndex(selectedIndex);
+        }
+
+        inventoryUI?.Refresh();
+        FindFirstObjectByType<GoldHUD>()?.Refresh();
+        FindFirstObjectByType<LevelHUD>()?.Refresh();
+
+        bool wasPaused = GameState.IsPaused;
+        if (wasPaused)
+            GameState.IsPaused = false;
+
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager != null && manager.Mode == LanMultiplayerManager.SessionMode.Host && manager.IsSessionReady)
+            SaveMultiplayerSession(false);
+        else if (manager != null && manager.Mode == LanMultiplayerManager.SessionMode.Client && manager.IsSessionReady)
+            SaveClientSession(false);
+        else if (manager == null || !manager.IsMultiplayerActive)
+            SaveGame(false);
+
+        if (wasPaused)
+            GameState.IsPaused = true;
+
+        if (showMessage)
+            MessageSystem.Instance?.ShowMessage("Personagem reiniciado.");
+
+        return true;
     }
 
     void RestoreInventory(List<SaveInventoryItemData> savedItems)
@@ -741,7 +795,7 @@ public class SaveGameManager : MonoBehaviour
 
         progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
         playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
-        progression.LoadProgress(pendingMultiplayerSessionLoad.currentXp);
+        progression.LoadProgress(pendingMultiplayerSessionLoad.currentXp, pendingMultiplayerSessionLoad.hasSilverLoadoutGranted);
         playerMagic.LoadState(pendingMultiplayerSessionLoad.hasUnlockedAreaMagic);
 
         Quaternion rotation = Quaternion.Euler(0f, pendingMultiplayerSessionLoad.playerRotY, 0f);
@@ -795,7 +849,7 @@ public class SaveGameManager : MonoBehaviour
 
         progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
         playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
-        progression.LoadProgress(pendingClientSessionLoad.currentXp);
+        progression.LoadProgress(pendingClientSessionLoad.currentXp, pendingClientSessionLoad.hasSilverLoadoutGranted);
         playerMagic.LoadState(pendingClientSessionLoad.hasUnlockedAreaMagic);
 
         Quaternion rotation = Quaternion.Euler(0f, pendingClientSessionLoad.playerRotY, 0f);

@@ -25,6 +25,8 @@ public class PlayerInteraction : MonoBehaviour
     public GameObject axePrefab;
     public GameObject pickaxePrefab;
     public GameObject bottlePrefab;
+    public GameObject silverAxePrefab;
+    public GameObject silverPickaxePrefab;
     public Vector3 axeHandScale = new(0.39f, 0.39f, 0.39f);
     public Vector3 pickaxeHandScale = new(0.39f, 0.39f, 0.39f);
 
@@ -169,6 +171,13 @@ public class PlayerInteraction : MonoBehaviour
             if (slot != null && slot.isBottle)
                 slot.SetBottleState(false);
         }
+    }
+
+    public void ResetStarterLoadout()
+    {
+        starterItemsInitialized = false;
+        ResolveReferences();
+        EnsureStarterItems();
     }
 
     bool TryAddStarterItem(bool shouldAdd, GameObject prefab)

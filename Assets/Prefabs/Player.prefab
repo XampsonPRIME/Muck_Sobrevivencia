@@ -413,6 +413,8 @@ MonoBehaviour:
   axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
   pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
   bottlePrefab: {fileID: 100100000000000105, guid: c5ef9170f2e64af1b731d24f95fd2910, type: 3}
+  silverAxePrefab: {fileID: 8955917039299750008, guid: d215fcaf207af4183bc25052fa77702c, type: 3}
+  silverPickaxePrefab: {fileID: 8955917039299750008, guid: 1c3e4197aa9254fd9a31fcb90da93413, type: 3}
   startWithAxe: 1
   startWithPickaxe: 1
   startWithBottle: 1

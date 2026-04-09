@@ -10,6 +10,7 @@ public class PauseMenu : MonoBehaviour
 {
     const string MasterVolumeKey = "settings.master_volume";
     const string MouseSensitivityKey = "settings.mouse_sensitivity";
+    const float ResetConfirmDuration = 4f;
 
     Canvas canvas;
     GraphicRaycaster graphicRaycaster;
@@ -20,6 +21,9 @@ public class PauseMenu : MonoBehaviour
     TextMeshProUGUI settingsSessionInfoText;
     InputAction pauseAction;
     PlayerMovement playerMovement;
+    Button resetPlayerButton;
+    TextMeshProUGUI resetPlayerButtonText;
+    float resetConfirmUntil;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -83,6 +87,7 @@ public class PauseMenu : MonoBehaviour
         if (!GameState.IsPaused)
             return;
 
+        UpdateResetConfirmationState();
         HandleMouseFallbackClick();
     }
 
@@ -114,6 +119,7 @@ public class PauseMenu : MonoBehaviour
         Cursor.visible = true;
         SetMenuVisible(true);
         ShowMainPanel();
+        ClearResetConfirmation();
     }
 
     void ResumeGame()
@@ -121,6 +127,7 @@ public class PauseMenu : MonoBehaviour
         GameState.IsPaused = false;
         Time.timeScale = 1f;
         SetMenuVisible(false);
+        ClearResetConfirmation();
 
         if (!GameState.IsInLobby && !GameState.IsInventoryOpen)
         {
@@ -145,6 +152,8 @@ public class PauseMenu : MonoBehaviour
 
         if (mainPanel != null)
             mainPanel.SetActive(true);
+
+        ClearResetConfirmation();
     }
 
     void QuitGame()
@@ -255,12 +264,14 @@ public class PauseMenu : MonoBehaviour
         Image overlayImage = overlayObject.AddComponent<Image>();
         overlayImage.color = new Color(0.03f, 0.04f, 0.06f, 0.82f);
 
-        mainPanel = CreatePanel("MainPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(560f, 520f));
+        mainPanel = CreatePanel("MainPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(560f, 620f));
         CreateTitle(mainPanel.transform, "Pausado");
-        CreateButton(mainPanel.transform, "ResumeButton", "Continuar", new Vector2(0f, 95f), new Color(0.72f, 0.56f, 0.18f, 1f), ResumeGame);
-        CreateButton(mainPanel.transform, "SettingsButton", "Configuracoes", new Vector2(0f, -15f), new Color(0.34f, 0.54f, 0.78f, 1f), OpenSettings);
-        CreateButton(mainPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -125f), new Color(0.68f, 0.29f, 0.24f, 1f), QuitGame);
-        mainSessionInfoText = CreateInfoBlock(mainPanel.transform, new Vector2(0f, -225f));
+        CreateButton(mainPanel.transform, "ResumeButton", "Continuar", new Vector2(0f, 145f), new Color(0.72f, 0.56f, 0.18f, 1f), ResumeGame);
+        CreateButton(mainPanel.transform, "SettingsButton", "Configuracoes", new Vector2(0f, 35f), new Color(0.34f, 0.54f, 0.78f, 1f), OpenSettings);
+        resetPlayerButton = CreateButton(mainPanel.transform, "ResetPlayerButton", "Reiniciar personagem", new Vector2(0f, -75f), new Color(0.78f, 0.4f, 0.18f, 1f), HandleResetPlayerPressed);
+        resetPlayerButtonText = resetPlayerButton != null ? resetPlayerButton.GetComponentInChildren<TextMeshProUGUI>() : null;
+        CreateButton(mainPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -185f), new Color(0.68f, 0.29f, 0.24f, 1f), QuitGame);
+        mainSessionInfoText = CreateInfoBlock(mainPanel.transform, new Vector2(0f, -305f));
 
         settingsPanel = CreatePanel("SettingsPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(640f, 560f));
         CreateTitle(settingsPanel.transform, "Configuracoes");
@@ -496,6 +507,44 @@ public class PauseMenu : MonoBehaviour
     {
         if (overlayObject != null)
             overlayObject.SetActive(visible);
+    }
+
+    void HandleResetPlayerPressed()
+    {
+        if (SaveGameManager.Instance == null)
+            return;
+
+        if (Time.unscaledTime > resetConfirmUntil)
+        {
+            resetConfirmUntil = Time.unscaledTime + ResetConfirmDuration;
+            SetResetButtonLabel("Confirmar reinicio");
+            return;
+        }
+
+        if (SaveGameManager.Instance.ResetCurrentPlayerProgress(true))
+            ResumeGame();
+        else
+            MessageSystem.Instance?.ShowMessage("Nao foi possivel reiniciar o personagem.");
+    }
+
+    void UpdateResetConfirmationState()
+    {
+        if (resetConfirmUntil <= 0f || Time.unscaledTime <= resetConfirmUntil)
+            return;
+
+        ClearResetConfirmation();
+    }
+
+    void ClearResetConfirmation()
+    {
+        resetConfirmUntil = 0f;
+        SetResetButtonLabel("Reiniciar personagem");
+    }
+
+    void SetResetButtonLabel(string label)
+    {
+        if (resetPlayerButtonText != null)
+            resetPlayerButtonText.text = label;
     }
 
     void OnDestroy()

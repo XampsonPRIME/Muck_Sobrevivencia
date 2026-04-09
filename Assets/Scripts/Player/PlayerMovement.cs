@@ -246,6 +246,35 @@ public class PlayerMovement : MonoBehaviour
         ApplyCameraPose();
     }
 
+    public void ResetToFreshStart()
+    {
+        GameState.IsPlayerDead = false;
+        GameState.IsInventoryOpen = false;
+
+        ApplySavedState(
+            spawnPosition,
+            spawnRotation,
+            false,
+            maxHealth,
+            maxStamina,
+            maxHunger,
+            maxThirst
+        );
+
+        lowHungerWarningShown = false;
+        criticalHungerWarningShown = false;
+        lowThirstWarningShown = false;
+        criticalThirstWarningShown = false;
+        respawnInvulnerabilityEndTime = Time.time + respawnInvulnerabilityDuration;
+        lastDamageTime = Time.time;
+        moveInput = Vector2.zero;
+        lookInput = Vector2.zero;
+        isRunning = false;
+        sprintLocked = false;
+        yVelocity = 0f;
+        HideDeathMessage();
+    }
+
     void HandleHunger()
     {
         if (GameState.IsPlayerDead)

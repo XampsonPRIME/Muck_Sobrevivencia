@@ -6,6 +6,7 @@ public class PlayerProgression : MonoBehaviour
     public int currentLevel = 1;
     public int currentXp;
     public int maxLevel = 100;
+    public int silverLoadoutLevel = 3;
 
     [Header("XP")]
     public int levelTwoXpThreshold = 100;
@@ -20,6 +21,10 @@ public class PlayerProgression : MonoBehaviour
     float baseMaxHealth;
     float baseMaxStamina;
     bool baseStatsInitialized;
+    bool silverLoadoutGranted;
+    bool pendingRewardValidation;
+    bool pendingRewardMessage;
+    public bool HasSilverLoadoutGranted => silverLoadoutGranted;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -41,6 +46,19 @@ public class PlayerProgression : MonoBehaviour
         currentXp = Mathf.Max(0, currentXp);
         currentLevel = Mathf.Clamp(GetLevelForXp(currentXp), 1, maxLevel);
         ApplyLevelBonuses(false);
+        QueueLevelRewards(false);
+    }
+
+    void Update()
+    {
+        if (!pendingRewardValidation)
+            return;
+
+        if (TryGrantSilverLoadout(pendingRewardMessage))
+        {
+            pendingRewardValidation = false;
+            pendingRewardMessage = false;
+        }
     }
 
     public void AddExperience(int amount, string sourceName = null)
@@ -105,16 +123,19 @@ public class PlayerProgression : MonoBehaviour
     {
         currentLevel++;
         ApplyLevelBonuses(true);
+        QueueLevelRewards(true);
 
         MessageSystem.Instance?.ShowMessage($"Subiu para o nivel {currentLevel}!");
     }
 
-    public void LoadProgress(int totalXp)
+    public void LoadProgress(int totalXp, bool hasSilverLoadoutGranted = false)
     {
         EnsureBaseStats();
         currentXp = Mathf.Max(0, totalXp);
         currentLevel = Mathf.Clamp(GetLevelForXp(currentXp), 1, maxLevel);
+        silverLoadoutGranted = hasSilverLoadoutGranted;
         ApplyLevelBonuses(false);
+        QueueLevelRewards(false);
     }
 
     void EnsureBaseStats()
@@ -148,5 +169,71 @@ public class PlayerProgression : MonoBehaviour
             playerMovement.currentHealth = Mathf.Clamp(playerMovement.currentHealth, 0f, playerMovement.maxHealth);
             playerMovement.currentStamina = Mathf.Clamp(playerMovement.currentStamina, 0f, playerMovement.maxStamina);
         }
+    }
+
+    void QueueLevelRewards(bool showMessage)
+    {
+        if (silverLoadoutGranted || currentLevel < silverLoadoutLevel)
+            return;
+
+        pendingRewardValidation = true;
+        pendingRewardMessage |= showMessage;
+    }
+
+    bool TryGrantSilverLoadout(bool showMessage)
+    {
+        PlayerInteraction interaction = GetComponent<PlayerInteraction>();
+        Inventory inventory = GetComponent<Inventory>();
+        Hotbar hotbar = GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
+
+        if (interaction == null || inventory == null || hotbar == null)
+            return false;
+
+        Item silverAxe = interaction.silverAxePrefab != null ? interaction.silverAxePrefab.GetComponent<Item>() : null;
+        Item silverPickaxe = interaction.silverPickaxePrefab != null ? interaction.silverPickaxePrefab.GetComponent<Item>() : null;
+        if (silverAxe == null || silverPickaxe == null)
+            return false;
+
+        bool addedAnyItem = false;
+        addedAnyItem |= EnsureRewardItem(inventory, hotbar, silverAxe);
+        addedAnyItem |= EnsureRewardItem(inventory, hotbar, silverPickaxe);
+
+        silverLoadoutGranted = true;
+
+        if (showMessage && addedAnyItem)
+            MessageSystem.Instance?.ShowMessage("Nivel 3: kit prata desbloqueado!");
+
+        return true;
+    }
+
+    bool EnsureRewardItem(Inventory inventory, Hotbar hotbar, Item item)
+    {
+        if (inventory == null || hotbar == null || item == null)
+            return false;
+
+        if (OwnsItem(inventory, hotbar, item.itemName))
+            return false;
+
+        inventory.AddItem(item.itemName, 1, item);
+        hotbar.AddItem(item.itemName, item.icon, item);
+        return true;
+    }
+
+    bool OwnsItem(Inventory inventory, Hotbar hotbar, string itemName)
+    {
+        if (inventory != null && inventory.GetItem(itemName) != null)
+            return true;
+
+        if (hotbar != null && hotbar.slots != null)
+        {
+            for (int i = 0; i < hotbar.slots.Length; i++)
+            {
+                HotbarSlot slot = hotbar.slots[i];
+                if (slot != null && !slot.IsEmpty() && slot.ItemName == itemName)
+                    return true;
+            }
+        }
+
+        return false;
     }
 }
