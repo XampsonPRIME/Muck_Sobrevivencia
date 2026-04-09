@@ -24,6 +24,9 @@ public class PauseMenu : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
     {
+        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+            return;
+
         if (FindFirstObjectByType<PauseMenu>() != null)
             return;
 
@@ -48,6 +51,12 @@ public class PauseMenu : MonoBehaviour
 
     void Start()
     {
+        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         EnsureEventSystem();
         ResolvePlayer();
         LoadSettings();

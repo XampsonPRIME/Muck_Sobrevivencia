@@ -39,6 +39,12 @@ public class LobbyUI : MonoBehaviour
 
     void Start()
     {
+        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         saveGameManager = FindFirstObjectByType<SaveGameManager>();
         if (saveGameManager == null)
         {

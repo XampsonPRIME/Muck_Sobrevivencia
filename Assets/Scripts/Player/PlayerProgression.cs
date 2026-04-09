@@ -24,6 +24,9 @@ public class PlayerProgression : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
     {
+        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+            return;
+
         PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
         if (player == null || player.GetComponent<PlayerProgression>() != null)
             return;

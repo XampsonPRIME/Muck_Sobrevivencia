@@ -352,7 +352,7 @@ public class BossEnemy : MonoBehaviour
 
         if (LanMultiplayerManager.Instance != null &&
             LanMultiplayerManager.Instance.IsMultiplayerActive &&
-            LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Host &&
+            LanMultiplayerManager.Instance.IsServerAuthority &&
             LanMultiplayerManager.Instance.TryFindClosestEnemyTarget(transform.position, out Transform networkTarget, out string playerId))
         {
             targetTransform = networkTarget;

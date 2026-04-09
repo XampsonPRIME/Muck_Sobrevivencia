@@ -50,6 +50,9 @@ public class SaveGameData
 public class MultiplayerSessionSaveData
 {
     public string sceneName;
+    public string sceneSetId;
+    public string activeSceneName;
+    public List<string> sceneNames = new List<string>();
     public int worldSeed;
     public float playerPosX;
     public float playerPosY;
@@ -94,6 +97,9 @@ public class SaveGameManager : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
     {
+        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+            return;
+
         if (FindFirstObjectByType<SaveGameManager>() != null)
             return;
 
@@ -201,7 +207,11 @@ public class SaveGameManager : MonoBehaviour
             return false;
 
         MultiplayerSessionSaveData data = JsonUtility.FromJson<MultiplayerSessionSaveData>(File.ReadAllText(MultiplayerSessionSavePath));
-        if (data == null || string.IsNullOrWhiteSpace(data.sceneName))
+        if (data == null)
+            return false;
+
+        MultiplayerSceneSetState savedSceneSet = BuildSavedSceneSet(data);
+        if (savedSceneSet == null)
             return false;
 
         if (!LanMultiplayerManager.Instance.StartHost(port, data.worldSeed))
@@ -213,8 +223,7 @@ public class SaveGameManager : MonoBehaviour
         GameState.IsPaused = false;
         ExitLobby();
 
-        if (SceneManager.GetActiveScene().name != data.sceneName)
-            SceneManager.LoadScene(data.sceneName);
+        MultiplayerSceneSetCatalog.ApplyToRuntime(savedSceneSet);
 
         TryApplyPendingMultiplayerSessionLoad();
         return true;
@@ -311,9 +320,13 @@ public class SaveGameManager : MonoBehaviour
         if (playerMovement == null || inventory == null || hotbar == null || progression == null)
             return false;
 
+        MultiplayerSceneSetState currentSceneSet = manager.CaptureCurrentSceneSet();
+
         MultiplayerSessionSaveData data = new MultiplayerSessionSaveData
         {
             sceneName = SceneManager.GetActiveScene().name,
+            sceneSetId = currentSceneSet?.sceneSetId,
+            activeSceneName = currentSceneSet?.activeSceneName,
             worldSeed = manager.WorldSeed,
             playerPosX = playerMovement.transform.position.x,
             playerPosY = playerMovement.transform.position.y,
@@ -331,6 +344,9 @@ public class SaveGameManager : MonoBehaviour
             selectedHotbarIndex = hotbar.SelectedIndex,
             worldEntities = manager.CaptureSavedWorldEntities()
         };
+
+        if (currentSceneSet?.sceneNames != null)
+            data.sceneNames.AddRange(currentSceneSet.sceneNames);
 
         foreach (InventoryItem item in inventory.items)
         {
@@ -564,7 +580,8 @@ public class SaveGameManager : MonoBehaviour
         if (pendingMultiplayerSessionLoad == null)
             return;
 
-        if (SceneManager.GetActiveScene().name != pendingMultiplayerSessionLoad.sceneName)
+        MultiplayerSceneSetState pendingSceneSet = BuildSavedSceneSet(pendingMultiplayerSessionLoad);
+        if (pendingSceneSet == null || !MultiplayerSceneSetCatalog.LoadedScenesMatch(pendingSceneSet))
             return;
 
         LanMultiplayerManager manager = LanMultiplayerManager.Instance;
@@ -614,6 +631,35 @@ public class SaveGameManager : MonoBehaviour
         pendingMultiplayerSessionLoad = null;
         autoSaveTimer = 0f;
         MessageSystem.Instance?.ShowMessage("Sessao multiplayer carregada");
+    }
+
+    MultiplayerSceneSetState BuildSavedSceneSet(MultiplayerSessionSaveData data)
+    {
+        if (data == null)
+            return null;
+
+        List<string> sceneNames = new List<string>();
+        if (data.sceneNames != null)
+        {
+            for (int i = 0; i < data.sceneNames.Count; i++)
+            {
+                string sceneName = data.sceneNames[i];
+                if (string.IsNullOrWhiteSpace(sceneName) || sceneNames.Contains(sceneName))
+                    continue;
+
+                sceneNames.Add(sceneName);
+            }
+        }
+
+        if (sceneNames.Count == 0 && !string.IsNullOrWhiteSpace(data.sceneName))
+            sceneNames.Add(data.sceneName);
+
+        return MultiplayerSceneSetCatalog.Normalize(new MultiplayerSceneSetState
+        {
+            sceneSetId = data.sceneSetId,
+            activeSceneName = string.IsNullOrWhiteSpace(data.activeSceneName) ? data.sceneName : data.activeSceneName,
+            sceneNames = sceneNames.ToArray()
+        });
     }
 
     void OnApplicationQuit()

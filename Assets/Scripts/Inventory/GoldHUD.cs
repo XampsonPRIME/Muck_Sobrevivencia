@@ -22,6 +22,9 @@ public class GoldHUD : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
     {
+        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+            return;
+
         if (FindFirstObjectByType<GoldHUD>() != null)
             return;
 
