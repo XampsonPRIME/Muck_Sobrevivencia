@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using UnityEngine.Rendering;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
@@ -71,6 +72,10 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("Respawn")]
     public float respawnInvulnerabilityDuration = 3f;
+    public float spawnRayHeight = 40f;
+    public float spawnRayDistance = 120f;
+    public float spawnGroundPadding = 0.08f;
+    public LayerMask spawnGroundMask = ~0;
 
     CharacterController controller;
     PlayerControls controls;
@@ -102,6 +107,8 @@ public class PlayerMovement : MonoBehaviour
 
     GameObject playerModel;
     Vector3 playerModelStartLocalPosition;
+    Renderer[] playerModelRenderers;
+    readonly Dictionary<Renderer, ShadowCastingMode> originalShadowModes = new Dictionary<Renderer, ShadowCastingMode>();
 
     void Awake()
     {
@@ -119,9 +126,10 @@ public class PlayerMovement : MonoBehaviour
 
         playerModel = anim.gameObject;
         playerModelStartLocalPosition = playerModel.transform.localPosition;
+        CachePlayerModelRenderers();
         inventory = GetComponent<Inventory>();
         hotbar = GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
-        spawnPosition = transform.position;
+        spawnPosition = ResolveSafeSpawnPosition(transform.position);
         spawnRotation = transform.rotation;
     }
 
@@ -220,7 +228,8 @@ public class PlayerMovement : MonoBehaviour
         if (controller != null)
             controller.enabled = false;
 
-        transform.SetPositionAndRotation(position, rotation);
+        Vector3 safePosition = ResolveSafeSpawnPosition(position);
+        transform.SetPositionAndRotation(safePosition, rotation);
 
         if (controller != null)
             controller.enabled = true;
@@ -230,7 +239,7 @@ public class PlayerMovement : MonoBehaviour
         currentHunger = Mathf.Clamp(savedHunger, 0f, maxHunger);
         currentThirst = Mathf.Clamp(savedThirst, 0f, maxThirst);
 
-        spawnPosition = position;
+        spawnPosition = safePosition;
         spawnRotation = rotation;
         yRotation = transform.eulerAngles.y;
         xRotation = thirdPerson ? thirdPersonPitch : 0f;
@@ -424,7 +433,9 @@ public class PlayerMovement : MonoBehaviour
         lastDamageTime = Time.time;
 
         controller.enabled = false;
-        transform.SetPositionAndRotation(spawnPosition, spawnRotation);
+        Vector3 safeRespawnPosition = ResolveSafeSpawnPosition(spawnPosition);
+        transform.SetPositionAndRotation(safeRespawnPosition, spawnRotation);
+        spawnPosition = safeRespawnPosition;
         controller.enabled = true;
 
         respawnInvulnerabilityEndTime = Time.time + respawnInvulnerabilityDuration;
@@ -505,7 +516,23 @@ public class PlayerMovement : MonoBehaviour
         if (playerModel == null)
             return;
 
-        playerModel.SetActive(thirdPerson);
+        if (!playerModel.activeSelf)
+            playerModel.SetActive(true);
+
+        CachePlayerModelRenderers();
+
+        bool shouldShowModel = thirdPerson;
+        for (int i = 0; i < playerModelRenderers.Length; i++)
+        {
+            Renderer renderer = playerModelRenderers[i];
+            if (renderer == null)
+                continue;
+
+            renderer.enabled = shouldShowModel;
+
+            if (originalShadowModes.TryGetValue(renderer, out ShadowCastingMode originalMode))
+                renderer.shadowCastingMode = shouldShowModel ? originalMode : ShadowCastingMode.ShadowsOnly;
+        }
     }
 
     void HandleStamina()
@@ -637,5 +664,95 @@ public class PlayerMovement : MonoBehaviour
             targetLocalPosition,
             Time.deltaTime * 10f
         );
+    }
+
+    void CachePlayerModelRenderers()
+    {
+        if (playerModel == null)
+        {
+            playerModelRenderers = System.Array.Empty<Renderer>();
+            return;
+        }
+
+        playerModelRenderers = playerModel.GetComponentsInChildren<Renderer>(true);
+        originalShadowModes.Clear();
+
+        for (int i = 0; i < playerModelRenderers.Length; i++)
+        {
+            Renderer renderer = playerModelRenderers[i];
+            if (renderer != null && !originalShadowModes.ContainsKey(renderer))
+                originalShadowModes.Add(renderer, renderer.shadowCastingMode);
+        }
+    }
+
+    Vector3 ResolveSafeSpawnPosition(Vector3 desiredPosition)
+    {
+        if (TryGetGroundedSpawnPosition(desiredPosition, out Vector3 groundedPosition))
+            return groundedPosition;
+
+        Vector3 fallbackPosition = transform.position;
+        if (TryGetGroundedSpawnPosition(fallbackPosition, out groundedPosition))
+            return groundedPosition;
+
+        return new Vector3(desiredPosition.x, Mathf.Max(desiredPosition.y, 5f), desiredPosition.z);
+    }
+
+    bool TryGetGroundedSpawnPosition(Vector3 desiredPosition, out Vector3 groundedPosition)
+    {
+        float controllerHeight = controller != null ? controller.height : 2f;
+        Vector3 rayOrigin = desiredPosition + Vector3.up * spawnRayHeight;
+        RaycastHit[] hits = Physics.RaycastAll(
+            rayOrigin,
+            Vector3.down,
+            spawnRayDistance,
+            spawnGroundMask,
+            QueryTriggerInteraction.Ignore
+        );
+
+        float closestDistance = float.MaxValue;
+        groundedPosition = desiredPosition;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit hit = hits[i];
+            if (!IsValidSpawnGroundHit(hit))
+                continue;
+
+            if (hit.distance < closestDistance)
+            {
+                closestDistance = hit.distance;
+                groundedPosition = hit.point + Vector3.up * (controllerHeight * 0.5f + spawnGroundPadding);
+            }
+        }
+
+        return closestDistance < float.MaxValue;
+    }
+
+    bool IsValidSpawnGroundHit(RaycastHit hit)
+    {
+        Collider hitCollider = hit.collider;
+        if (hitCollider == null)
+            return false;
+
+        if (hit.normal.y < 0.35f)
+            return false;
+
+        Transform hitTransform = hitCollider.transform;
+        if (hitTransform == transform || hitTransform.IsChildOf(transform))
+            return false;
+
+        if (hitCollider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (hitCollider.GetComponentInParent<MiniKrug>() != null)
+            return false;
+
+        if (hitCollider.GetComponentInParent<BossEnemy>() != null)
+            return false;
+
+        if (hitCollider.GetComponentInParent<RemotePlayerReplica>() != null)
+            return false;
+
+        return true;
     }
 }
