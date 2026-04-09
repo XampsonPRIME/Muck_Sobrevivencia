@@ -441,12 +441,6 @@ public class LanMultiplayerManager : MonoBehaviour
         ShutdownSession();
         ResolveLocalPlayer();
 
-        if (localPlayer == null)
-        {
-            SetError("Player local nao encontrado para hospedar.");
-            return false;
-        }
-
         try
         {
             localPlayerId = CreatePlayerId();
@@ -473,7 +467,8 @@ public class LanMultiplayerManager : MonoBehaviour
             acceptThread.Start();
 
             hasLastLocalPosition = false;
-            SendLocalPlayerState();
+            if (localPlayer != null)
+                SendLocalPlayerState();
             BroadcastWorldState();
             return true;
         }
@@ -601,12 +596,6 @@ public class LanMultiplayerManager : MonoBehaviour
         ShutdownSession();
         ResolveLocalPlayer();
 
-        if (localPlayer == null)
-        {
-            SetError("Player local nao encontrado para conectar.");
-            return false;
-        }
-
         localPlayerId = CreatePlayerId();
         localPlayerName = BuildPlayerName();
         SessionId = null;
@@ -645,6 +634,15 @@ public class LanMultiplayerManager : MonoBehaviour
                 return player;
         }
 
+        PlayerMovement[] inactivePlayers = Resources.FindObjectsOfTypeAll<PlayerMovement>();
+        foreach (PlayerMovement player in inactivePlayers)
+        {
+            if (!IsValidLocalPlayerCandidate(player))
+                continue;
+
+            return player;
+        }
+
         return null;
     }
 
@@ -665,12 +663,40 @@ public class LanMultiplayerManager : MonoBehaviour
                 filteredPlayers.Add(player);
         }
 
+        PlayerMovement[] inactivePlayers = Resources.FindObjectsOfTypeAll<PlayerMovement>();
+        foreach (PlayerMovement player in inactivePlayers)
+        {
+            if (!IsValidLocalPlayerCandidate(player) || filteredPlayers.Contains(player))
+                continue;
+
+            filteredPlayers.Add(player);
+        }
+
         return filteredPlayers.ToArray();
     }
 
     public static bool IsReplica(Component component)
     {
         return component != null && component.GetComponent<RemotePlayerReplica>() != null;
+    }
+
+    static bool IsValidLocalPlayerCandidate(PlayerMovement player)
+    {
+        if (player == null || IsReplica(player))
+            return false;
+
+        GameObject playerObject = player.gameObject;
+        if (playerObject == null)
+            return false;
+
+        Scene scene = playerObject.scene;
+        if (!scene.IsValid() || !scene.isLoaded)
+            return false;
+
+        if ((playerObject.hideFlags & HideFlags.HideAndDontSave) != 0)
+            return false;
+
+        return true;
     }
 
     public static Transform FindWorldFocusTransform()
