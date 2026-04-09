@@ -37,12 +37,10 @@ public class LobbyUI : MonoBehaviour
     bool hasDetectedJoinSession;
     float nextDiscoveryRefreshTime;
 
-void Start()
-{
+    void Start()
+    {
         LanMultiplayerManager manager = LanMultiplayerManager.Instance;
-        if (LanMultiplayerManager.IsDedicatedProcessRequested ||
-            LanMultiplayerManager.IsDedicatedRuntime ||
-            (manager != null && manager.IsSessionReady && manager.IsMultiplayerActive))
+        if (manager != null && manager.IsSessionReady && manager.IsMultiplayerActive)
         {
             ExitLobby();
             Destroy(gameObject);
