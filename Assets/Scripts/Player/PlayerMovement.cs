@@ -2,8 +2,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TMPro;
-using System.Collections.Generic;
-using UnityEngine.Rendering;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
@@ -107,8 +105,6 @@ public class PlayerMovement : MonoBehaviour
 
     GameObject playerModel;
     Vector3 playerModelStartLocalPosition;
-    Renderer[] playerModelRenderers;
-    readonly Dictionary<Renderer, ShadowCastingMode> originalShadowModes = new Dictionary<Renderer, ShadowCastingMode>();
 
     void Awake()
     {
@@ -126,7 +122,6 @@ public class PlayerMovement : MonoBehaviour
 
         playerModel = anim.gameObject;
         playerModelStartLocalPosition = playerModel.transform.localPosition;
-        CachePlayerModelRenderers();
         inventory = GetComponent<Inventory>();
         hotbar = GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
         spawnPosition = ResolveSafeSpawnPosition(transform.position);
@@ -545,23 +540,9 @@ public class PlayerMovement : MonoBehaviour
         if (playerModel == null)
             return;
 
-        if (!playerModel.activeSelf)
-            playerModel.SetActive(true);
-
-        CachePlayerModelRenderers();
-
         bool shouldShowModel = thirdPerson;
-        for (int i = 0; i < playerModelRenderers.Length; i++)
-        {
-            Renderer renderer = playerModelRenderers[i];
-            if (renderer == null)
-                continue;
-
-            renderer.enabled = shouldShowModel;
-
-            if (originalShadowModes.TryGetValue(renderer, out ShadowCastingMode originalMode))
-                renderer.shadowCastingMode = shouldShowModel ? originalMode : ShadowCastingMode.ShadowsOnly;
-        }
+        if (playerModel.activeSelf != shouldShowModel)
+            playerModel.SetActive(shouldShowModel);
     }
 
     void HandleStamina()
@@ -693,25 +674,6 @@ public class PlayerMovement : MonoBehaviour
             targetLocalPosition,
             Time.deltaTime * 10f
         );
-    }
-
-    void CachePlayerModelRenderers()
-    {
-        if (playerModel == null)
-        {
-            playerModelRenderers = System.Array.Empty<Renderer>();
-            return;
-        }
-
-        playerModelRenderers = playerModel.GetComponentsInChildren<Renderer>(true);
-        originalShadowModes.Clear();
-
-        for (int i = 0; i < playerModelRenderers.Length; i++)
-        {
-            Renderer renderer = playerModelRenderers[i];
-            if (renderer != null && !originalShadowModes.ContainsKey(renderer))
-                originalShadowModes.Add(renderer, renderer.shadowCastingMode);
-        }
     }
 
     Vector3 ResolveSafeSpawnPosition(Vector3 desiredPosition)
