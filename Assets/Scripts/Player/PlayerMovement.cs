@@ -74,7 +74,7 @@ public class PlayerMovement : MonoBehaviour
     public float spawnRayHeight = 40f;
     public float spawnRayDistance = 120f;
     public float spawnGroundPadding = 0.08f;
-    public float spawnAirDropHeight = 4f;
+    public float spawnAirDropHeight = 10f;
     public LayerMask spawnGroundMask = ~0;
 
     CharacterController controller;
@@ -687,7 +687,15 @@ public class PlayerMovement : MonoBehaviour
         if (TryGetGroundedSpawnPosition(fallbackPosition, out groundedPosition))
             return groundedPosition;
 
-        return new Vector3(desiredPosition.x, Mathf.Max(desiredPosition.y, 5f), desiredPosition.z);
+        float emergencyHeight = Mathf.Max(
+            desiredPosition.y + spawnAirDropHeight,
+            transform.position.y + spawnAirDropHeight,
+            spawnPosition.y + spawnAirDropHeight,
+            spawnRayHeight + spawnAirDropHeight,
+            60f
+        );
+
+        return new Vector3(desiredPosition.x, emergencyHeight, desiredPosition.z);
     }
 
     bool TryGetGroundedSpawnPosition(Vector3 desiredPosition, out Vector3 groundedPosition)
