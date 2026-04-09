@@ -39,6 +39,14 @@ public class LobbyUI : MonoBehaviour
 
     void Start()
     {
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager != null && manager.IsSessionReady && manager.IsMultiplayerActive)
+        {
+            ExitLobby();
+            Destroy(gameObject);
+            return;
+        }
+
         saveGameManager = FindFirstObjectByType<SaveGameManager>();
         if (saveGameManager == null)
         {
