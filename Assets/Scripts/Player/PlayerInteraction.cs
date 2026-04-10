@@ -27,6 +27,7 @@ public class PlayerInteraction : MonoBehaviour
     public GameObject bottlePrefab;
     public GameObject silverAxePrefab;
     public GameObject silverPickaxePrefab;
+
     public Vector3 axeHandScale = new(0.39f, 0.39f, 0.39f);
     public Vector3 pickaxeHandScale = new(0.39f, 0.39f, 0.39f);
 
@@ -88,6 +89,12 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         if (GameState.IsPaused)
+        {
+            consumeTimer = 0f;
+            return;
+        }
+
+        if (GameState.IsVendorOpen)
         {
             consumeTimer = 0f;
             return;
@@ -325,6 +332,15 @@ public class PlayerInteraction : MonoBehaviour
         if (!TryFindInteractionHit(out RaycastHit hit))
             return;
 
+        VendorShop vendorShop = hit.collider.GetComponent<VendorShop>() ??
+                                hit.collider.GetComponentInParent<VendorShop>();
+
+        if (vendorShop != null)
+        {
+            VendorShopUI.Instance?.Open(vendorShop, inventory, hotbar, playerMovement, this);
+            return;
+        }
+
         RiverWaterSource riverWater = hit.collider.GetComponent<RiverWaterSource>() ??
                                       hit.collider.GetComponentInParent<RiverWaterSource>();
 
@@ -389,7 +405,7 @@ public class PlayerInteraction : MonoBehaviour
 
     void Attack()
     {
-        if (Time.time < nextHitTime || GameState.IsInventoryOpen || GameState.IsPaused)
+        if (Time.time < nextHitTime || GameState.IsInventoryOpen || GameState.IsPaused || GameState.IsVendorOpen)
             return;
 
         if (!TryFindInteractionHit(out RaycastHit hit))
@@ -629,6 +645,11 @@ public class PlayerInteraction : MonoBehaviour
     public void SelectSlotIndex(int index)
     {
         SelectSlot(index);
+    }
+
+    public void RefreshEquippedSelection()
+    {
+        ReequipSelectedSlot();
     }
 
     void UnequipCurrentItem()

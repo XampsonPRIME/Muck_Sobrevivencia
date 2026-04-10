@@ -174,6 +174,14 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
+        if (GameState.IsVendorOpen)
+        {
+            moveInput = Vector2.zero;
+            lookInput = Vector2.zero;
+            HandleModelVisibility();
+            return;
+        }
+
         if (GameState.IsPlayerDead)
         {
             if (respawnAction.WasPressedThisFrame())
@@ -372,7 +380,7 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleHealthRegeneration()
     {
-        if (GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInLobby)
+        if (GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInLobby || GameState.IsVendorOpen)
             return;
 
         if (currentHealth >= maxHealth || healthRegenPerSecond <= 0f)
@@ -418,6 +426,7 @@ public class PlayerMovement : MonoBehaviour
     {
         GameState.IsPlayerDead = true;
         GameState.IsInventoryOpen = false;
+        GameState.IsVendorOpen = false;
         moveInput = Vector2.zero;
         lookInput = Vector2.zero;
         isRunning = false;
@@ -443,6 +452,7 @@ public class PlayerMovement : MonoBehaviour
     {
         GameState.IsPlayerDead = false;
         GameState.IsInventoryOpen = false;
+        GameState.IsVendorOpen = false;
 
         currentHealth = maxHealth;
         currentHunger = maxHunger;

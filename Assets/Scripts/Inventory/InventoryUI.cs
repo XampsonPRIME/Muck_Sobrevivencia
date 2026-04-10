@@ -39,7 +39,7 @@ public class InventoryUI : MonoBehaviour
     {
         ResolveReferences();
 
-        if (GameState.IsPaused || GameState.IsInLobby)
+        if (GameState.IsPaused || GameState.IsInLobby || GameState.IsVendorOpen)
             return;
 
         if (toggleInventoryAction.WasPressedThisFrame())
@@ -48,7 +48,7 @@ public class InventoryUI : MonoBehaviour
 
     void Toggle()
     {
-        if (panel == null)
+        if (panel == null || GameState.IsVendorOpen)
             return;
 
         ResolveReferences();

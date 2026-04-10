@@ -123,4 +123,14 @@ public class InventoryItem
 
         return true;
     }
+
+    public int GetBuyPrice()
+    {
+        return itemData != null ? itemData.GetBuyPrice() : 0;
+    }
+
+    public int GetSellPrice()
+    {
+        return itemData != null ? itemData.GetSellPrice() : 0;
+    }
 }

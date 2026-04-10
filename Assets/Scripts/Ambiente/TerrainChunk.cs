@@ -154,6 +154,8 @@ public class TerrainChunk : MonoBehaviour
         GetComponent<MeshFilter>().mesh = mesh;
         GetComponent<MeshRenderer>().material = terrainMaterial;
 
+        VillageSystem.PrepareVillageHeightsForChunk(GetWorldSeed(), offset, size, GetBaseHeight);
+
         vertices = new Vector3[(size + 1) * (size + 1)];
         colors = new Color[vertices.Length];
         uvs = new Vector2[vertices.Length];
@@ -237,6 +239,12 @@ public class TerrainChunk : MonoBehaviour
 
     float GetHeight(Vector2 point)
     {
+        float h = GetBaseHeight(point);
+        return VillageSystem.ApplyVillageFlatten(GetWorldSeed(), point, h);
+    }
+
+    float GetBaseHeight(Vector2 point)
+    {
         float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
         h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
 
@@ -246,8 +254,12 @@ public class TerrainChunk : MonoBehaviour
             float riverBedHeight = h - riverDepthValue * riverBlend;
             h = Mathf.Min(h, riverBedHeight);
         }
-
         return h;
+    }
+
+    int GetWorldSeed()
+    {
+        return LanMultiplayerManager.Instance != null ? LanMultiplayerManager.Instance.WorldSeed : 0;
     }
 
     bool TryGetRiverBlend(Vector2 point, out float blend)
@@ -641,6 +653,9 @@ public class TerrainChunk : MonoBehaviour
 
             Vector3 worldPos = pos + transform.position;
 
+            if (VillageSystem.IsReserved(GetWorldSeed(), worldPos, 2f))
+                continue;
+
             // 🚫 zona ao redor
             if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius)
                 continue;
@@ -848,6 +863,9 @@ public class TerrainChunk : MonoBehaviour
 
                 spawnPos = GetGroundPoint(spawnPos);
 
+                if (VillageSystem.IsReserved(GetWorldSeed(), spawnPos, 3f))
+                    continue;
+
                 if (IsRiverZone(new Vector2(spawnPos.x, spawnPos.z), 2f))
                     continue;
 
@@ -961,6 +979,9 @@ public class TerrainChunk : MonoBehaviour
 
             Vector3 localPos = vertices[i];
             Vector3 worldPos = localPos + transform.position;
+
+            if (VillageSystem.IsReserved(GetWorldSeed(), worldPos, 4f))
+                continue;
 
             if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 8f)
                 continue;

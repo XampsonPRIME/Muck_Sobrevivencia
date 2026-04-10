@@ -84,6 +84,9 @@ public class PauseMenu : MonoBehaviour
             return;
         }
 
+        if (GameState.IsVendorOpen)
+            return;
+
         if (pauseAction.WasPressedThisFrame())
             HandlePausePressed();
 

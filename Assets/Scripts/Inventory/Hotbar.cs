@@ -113,4 +113,38 @@ public class Hotbar : MonoBehaviour
 
         return false;
     }
+
+    public bool RemoveInventoryItem(InventoryItem inventoryItem, int amount = 1)
+    {
+        if (inventoryItem == null || slots == null || amount <= 0)
+            return false;
+
+        for (int i = 0; i < slots.Length; i++)
+        {
+            HotbarSlot slot = slots[i];
+            if (slot == null || slot.IsEmpty())
+                continue;
+
+            bool sameBottleState = !inventoryItem.isBottle || slot.bottleIsFilled == inventoryItem.bottleIsFilled;
+            if (slot.ItemName != inventoryItem.itemName || !sameBottleState)
+                continue;
+
+            int remainingAmount = slot.GetAmount() - amount;
+            if (remainingAmount > 0)
+            {
+                slot.SetItem(slot.ItemName, slot.GetItemData().icon, slot.GetItemData(), remainingAmount);
+
+                if (inventoryItem.isBottle)
+                    slot.SetBottleState(inventoryItem.bottleIsFilled);
+            }
+            else
+            {
+                slot.ClearSlot();
+            }
+
+            return true;
+        }
+
+        return false;
+    }
 }

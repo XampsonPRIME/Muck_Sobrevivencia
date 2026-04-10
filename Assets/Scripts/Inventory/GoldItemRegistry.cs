@@ -18,6 +18,8 @@ public static class GoldItemRegistry
         goldItem.itemType = ItemType.Resource;
         goldItem.toolType = ToolType.None;
         goldItem.toolDamage = 0;
+        goldItem.buyPrice = 0;
+        goldItem.sellPrice = 0;
         goldItem.icon = GetGoldSprite();
 
         return goldItem;

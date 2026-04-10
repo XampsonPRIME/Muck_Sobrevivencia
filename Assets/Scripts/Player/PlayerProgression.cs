@@ -189,8 +189,9 @@ public class PlayerProgression : MonoBehaviour
         if (interaction == null || inventory == null || hotbar == null)
             return false;
 
-        Item silverAxe = interaction.silverAxePrefab != null ? interaction.silverAxePrefab.GetComponent<Item>() : null;
-        Item silverPickaxe = interaction.silverPickaxePrefab != null ? interaction.silverPickaxePrefab.GetComponent<Item>() : null;
+        Item silverAxe = ResolveSilverRewardItem(interaction.silverAxePrefab, "Axe_prata");
+        Item silverPickaxe = ResolveSilverRewardItem(interaction.silverPickaxePrefab, "Axepick_prata");
+
         if (silverAxe == null || silverPickaxe == null)
             return false;
 
@@ -204,6 +205,39 @@ public class PlayerProgression : MonoBehaviour
             MessageSystem.Instance?.ShowMessage("Nivel 3: kit prata desbloqueado!");
 
         return true;
+    }
+
+    Item ResolveSilverRewardItem(GameObject configuredPrefab, string prefabName)
+    {
+        if (configuredPrefab != null)
+        {
+            Item configuredItem = configuredPrefab.GetComponent<Item>();
+            if (configuredItem != null)
+                return configuredItem;
+        }
+
+        return LoadItemByName(prefabName);
+    }
+
+    Item LoadItemByName(string prefabName)
+    {
+        GameObject prefab = Resources.Load<GameObject>($"Weapons/{prefabName}");
+
+        if (prefab == null)
+        {
+            Debug.LogError($"Prefab não encontrado: {prefabName}");
+            return null;
+        }
+
+        Item item = prefab.GetComponent<Item>();
+
+        if (item == null)
+        {
+            Debug.LogError($"Prefab {prefabName} não tem componente Item!");
+            return null;
+        }
+
+        return item;
     }
 
     bool EnsureRewardItem(Inventory inventory, Hotbar hotbar, Item item)

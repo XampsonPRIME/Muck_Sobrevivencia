@@ -5,6 +5,34 @@ public class Inventory : MonoBehaviour
 {
     public List<InventoryItem> items = new List<InventoryItem>();
 
+    public int GetGoldAmount()
+    {
+        InventoryItem goldItem = GetItem("Gold");
+        return goldItem != null ? Mathf.Max(0, goldItem.quantity) : 0;
+    }
+
+    public void AddGold(int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        AddItem("Gold", amount, GoldItemRegistry.GetOrCreate());
+    }
+
+    public bool HasEnoughGold(int amount)
+    {
+        return GetGoldAmount() >= Mathf.Max(0, amount);
+    }
+
+    public bool TrySpendGold(int amount)
+    {
+        int clampedAmount = Mathf.Max(0, amount);
+        if (clampedAmount == 0)
+            return true;
+
+        return RemoveItem("Gold", clampedAmount);
+    }
+
     public void AddItem(string itemName, int amount = 1, Item itemData = null)
     {
         InventoryItem existing = items.Find(i => i.itemName == itemName);
