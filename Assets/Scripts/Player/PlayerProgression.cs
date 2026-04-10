@@ -10,8 +10,8 @@ public class PlayerProgression : MonoBehaviour
 
     [Header("XP")]
     public int levelTwoXpThreshold = 100;
-    public int levelThreeXpThreshold = 1000;
-    public int xpPerLevelAfterThree = 1000;
+    public int levelThreeXpThreshold = 700;
+    public int xpPerLevelAfterThree = 700;
 
     [Header("Bonus por nivel")]
     public float healthBonusPerLevel = 25f;
