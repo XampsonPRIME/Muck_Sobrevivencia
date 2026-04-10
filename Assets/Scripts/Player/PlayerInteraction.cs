@@ -332,6 +332,16 @@ public class PlayerInteraction : MonoBehaviour
         if (!TryFindInteractionHit(out RaycastHit hit))
             return;
 
+        Door door = hit.collider.GetComponent<Door>() ??
+                    hit.collider.GetComponentInParent<Door>();
+
+        if (door != null)
+        {
+            door.ToggleDoor();
+            return;
+        }
+
+
         VendorShop vendorShop = hit.collider.GetComponent<VendorShop>() ??
                                 hit.collider.GetComponentInParent<VendorShop>();
 

@@ -59,8 +59,8 @@ public class TerrainChunk : MonoBehaviour
     public TreeData[] trees;
     public GameObject mushroomPrefab;
 
-    public float treeDensity = 0.003f;
-    public int maxTreesPerChunk = 3;
+    public float treeDensity = 0.38f;
+    public int maxTreesPerChunk = 48;
     public float mushroomDensity = 0.001f;
     public int rockClusterCount = 3;
     public int generationYieldInterval = 120;
@@ -82,8 +82,8 @@ public class TerrainChunk : MonoBehaviour
     [Range(0f, 1f)] public float riverSurfaceSmoothing = 0.7f;
     public float riverMaxSegmentGap = 4.5f;
 
-    public float minDistanceBetweenObjects = 15f;
-    public float minTreeDistance = 10f;
+    public float minDistanceBetweenObjects = 12f;
+    public float minTreeDistance = 4.5f;
 
     [Header("Rochas")]
     public GameObject rockSmallPrefab;
@@ -153,8 +153,6 @@ public class TerrainChunk : MonoBehaviour
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
         GetComponent<MeshRenderer>().material = terrainMaterial;
-
-        VillageSystem.PrepareVillageHeightsForChunk(GetWorldSeed(), offset, size, GetBaseHeight);
 
         vertices = new Vector3[(size + 1) * (size + 1)];
         colors = new Color[vertices.Length];
@@ -239,14 +237,12 @@ public class TerrainChunk : MonoBehaviour
 
     float GetHeight(Vector2 point)
     {
-        float h = GetBaseHeight(point);
-        return VillageSystem.ApplyVillageFlatten(GetWorldSeed(), point, h);
+        return GetBaseHeight(point);
     }
 
     float GetBaseHeight(Vector2 point)
     {
-        float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
-        h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
+        float h = GetTerrainSurfaceHeight(point);
 
         if (TryGetRiverBlend(point, out float riverBlend))
         {
@@ -254,6 +250,13 @@ public class TerrainChunk : MonoBehaviour
             float riverBedHeight = h - riverDepthValue * riverBlend;
             h = Mathf.Min(h, riverBedHeight);
         }
+        return h;
+    }
+
+    float GetTerrainSurfaceHeight(Vector2 point)
+    {
+        float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
+        h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
         return h;
     }
 
@@ -639,7 +642,7 @@ public class TerrainChunk : MonoBehaviour
         int iterationsSinceYield = 0;
 
 
-        for (int i = 0; i < vertices.Length; i += 10) // 🔥 menos spawn
+        for (int i = 0; i < vertices.Length; i += 4)
         {
             iterationsSinceYield++;
             if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
@@ -652,9 +655,6 @@ public class TerrainChunk : MonoBehaviour
             Vector3 normal = mesh.normals[i];
 
             Vector3 worldPos = pos + transform.position;
-
-            if (VillageSystem.IsReserved(GetWorldSeed(), worldPos, 2f))
-                continue;
 
             // 🚫 zona ao redor
             if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius)
@@ -677,7 +677,7 @@ public class TerrainChunk : MonoBehaviour
 
 
 
-            if (biome == BiomeType.Forest && cluster < 0.5f)
+            if (biome == BiomeType.Forest && cluster < 0.32f)
                 continue;
 
             float density = treeDensity;
@@ -685,7 +685,7 @@ public class TerrainChunk : MonoBehaviour
             switch (biome)
             {
                 case BiomeType.Desert:
-                    density = 0.0003f; // 🔥 quase vazio
+                    density = 0.01f;
                     break;
 
                 case BiomeType.Forest:
@@ -693,7 +693,7 @@ public class TerrainChunk : MonoBehaviour
                     break;
 
                 case BiomeType.Snow:
-                    density = treeDensity * 0.65f;
+                    density = treeDensity * 0.8f;
                     break;
             }
 
@@ -863,9 +863,6 @@ public class TerrainChunk : MonoBehaviour
 
                 spawnPos = GetGroundPoint(spawnPos);
 
-                if (VillageSystem.IsReserved(GetWorldSeed(), spawnPos, 3f))
-                    continue;
-
                 if (IsRiverZone(new Vector2(spawnPos.x, spawnPos.z), 2f))
                     continue;
 
@@ -979,9 +976,6 @@ public class TerrainChunk : MonoBehaviour
 
             Vector3 localPos = vertices[i];
             Vector3 worldPos = localPos + transform.position;
-
-            if (VillageSystem.IsReserved(GetWorldSeed(), worldPos, 4f))
-                continue;
 
             if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 8f)
                 continue;
