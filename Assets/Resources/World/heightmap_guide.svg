@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e6e6e6"/>
+      <stop offset="100%" stop-color="#cfcfcf"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <style>
+      .label { font: 700 28px Arial, sans-serif; fill: #222; letter-spacing: 1px; }
+      .small { font: 600 20px Arial, sans-serif; fill: #222; }
+      .outline { fill: none; stroke: #333; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .dash { stroke-dasharray: 14 10; }
+    </style>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Mountains -->
+  <g opacity="0.9">
+    <path d="M40,160 C110,40 240,40 320,130 C360,170 380,190 420,180 C470,168 520,100 570,110 C640,124 690,180 720,250 C748,316 720,348 646,350 C520,354 430,306 340,312 C250,318 180,370 110,334 C46,300 6,220 40,160 Z"
+          fill="#f7f7f7" filter="url(#soft)"/>
+    <path d="M708,138 C774,76 882,64 950,132 C1002,184 1012,264 972,328 C934,388 858,412 776,392 C708,374 660,330 648,270 C636,212 658,176 708,138 Z"
+          fill="#ececec" filter="url(#soft)"/>
+    <path d="M82,742 C154,674 252,678 318,726 C380,770 402,854 366,918 C320,998 186,1014 102,962 C10,904 4,816 82,742 Z"
+          fill="#ececec" filter="url(#soft)"/>
+  </g>
+
+  <!-- Forest / biome masses -->
+  <g opacity="0.28">
+    <ellipse cx="298" cy="330" rx="170" ry="120" fill="#9b9b9b"/>
+    <ellipse cx="746" cy="548" rx="140" ry="110" fill="#adadad"/>
+    <ellipse cx="280" cy="770" rx="130" ry="100" fill="#a4a4a4"/>
+  </g>
+
+  <!-- Central play plain -->
+  <ellipse cx="515" cy="435" rx="245" ry="155" fill="#bdbdbd" opacity="0.65"/>
+
+  <!-- Main road -->
+  <path d="M84,468 C220,468 300,458 420,472 C560,488 650,510 812,510 C886,510 940,500 980,492"
+        fill="none" stroke="#8a6d45" stroke-width="42" stroke-linecap="round" opacity="0.85"/>
+  <path d="M84,468 C220,468 300,458 420,472 C560,488 650,510 812,510 C886,510 940,500 980,492"
+        fill="none" stroke="#6e5635" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- Secondary road -->
+  <path d="M620,522 C660,590 706,644 784,706 C834,746 902,774 966,782"
+        fill="none" stroke="#8a6d45" stroke-width="28" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- River / valley -->
+  <path d="M52,618 C168,660 256,650 360,624 C470,596 572,608 652,662 C744,726 848,738 978,714"
+        fill="none" stroke="#7d7d7d" stroke-width="92" stroke-linecap="round" opacity="0.36"/>
+  <path d="M52,618 C168,660 256,650 360,624 C470,596 572,608 652,662 C744,726 848,738 978,714"
+        fill="none" stroke="#686868" stroke-width="18" stroke-linecap="round" opacity="0.48"/>
+
+  <!-- Village plateau -->
+  <ellipse cx="600" cy="558" rx="118" ry="74" fill="#b2b2b2" opacity="0.72"/>
+  <ellipse cx="600" cy="558" rx="128" ry="82" class="outline dash" opacity="0.4"/>
+
+  <!-- Spawn zone -->
+  <ellipse cx="404" cy="390" rx="108" ry="66" fill="#b6b6b6" opacity="0.82"/>
+  <ellipse cx="404" cy="390" rx="118" ry="74" class="outline dash" opacity="0.35"/>
+
+  <!-- Boss arena -->
+  <circle cx="842" cy="804" r="90" fill="#d8d8d8" opacity="0.78"/>
+  <circle cx="842" cy="804" r="104" class="outline dash" opacity="0.4"/>
+
+  <!-- Build markers -->
+  <g opacity="0.75">
+    <circle cx="546" cy="516" r="8" fill="#333"/>
+    <circle cx="596" cy="500" r="8" fill="#333"/>
+    <circle cx="644" cy="516" r="8" fill="#333"/>
+    <circle cx="694" cy="534" r="8" fill="#333"/>
+    <circle cx="736" cy="570" r="8" fill="#333"/>
+  </g>
+
+  <!-- Labels -->
+  <text x="160" y="122" class="label">MONTANHAS ALTAS</text>
+  <text x="728" y="116" class="label">COLINAS</text>
+  <text x="348" y="368" class="label">SPAWN</text>
+  <text x="300" y="410" class="small">area inicial plana</text>
+  <text x="356" y="454" class="label">PLANICIE CENTRAL</text>
+  <text x="416" y="512" class="label">ESTRADA PRINCIPAL</text>
+  <text x="544" y="566" class="label">VILA</text>
+  <text x="502" y="598" class="small">area plana para construcoes</text>
+  <text x="252" y="688" class="label">RIO / VALE</text>
+  <text x="812" y="814" class="label">BOSS</text>
+  <text x="770" y="848" class="small">arena elevada</text>
+  <text x="176" y="300" class="label">FLORESTA / RECURSOS</text>
+  <text x="146" y="786" class="label">BOSQUE</text>
+  <text x="700" y="696" class="label">ESTRADA SECUNDARIA</text>
+
+  <!-- Border -->
+  <rect x="20" y="20" width="984" height="984" rx="18" ry="18" fill="none" stroke="#555" stroke-width="4" opacity="0.4"/>
+</svg>

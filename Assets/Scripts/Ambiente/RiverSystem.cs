@@ -55,13 +55,14 @@ public class RiverSystem : MonoBehaviour
     AudioSource ambientSource;
     Transform playerTransform;
     static Material sharedRiverMaterial;
+    static WorldHeightmapData cachedHeightmap;
     float refreshTimer;
     bool initialized;
     Vector3 startOrigin;
     float baseRiverX;
     Vector3 lastRefreshPosition;
 
-    float EffectiveWaterInset => Mathf.Clamp(waterInset, 0.1f, 1f);
+    float EffectiveWaterInset => Mathf.Clamp(waterInset * GetHeightmapWaterInsetScale(), 0.1f, 1f);
 
     struct RiverQuery
     {
@@ -253,7 +254,7 @@ public class RiverSystem : MonoBehaviour
         {
             distance = float.MaxValue,
             nearestPoint = new Vector3(point.x, 0f, point.y),
-            halfWidth = Mathf.Max(2.5f, baseWidth * 0.5f)
+            halfWidth = Mathf.Max(1.3f, baseWidth * 0.5f * GetHeightmapWidthScale())
         };
 
         if (samples.Count == 0)
@@ -296,8 +297,17 @@ public class RiverSystem : MonoBehaviour
             RiverSamplePoint sample = samples[i];
             Vector3 right = Vector3.Cross(Vector3.up, sample.tangent).normalized;
             bool hasGround = TrySampleWaterHeight(sample.center, sample.halfWidth * EffectiveWaterInset, out float waterHeight);
+            RiverBlocker.ApplyOverheadColliderConstraint(sample.center, ref waterHeight);
 
             Vector3 center = new Vector3(sample.center.x, waterHeight, sample.center.z);
+            if (RiverBlocker.TryFilterWaterSurface(center, ref waterHeight))
+            {
+                sampleValidity.Add(false);
+                continue;
+            }
+
+            center.y = waterHeight;
+
             samples[i] = new RiverSamplePoint
             {
                 center = center,
@@ -404,10 +414,20 @@ public class RiverSystem : MonoBehaviour
 
     bool TrySampleTerrainHeight(Vector3 worldPoint, out float height)
     {
-        if (Physics.Raycast(worldPoint + Vector3.up * 200f, Vector3.down, out RaycastHit hit, 500f, ~0, QueryTriggerInteraction.Ignore))
+        RaycastHit[] hits = Physics.RaycastAll(worldPoint + Vector3.up * 200f, Vector3.down, 500f, ~0, QueryTriggerInteraction.Ignore);
+        if (hits != null && hits.Length > 0)
         {
-            height = hit.point.y;
-            return true;
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            for (int i = 0; i < hits.Length; i++)
+            {
+                RaycastHit hit = hits[i];
+                if (RiverBlocker.IsBlockedCollider(hit.collider))
+                    continue;
+
+                height = hit.point.y;
+                return true;
+            }
         }
 
         height = startOrigin.y;
@@ -666,7 +686,33 @@ public class RiverSystem : MonoBehaviour
     {
         float widthNoise = Mathf.PerlinNoise(41.91f, Mathf.Clamp01(t) * 3.7f);
         float multiplier = Mathf.Lerp(1f - widthVariation, 1f + widthVariation, widthNoise);
-        return Mathf.Max(2.5f, baseWidth * multiplier * 0.5f);
+        return Mathf.Max(1.3f, baseWidth * multiplier * 0.5f * GetHeightmapWidthScale());
+    }
+
+    float GetHeightmapWidthScale()
+    {
+        WorldHeightmapData data = GetActiveHeightmapData();
+        if (data != null && data.CanSample())
+            return Mathf.Clamp(data.riverWidthScale, 0.2f, 1f);
+
+        return 1f;
+    }
+
+    float GetHeightmapWaterInsetScale()
+    {
+        WorldHeightmapData data = GetActiveHeightmapData();
+        if (data != null && data.CanSample())
+            return Mathf.Clamp(data.riverWaterInsetScale, 0.2f, 1f);
+
+        return 1f;
+    }
+
+    static WorldHeightmapData GetActiveHeightmapData()
+    {
+        if (cachedHeightmap == null)
+            cachedHeightmap = Resources.Load<WorldHeightmapData>("World/DefaultHeightmapData");
+
+        return cachedHeightmap;
     }
 
     Vector3 ClosestPointOnSegment(Vector3 point, Vector3 a, Vector3 b)

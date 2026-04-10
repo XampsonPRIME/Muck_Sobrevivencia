@@ -48,6 +48,8 @@ public class TerrainChunk : MonoBehaviour
     public int size = 50;
     public float terrainScale = 40f;
     public float heightMultiplier = 12f;
+    public bool useHeightmapWhenAvailable = true;
+    public WorldHeightmapData worldHeightmap;
 
     public Transform player;
     public float safeZoneRadius = 10f;
@@ -124,6 +126,7 @@ public class TerrainChunk : MonoBehaviour
     List<Vector3> usedPositions = new List<Vector3>();
     List<Vector3> cowGroupPositions = new List<Vector3>();
     static Material riverMaterial;
+    static WorldHeightmapData cachedHeightmap;
 
     int BuildChunkSeed(Vector2 offset, int salt)
     {
@@ -146,6 +149,7 @@ public class TerrainChunk : MonoBehaviour
             return;
 
         alreadyGenerated = true;
+        ResolveHeightmapData();
 
         if (player == null)
             player = LanMultiplayerManager.FindWorldFocusTransform();
@@ -177,20 +181,29 @@ public class TerrainChunk : MonoBehaviour
                 // 🌍 BIOMA
                 BiomeType biome = GetBiome(point);
 
+                Color biomeColor;
                 switch (biome)
                 {
                     case BiomeType.Desert:
-                        colors[i] = new Color(0, 0, 1); // areia
+                        biomeColor = new Color(0, 0, 0); // areia
                         break;
 
                     case BiomeType.Forest:
-                        colors[i] = new Color(0, 1, 0); // grama
+                        biomeColor = new Color(0, 1, 0); // grama
                         break;
 
                     case BiomeType.Snow:
-                        colors[i] = new Color(1, 0, 0); // neve
+                        biomeColor = new Color(1, 0, 0); // neve
+                        break;
+
+                    default:
+                        biomeColor = Color.black;
                         break;
                 }
+
+                float roadBlend = RoadSystem.GetRoadBlend(new Vector3(worldX, h, worldZ));
+                biomeColor.b = Mathf.Max(biomeColor.b, roadBlend);
+                colors[i] = biomeColor;
             }
         }
 
@@ -237,17 +250,22 @@ public class TerrainChunk : MonoBehaviour
 
     float GetHeight(Vector2 point)
     {
-        return GetBaseHeight(point);
+        float baseHeight = GetBaseHeight(point);
+        if (ShouldApplyRoadFlattening())
+            return RoadSystem.ApplyFlatten(new Vector3(point.x, baseHeight, point.y), baseHeight);
+
+        return baseHeight;
     }
 
     float GetBaseHeight(Vector2 point)
     {
         float h = GetTerrainSurfaceHeight(point);
 
-        if (TryGetRiverBlend(point, out float riverBlend))
+        if (ShouldApplyRiverCarving() && TryGetRiverBlend(point, out float riverBlend))
         {
             float riverDepthValue = RiverSystem.Instance != null ? RiverSystem.Instance.RiverDepth : riverDepth;
-            float riverBedHeight = h - riverDepthValue * riverBlend;
+            float carvingStrength = GetRiverCarvingStrength();
+            float riverBedHeight = h - riverDepthValue * riverBlend * carvingStrength;
             h = Mathf.Min(h, riverBedHeight);
         }
         return h;
@@ -255,9 +273,67 @@ public class TerrainChunk : MonoBehaviour
 
     float GetTerrainSurfaceHeight(Vector2 point)
     {
+        WorldHeightmapData activeHeightmap = GetActiveHeightmap();
+        if (useHeightmapWhenAvailable &&
+            activeHeightmap != null &&
+            activeHeightmap.TrySampleHeight(point, out float sampledHeight))
+            return sampledHeight;
+
         float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
         h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
         return h;
+    }
+
+    void ResolveHeightmapData()
+    {
+        if (worldHeightmap != null)
+            return;
+
+        if (cachedHeightmap == null)
+            cachedHeightmap = Resources.Load<WorldHeightmapData>("World/DefaultHeightmapData");
+
+        worldHeightmap = cachedHeightmap;
+    }
+
+    WorldHeightmapData GetActiveHeightmap()
+    {
+        if (worldHeightmap != null)
+            return worldHeightmap;
+
+        if (cachedHeightmap == null)
+            cachedHeightmap = Resources.Load<WorldHeightmapData>("World/DefaultHeightmapData");
+
+        return cachedHeightmap;
+    }
+
+    bool ShouldApplyRiverCarving()
+    {
+        WorldHeightmapData activeHeightmap = GetActiveHeightmap();
+
+        if (useHeightmapWhenAvailable && activeHeightmap != null && activeHeightmap.CanSample())
+            return activeHeightmap.applyRiverCarving;
+
+        return true;
+    }
+
+    bool ShouldApplyRoadFlattening()
+    {
+        WorldHeightmapData activeHeightmap = GetActiveHeightmap();
+
+        if (useHeightmapWhenAvailable && activeHeightmap != null && activeHeightmap.CanSample())
+            return activeHeightmap.applyRoadFlattening;
+
+        return true;
+    }
+
+    float GetRiverCarvingStrength()
+    {
+        WorldHeightmapData activeHeightmap = GetActiveHeightmap();
+
+        if (useHeightmapWhenAvailable && activeHeightmap != null && activeHeightmap.CanSample())
+            return Mathf.Clamp01(activeHeightmap.riverCarvingStrength);
+
+        return 1f;
     }
 
     int GetWorldSeed()
@@ -656,6 +732,9 @@ public class TerrainChunk : MonoBehaviour
 
             Vector3 worldPos = pos + transform.position;
 
+            if (RoadSystem.IsReserved(worldPos, 1.5f))
+                continue;
+
             // 🚫 zona ao redor
             if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius)
                 continue;
@@ -717,6 +796,9 @@ public class TerrainChunk : MonoBehaviour
                     TreeData selected = validTrees[rng.Range(0, validTrees.Count)];
                     Vector3 groundPoint = GetGroundPoint(worldPos);
 
+                    if (RoadSystem.IsReserved(groundPoint, 1.5f))
+                        continue;
+
                     if (IsTooClose(groundPoint, minTreeDistance))
                         continue;
 
@@ -749,6 +831,9 @@ public class TerrainChunk : MonoBehaviour
 
                     Vector3 finalPos = worldPos + offsetPos;
                     Vector3 finalGroundPoint = GetGroundPoint(finalPos);
+
+                    if (RoadSystem.IsReserved(finalGroundPoint, 1f))
+                        continue;
 
                     // 🚫 evita sobreposição
                     if (IsTooClose(finalGroundPoint))
@@ -832,6 +917,10 @@ public class TerrainChunk : MonoBehaviour
                 continue;
 
             Vector3 basePos = vertices[index] + transform.position;
+
+            if (RoadSystem.IsReserved(basePos, 2f))
+                continue;
+
             Vector2 basePoint = new Vector2(basePos.x, basePos.z);
 
             if (IsRiverZone(basePoint, 2f))
@@ -862,6 +951,9 @@ public class TerrainChunk : MonoBehaviour
                 Vector3 spawnPos = basePos + offsetPos;
 
                 spawnPos = GetGroundPoint(spawnPos);
+
+                if (RoadSystem.IsReserved(spawnPos, 2f))
+                    continue;
 
                 if (IsRiverZone(new Vector2(spawnPos.x, spawnPos.z), 2f))
                     continue;
@@ -976,6 +1068,9 @@ public class TerrainChunk : MonoBehaviour
 
             Vector3 localPos = vertices[i];
             Vector3 worldPos = localPos + transform.position;
+
+            if (RoadSystem.IsReserved(worldPos, 3f))
+                continue;
 
             if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 8f)
                 continue;

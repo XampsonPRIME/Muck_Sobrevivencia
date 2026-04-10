@@ -15,6 +15,8 @@ public class WorldGenerator : MonoBehaviour
     public int chunkSize = 50;
     public int viewDistance = 2;
     public int maxChunkCreationsPerFrame = 1;
+    public Vector2 worldCenter = Vector2.zero;
+    public Vector2 worldSize = new Vector2(800f, 800f);
 
     private readonly Dictionary<Vector2Int, GameObject> chunks = new Dictionary<Vector2Int, GameObject>();
     readonly Queue<Vector2Int> pendingChunkQueue = new Queue<Vector2Int>();
@@ -109,6 +111,9 @@ public class WorldGenerator : MonoBehaviour
             for (int z = -viewDistance; z <= viewDistance; z++)
             {
                 Vector2Int coord = new Vector2Int(playerChunk.x + x, playerChunk.y + z);
+                if (!IsCoordWithinWorldBounds(coord))
+                    continue;
+
                 neededChunks.Add(coord);
 
                 if (!chunks.ContainsKey(coord) && !queuedChunkCoords.Contains(coord))
@@ -136,6 +141,9 @@ public class WorldGenerator : MonoBehaviour
 
     void QueueChunk(Vector2Int coord)
     {
+        if (!IsCoordWithinWorldBounds(coord))
+            return;
+
         pendingChunkQueue.Enqueue(coord);
         queuedChunkCoords.Add(coord);
     }
@@ -163,6 +171,9 @@ public class WorldGenerator : MonoBehaviour
         if (player == null)
             return false;
 
+        if (!IsCoordWithinWorldBounds(coord))
+            return false;
+
         Vector2Int playerChunk = GetPlayerChunkCoord();
         return Mathf.Abs(coord.x - playerChunk.x) <= viewDistance &&
                Mathf.Abs(coord.y - playerChunk.y) <= viewDistance;
@@ -186,6 +197,22 @@ public class WorldGenerator : MonoBehaviour
         }
 
         chunks.Add(coord, chunk);
+    }
+
+    bool IsCoordWithinWorldBounds(Vector2Int coord)
+    {
+        float minX = worldCenter.x - worldSize.x * 0.5f;
+        float maxX = worldCenter.x + worldSize.x * 0.5f;
+        float minZ = worldCenter.y - worldSize.y * 0.5f;
+        float maxZ = worldCenter.y + worldSize.y * 0.5f;
+
+        float chunkWorldX = coord.x * chunkSize;
+        float chunkWorldZ = coord.y * chunkSize;
+
+        return chunkWorldX >= minX &&
+               chunkWorldX < maxX &&
+               chunkWorldZ >= minZ &&
+               chunkWorldZ < maxZ;
     }
 
     void SetupDistantMountains()

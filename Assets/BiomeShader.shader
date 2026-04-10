@@ -5,6 +5,9 @@ Shader "Custom/BiomeShader_URP"
         _SandTex ("Sand", 2D) = "white" {}
         _GrassTex ("Grass", 2D) = "white" {}
         _SnowTex ("Snow", 2D) = "white" {}
+        _RoadColor ("Road Color", Color) = (0.95, 0.90, 0.72, 1)
+        _RoadBlendThreshold ("Road Blend Threshold", Range(0, 1)) = 0.55
+        _RoadBlendSoftness ("Road Blend Softness", Range(0.001, 0.25)) = 0.06
     }
 
     SubShader
@@ -43,6 +46,9 @@ Shader "Custom/BiomeShader_URP"
             SAMPLER(sampler_GrassTex);
             TEXTURE2D(_SnowTex);
             SAMPLER(sampler_SnowTex);
+            float4 _RoadColor;
+            float _RoadBlendThreshold;
+            float _RoadBlendSoftness;
 
             Varyings vert(Attributes input)
             {
@@ -62,6 +68,12 @@ Shader "Custom/BiomeShader_URP"
 
                 half3 mixed = lerp(sand, grass, saturate(input.color.g));
                 mixed = lerp(mixed, snow, saturate(input.color.r));
+                half roadMask = smoothstep(
+                    _RoadBlendThreshold - _RoadBlendSoftness,
+                    _RoadBlendThreshold + _RoadBlendSoftness,
+                    saturate(input.color.b)
+                );
+                mixed = lerp(mixed, _RoadColor.rgb, roadMask);
                 return half4(mixed, 1.0);
             }
             ENDHLSL
@@ -83,6 +95,9 @@ Shader "Custom/BiomeShader_URP"
             sampler2D _SandTex;
             sampler2D _GrassTex;
             sampler2D _SnowTex;
+            fixed4 _RoadColor;
+            float _RoadBlendThreshold;
+            float _RoadBlendSoftness;
 
             struct appdata
             {
@@ -115,6 +130,12 @@ Shader "Custom/BiomeShader_URP"
 
                 fixed3 mixed = lerp(sand, grass, saturate(input.color.g));
                 mixed = lerp(mixed, snow, saturate(input.color.r));
+                fixed roadMask = smoothstep(
+                    _RoadBlendThreshold - _RoadBlendSoftness,
+                    _RoadBlendThreshold + _RoadBlendSoftness,
+                    saturate(input.color.b)
+                );
+                mixed = lerp(mixed, _RoadColor.rgb, roadMask);
                 return fixed4(mixed, 1.0);
             }
             ENDCG
