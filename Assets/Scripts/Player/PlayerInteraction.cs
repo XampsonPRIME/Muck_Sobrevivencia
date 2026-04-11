@@ -453,6 +453,19 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
+        MushroomMonsterEnemy mushroomMonster = hit.collider.GetComponent<MushroomMonsterEnemy>() ??
+                                               hit.collider.GetComponentInParent<MushroomMonsterEnemy>();
+
+        if (mushroomMonster != null)
+        {
+            if (LanMultiplayerManager.Instance != null &&
+                LanMultiplayerManager.Instance.TryHandleGameplayHit(mushroomMonster, playerMovement, currentTool, toolDamage))
+                return;
+
+            mushroomMonster.Hit(toolDamage, playerMovement);
+            return;
+        }
+
         BossEnemy bossEnemy = hit.collider.GetComponent<BossEnemy>() ??
                               hit.collider.GetComponentInParent<BossEnemy>();
 

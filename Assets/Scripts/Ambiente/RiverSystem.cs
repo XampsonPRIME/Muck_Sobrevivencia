@@ -4,6 +4,7 @@ using UnityEngine;
 public class RiverSystem : MonoBehaviour
 {
     public static RiverSystem Instance { get; private set; }
+    static readonly List<RiverPath> activePaths = new List<RiverPath>();
 
     [Header("Spline")]
     public int controlPointCount = 8;
@@ -55,14 +56,18 @@ public class RiverSystem : MonoBehaviour
     AudioSource ambientSource;
     Transform playerTransform;
     static Material sharedRiverMaterial;
-    static WorldHeightmapData cachedHeightmap;
     float refreshTimer;
     bool initialized;
     Vector3 startOrigin;
     float baseRiverX;
     Vector3 lastRefreshPosition;
+    RiverPath activePath;
+    int activePathVersion = -1;
+    float activePathBankBlend;
+    float activePathDepth;
+    float activePathWaterInset = 1f;
 
-    float EffectiveWaterInset => Mathf.Clamp(waterInset * GetHeightmapWaterInsetScale(), 0.1f, 1f);
+    float EffectiveWaterInset => Mathf.Clamp(waterInset * activePathWaterInset * GetHeightmapWaterInsetScale(), 0.1f, 1f);
 
     struct RiverQuery
     {
@@ -89,6 +94,30 @@ public class RiverSystem : MonoBehaviour
         Instance = this;
     }
 
+    public static void RegisterPath(RiverPath path)
+    {
+        if (path == null || activePaths.Contains(path))
+            return;
+
+        activePaths.Add(path);
+        NotifyPathsChanged();
+    }
+
+    public static void UnregisterPath(RiverPath path)
+    {
+        if (path == null)
+            return;
+
+        activePaths.Remove(path);
+        NotifyPathsChanged();
+    }
+
+    public static void NotifyPathsChanged()
+    {
+        if (Instance != null && Instance.initialized)
+            Instance.RebuildRiverLayout();
+    }
+
     public void Initialize(Vector3 origin)
     {
         if (initialized)
@@ -99,16 +128,35 @@ public class RiverSystem : MonoBehaviour
         baseRiverX = origin.x;
         playerTransform = FindPlayerTransform();
         BuildVisualObjects();
-        BuildSpline(origin);
-        BuildSampledRiver();
-        RefreshRiverHeights();
+        RebuildRiverLayout();
         lastRefreshPosition = playerTransform != null ? playerTransform.position : origin;
+    }
+
+    void RebuildRiverLayout()
+    {
+        ResolveActivePath();
+
+        if (activePath != null)
+            BuildSampledRiverFromPath(activePath);
+        else
+        {
+            BuildSpline(startOrigin);
+            BuildSampledRiver();
+        }
+
+        RefreshRiverHeights();
     }
 
     void Update()
     {
         if (!initialized)
             return;
+
+        if (HasDrawnPathChanged())
+        {
+            RebuildRiverLayout();
+            refreshTimer = 0f;
+        }
 
         if (playerTransform == null)
             playerTransform = FindPlayerTransform();
@@ -206,14 +254,51 @@ public class RiverSystem : MonoBehaviour
         }
     }
 
+    void BuildSampledRiverFromPath(RiverPath path)
+    {
+        samples.Clear();
+        if (path == null)
+            return;
+
+        List<Vector3> centers = new List<Vector3>();
+        if (!path.TryBuildCenterlineSamples(centers) || centers.Count < 2)
+            return;
+
+        for (int i = 0; i < centers.Count; i++)
+        {
+            Vector3 tangent;
+
+            if (i <= 0)
+                tangent = centers[1] - centers[0];
+            else if (i >= centers.Count - 1)
+                tangent = centers[i] - centers[i - 1];
+            else
+                tangent = centers[i + 1] - centers[i - 1];
+
+            tangent.y = 0f;
+            if (tangent.sqrMagnitude < 0.0001f)
+                tangent = Vector3.forward;
+
+            samples.Add(new RiverSamplePoint
+            {
+                center = new Vector3(centers[i].x, 0f, centers[i].z),
+                tangent = tangent.normalized,
+                halfWidth = Mathf.Max(1.3f, path.riverWidth * 0.5f * GetHeightmapWidthScale())
+            });
+        }
+    }
+
     public bool TryGetBlend(Vector2 point, bool allowBiome, out float blend)
     {
         blend = 0f;
-        if (!initialized || !allowBiome)
+        if (!initialized)
+            return false;
+
+        if (activePath == null && !allowBiome)
             return false;
 
         RiverQuery query = GetQuery(point);
-        float influence = query.halfWidth + bankBlend;
+        float influence = query.halfWidth + GetBankBlend();
         if (query.distance <= influence)
         {
             blend = Mathf.Clamp01(1f - query.distance / influence);
@@ -225,7 +310,10 @@ public class RiverSystem : MonoBehaviour
 
     public bool IsRiverZone(Vector2 point, bool allowBiome, float extraMargin = 0f)
     {
-        if (!initialized || !allowBiome)
+        if (!initialized)
+            return false;
+
+        if (activePath == null && !allowBiome)
             return false;
 
         RiverQuery query = GetQuery(point);
@@ -246,7 +334,7 @@ public class RiverSystem : MonoBehaviour
         return TrySampleWaterHeight(query.nearestPoint, halfWidth, out waterHeight);
     }
 
-    public float RiverDepth => depth;
+    public float RiverDepth => activePath != null ? activePathDepth : depth;
 
     RiverQuery GetQuery(Vector2 point)
     {
@@ -689,6 +777,72 @@ public class RiverSystem : MonoBehaviour
         return Mathf.Max(1.3f, baseWidth * multiplier * 0.5f * GetHeightmapWidthScale());
     }
 
+    float GetBankBlend()
+    {
+        return activePath != null ? activePathBankBlend : bankBlend;
+    }
+
+    void ResolveActivePath()
+    {
+        RiverPath bestPath = null;
+        int bestPriority = int.MinValue;
+
+        for (int i = activePaths.Count - 1; i >= 0; i--)
+        {
+            RiverPath path = activePaths[i];
+            if (path == null)
+            {
+                activePaths.RemoveAt(i);
+                continue;
+            }
+
+            if (!path.isActiveAndEnabled)
+                continue;
+
+            if (bestPath != null && path.priority < bestPriority)
+                continue;
+
+            bestPath = path;
+            bestPriority = path.priority;
+        }
+
+        activePath = bestPath;
+        activePathVersion = activePath != null ? activePath.Version : -1;
+        activePathBankBlend = activePath != null ? Mathf.Max(0.5f, activePath.bankBlend) : bankBlend;
+        activePathDepth = activePath != null ? Mathf.Max(0.5f, activePath.depth) : depth;
+        activePathWaterInset = activePath != null ? Mathf.Clamp(activePath.waterInsetMultiplier, 0.2f, 1f) : 1f;
+    }
+
+    bool HasDrawnPathChanged()
+    {
+        RiverPath currentPath = activePath;
+        if (currentPath == null)
+            return HasAnyActivePath();
+
+        if (!currentPath.isActiveAndEnabled)
+            return true;
+
+        return currentPath.Version != activePathVersion;
+    }
+
+    bool HasAnyActivePath()
+    {
+        for (int i = activePaths.Count - 1; i >= 0; i--)
+        {
+            RiverPath path = activePaths[i];
+            if (path == null)
+            {
+                activePaths.RemoveAt(i);
+                continue;
+            }
+
+            if (path.isActiveAndEnabled)
+                return true;
+        }
+
+        return false;
+    }
+
     float GetHeightmapWidthScale()
     {
         WorldHeightmapData data = GetActiveHeightmapData();
@@ -709,10 +863,11 @@ public class RiverSystem : MonoBehaviour
 
     static WorldHeightmapData GetActiveHeightmapData()
     {
-        if (cachedHeightmap == null)
-            cachedHeightmap = Resources.Load<WorldHeightmapData>("World/DefaultHeightmapData");
+        RiverSystem instance = Instance;
+        if (instance != null)
+            return SceneTerrainContext.GetHeightmapForScene(instance.gameObject.scene);
 
-        return cachedHeightmap;
+        return SceneTerrainContext.GetActiveHeightmap();
     }
 
     Vector3 ClosestPointOnSegment(Vector3 point, Vector3 a, Vector3 b)

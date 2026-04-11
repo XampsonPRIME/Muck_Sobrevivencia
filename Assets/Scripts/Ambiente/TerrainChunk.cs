@@ -33,7 +33,8 @@ public class TerrainChunk : MonoBehaviour
     {
         Desert,
         Forest,
-        Snow
+        Snow,
+        EnchantedForest
     }
 
     [System.Serializable]
@@ -45,9 +46,9 @@ public class TerrainChunk : MonoBehaviour
     }
 
     [Header("Config")]
-    public int size = 50;
+    public int size = 100;
     public float terrainScale = 40f;
-    public float heightMultiplier = 12f;
+    public float heightMultiplier = 8f;
     public bool useHeightmapWhenAvailable = true;
     public WorldHeightmapData worldHeightmap;
 
@@ -124,9 +125,9 @@ public class TerrainChunk : MonoBehaviour
     Vector2[] uvs;
 
     List<Vector3> usedPositions = new List<Vector3>();
+    List<Vector3> decorativeMushroomPositions = new List<Vector3>();
     List<Vector3> cowGroupPositions = new List<Vector3>();
     static Material riverMaterial;
-    static WorldHeightmapData cachedHeightmap;
 
     int BuildChunkSeed(Vector2 offset, int salt)
     {
@@ -156,7 +157,20 @@ public class TerrainChunk : MonoBehaviour
 
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
-        GetComponent<MeshRenderer>().material = terrainMaterial;
+        SceneTerrainSettings sceneSettings = SceneTerrainContext.GetSettingsForScene(gameObject.scene);
+
+        Material finalMaterial = terrainMaterial;
+
+        if (sceneSettings != null && sceneSettings.enchantedTerrainMaterial != null)
+        {
+            // 👉 aplica só se for floresta (ou sua cena encantada)
+            if (SceneTerrainContext.GetActiveBiomeOverride() == SceneBiomeOverride.ForestOnly)
+            {
+                finalMaterial = sceneSettings.enchantedTerrainMaterial;
+            }
+        }
+
+        GetComponent<MeshRenderer>().material = finalMaterial;
 
         vertices = new Vector3[(size + 1) * (size + 1)];
         colors = new Color[vertices.Length];
@@ -192,6 +206,10 @@ public class TerrainChunk : MonoBehaviour
                         biomeColor = new Color(0, 1, 0); // grama
                         break;
 
+                    case BiomeType.EnchantedForest:
+                        biomeColor = new Color(0, 0, 1, 0);
+                        break;
+
                     case BiomeType.Snow:
                         biomeColor = new Color(1, 0, 0); // neve
                         break;
@@ -202,7 +220,7 @@ public class TerrainChunk : MonoBehaviour
                 }
 
                 float roadBlend = RoadSystem.GetRoadBlend(new Vector3(worldX, h, worldZ));
-                biomeColor.b = Mathf.Max(biomeColor.b, roadBlend);
+                biomeColor.a = Mathf.Max(biomeColor.a, roadBlend); // 🔥 CORRETO
                 colors[i] = biomeColor;
             }
         }
@@ -225,6 +243,16 @@ public class TerrainChunk : MonoBehaviour
 
     BiomeType GetBiome(Vector2 point)
     {
+        switch (SceneTerrainContext.GetActiveBiomeOverride())
+        {
+            case SceneBiomeOverride.ForestOnly:
+                return BiomeType.EnchantedForest;
+            case SceneBiomeOverride.DesertOnly:
+                return BiomeType.Desert;
+            case SceneBiomeOverride.SnowOnly:
+                return BiomeType.Snow;
+        }
+
         float biome = Mathf.PerlinNoise(point.x * biomeScale, point.y * biomeScale);
 
         if (biome < 0.33f)
@@ -286,24 +314,13 @@ public class TerrainChunk : MonoBehaviour
 
     void ResolveHeightmapData()
     {
-        if (worldHeightmap != null)
-            return;
-
-        if (cachedHeightmap == null)
-            cachedHeightmap = Resources.Load<WorldHeightmapData>("World/DefaultHeightmapData");
-
-        worldHeightmap = cachedHeightmap;
+        if (worldHeightmap == null)
+            worldHeightmap = SceneTerrainContext.GetActiveHeightmap();
     }
 
     WorldHeightmapData GetActiveHeightmap()
     {
-        if (worldHeightmap != null)
-            return worldHeightmap;
-
-        if (cachedHeightmap == null)
-            cachedHeightmap = Resources.Load<WorldHeightmapData>("World/DefaultHeightmapData");
-
-        return cachedHeightmap;
+        return SceneTerrainContext.GetActiveHeightmap(worldHeightmap);
     }
 
     bool ShouldApplyRiverCarving()
@@ -703,8 +720,8 @@ public class TerrainChunk : MonoBehaviour
         mesh.triangles = triangles;
         mesh.colors = colors;
         mesh.uv = uvs;
-
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents(); // opcional, mas melhor
 
         GetComponent<MeshCollider>().sharedMesh = mesh;
     }
@@ -713,13 +730,27 @@ public class TerrainChunk : MonoBehaviour
     IEnumerator SpawnVegetationAsync(Vector2 offset)
     {
         ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 101));
+        SceneTerrainSettings sceneSettings = SceneTerrainContext.GetSettingsForScene(gameObject.scene);
         usedPositions.Clear();
+        decorativeMushroomPositions.Clear();
         int treeCount = 0;
         int iterationsSinceYield = 0;
-
+        float sceneTreeDensityMultiplier = SceneTerrainContext.GetTreeDensityMultiplier(gameObject.scene);
+        int sceneMaxTreesOverride = SceneTerrainContext.GetMaxTreesPerChunkOverride(gameObject.scene);
+        float sceneMinTreeDistanceOverride = SceneTerrainContext.GetMinTreeDistanceOverride(gameObject.scene);
+        float sceneMushroomDensityMultiplier = SceneTerrainContext.GetMushroomDensityMultiplier(gameObject.scene);
+        bool preferMagicForestTrees = SceneTerrainContext.GetPreferMagicForestTrees(gameObject.scene);
+        float magicForestTreeChance = SceneTerrainContext.GetMagicForestTreeChance(gameObject.scene);
+        int maxTreeLimit = sceneMaxTreesOverride > 0 ? sceneMaxTreesOverride : maxTreesPerChunk;
+        float treeSpacing = sceneMinTreeDistanceOverride > 0f ? sceneMinTreeDistanceOverride : minTreeDistance;
+        int mushroomCount = 0;
+        int maxMushroomsPerChunk = 16; // 🔥 controla aqui
 
         for (int i = 0; i < vertices.Length; i += 4)
         {
+            if (mushroomCount >= maxMushroomsPerChunk)
+                continue;
+
             iterationsSinceYield++;
             if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
             {
@@ -776,9 +807,11 @@ public class TerrainChunk : MonoBehaviour
                     break;
             }
 
+            density *= sceneTreeDensityMultiplier;
+
 
             // 🌲 ÁRVORES
-            if (treeCount < maxTreesPerChunk && rng.Value() < density)
+            if (treeCount < maxTreeLimit && rng.Value() < density)
             {
                 List<TreeData> validTrees = new List<TreeData>();
 
@@ -793,13 +826,32 @@ public class TerrainChunk : MonoBehaviour
 
                 if (validTrees.Count > 0)
                 {
-                    TreeData selected = validTrees[rng.Range(0, validTrees.Count)];
+                    List<TreeData> magicalTrees = null;
+                    if (preferMagicForestTrees && biome == BiomeType.Forest)
+                    {
+                        magicalTrees = new List<TreeData>();
+                        foreach (TreeData candidateTree in validTrees)
+                        {
+                            if (candidateTree == null || candidateTree.prefab == null)
+                                continue;
+
+                            string prefabName = candidateTree.prefab.name.ToLowerInvariant();
+                            if (prefabName.Contains("roxa") || prefabName.Contains("amarela") || prefabName.Contains("purple") || prefabName.Contains("yellow"))
+                                magicalTrees.Add(candidateTree);
+                        }
+                    }
+
+                    List<TreeData> selectionPool = magicalTrees != null && magicalTrees.Count > 0 && rng.Value() <= magicForestTreeChance
+                        ? magicalTrees
+                        : validTrees;
+
+                    TreeData selected = selectionPool[rng.Range(0, selectionPool.Count)];
                     Vector3 groundPoint = GetGroundPoint(worldPos);
 
                     if (RoadSystem.IsReserved(groundPoint, 1.5f))
                         continue;
 
-                    if (IsTooClose(groundPoint, minTreeDistance))
+                    if (IsTooClose(groundPoint, treeSpacing))
                         continue;
 
                     GameObject tree = Instantiate(
@@ -816,39 +868,179 @@ public class TerrainChunk : MonoBehaviour
                 }
             }
 
+            GameObject sceneDecorativeSingle = sceneSettings != null ? sceneSettings.decorativeMushroomSinglePrefab : null;
+            GameObject sceneDecorativeCluster = sceneSettings != null ? sceneSettings.decorativeMushroomClusterPrefab : null;
+            bool hasDecorativeMushrooms = sceneDecorativeSingle != null || sceneDecorativeCluster != null;
+            float mushroomSpawnChance = mushroomDensity * sceneMushroomDensityMultiplier;
+
+
+            // 🔥 reduz ao invés de forçar spawn
+            if (hasDecorativeMushrooms)
+                mushroomSpawnChance *= 0.8f;
+
             // 🍄
-            if (biome == BiomeType.Forest && rng.Value() < mushroomDensity) // chance do cluster
+            if (biome == BiomeType.EnchantedForest && rng.Value() < mushroomSpawnChance)
             {
-                int mushroomCount = 3;
-
-                for (int m = 0; m < mushroomCount; m++)
-                {
-                    Vector3 offsetPos = new Vector3(
-                        rng.Range(-1.5f, 1.5f),
-                        0,
-                        rng.Range(-1.5f, 1.5f)
-                    );
-
-                    Vector3 finalPos = worldPos + offsetPos;
-                    Vector3 finalGroundPoint = GetGroundPoint(finalPos);
-
-                    if (RoadSystem.IsReserved(finalGroundPoint, 1f))
-                        continue;
-
-                    // 🚫 evita sobreposição
-                    if (IsTooClose(finalGroundPoint))
-                        continue;
-
-                    Instantiate(
-                        mushroomPrefab,
-                        finalGroundPoint + Vector3.up * 0.2f,
-                        Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
-                        transform
-                    );
-
-                    usedPositions.Add(finalGroundPoint);
-                }
+                SpawnDecorativeMushrooms(sceneSettings, rng, worldPos);
+                mushroomCount++;
             }
+        }
+    }
+
+    void SpawnDecorativeMushrooms(SceneTerrainSettings sceneSettings, ChunkRandom rng, Vector3 centerWorldPos)
+    {
+        GameObject customSingle = sceneSettings != null ? sceneSettings.decorativeMushroomSinglePrefab : null;
+        GameObject customCluster = sceneSettings != null ? sceneSettings.decorativeMushroomClusterPrefab : null;
+        customSingle ??= Resources.Load<GameObject>($"World/Scenes/{gameObject.scene.name}/cocumelom");
+        customCluster ??= Resources.Load<GameObject>($"World/Scenes/{gameObject.scene.name}/cocumeloscluster");
+
+        bool useCustomDecor = customSingle != null || customCluster != null;
+        int spawnAttempts = useCustomDecor ? rng.Range(2, 4) : 2;
+        float clusterChance = sceneSettings != null ? sceneSettings.decorativeMushroomClusterChance : 0f;
+        float minDistance = sceneSettings != null && sceneSettings.decorativeMushroomMinDistance > 0f
+            ? sceneSettings.decorativeMushroomMinDistance
+            : 4f;
+        float yOffset = sceneSettings != null ? sceneSettings.decorativeMushroomYOffset : 0.2f;
+        Vector2 scaleRange = sceneSettings != null ? sceneSettings.decorativeMushroomScaleRange : Vector2.one;
+
+        for (int m = 0; m < spawnAttempts; m++)
+        {
+            Vector3 offsetPos = new Vector3(
+                rng.Range(-1.85f, 1.85f),
+                0f,
+                rng.Range(-1.85f, 1.85f)
+            );
+
+            Vector3 finalPos = centerWorldPos + offsetPos;
+            Vector3 finalGroundPoint = GetGroundPoint(finalPos);
+
+            if (RoadSystem.IsReserved(finalGroundPoint, 1f))
+                continue;
+
+            if (IsRiverZone(new Vector2(finalGroundPoint.x, finalGroundPoint.z), 1f))
+                continue;
+
+            if (IsTooCloseDecorativeMushroom(finalGroundPoint, minDistance))
+                continue;
+
+            GameObject prefabToSpawn = mushroomPrefab;
+            if (useCustomDecor)
+            {
+                bool spawnCluster = customCluster != null && (customSingle == null || rng.Value() <= clusterChance);
+                prefabToSpawn = spawnCluster ? customCluster : customSingle;
+            }
+
+            if (prefabToSpawn == null)
+                continue;
+
+            GameObject mushroomObject = Instantiate(
+                prefabToSpawn,
+                finalGroundPoint,
+                Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
+                transform
+            );
+
+            float scale = rng.Range(
+                Mathf.Max(0.1f, scaleRange.x),
+                Mathf.Max(scaleRange.x, scaleRange.y)
+            );
+            mushroomObject.transform.localScale *= scale;
+            AlignObjectBaseToGround(mushroomObject, finalGroundPoint, yOffset);
+            ApplyDecorativeMushroomColorVariation(mushroomObject, sceneSettings, rng);
+            decorativeMushroomPositions.Add(finalGroundPoint);
+        }
+    }
+
+    bool IsTooCloseDecorativeMushroom(Vector3 pos, float minDistance)
+    {
+        for (int i = 0; i < decorativeMushroomPositions.Count; i++)
+        {
+            if (Vector3.Distance(decorativeMushroomPositions[i], pos) < minDistance)
+                return true;
+        }
+
+        return false;
+    }
+
+    void ApplyDecorativeMushroomColorVariation(GameObject mushroomObject, SceneTerrainSettings sceneSettings, ChunkRandom rng)
+    {
+        if (mushroomObject == null)
+            return;
+
+        Renderer[] renderers = mushroomObject.GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            return;
+
+        // 🌈 PALETA MÁGICA (mais variedade)
+        Color[] palette = new Color[]
+        {
+        new Color(0.2f, 0.6f, 1f),   // azul
+        new Color(0.8f, 0.3f, 1f),   // roxo
+        new Color(0.3f, 1f, 0.6f),   // verde mágico
+        new Color(1f, 0.5f, 0.9f),   // rosa
+        new Color(0.6f, 0.9f, 1f),   // azul claro
+        };
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            Material sharedMaterial = renderer.sharedMaterial;
+            if (sharedMaterial == null)
+                continue;
+
+            string colorProperty = null;
+
+            if (sharedMaterial.HasProperty("_BaseColor"))
+                colorProperty = "_BaseColor";
+            else if (sharedMaterial.HasProperty("_Color"))
+                colorProperty = "_Color";
+
+            if (string.IsNullOrEmpty(colorProperty))
+                continue;
+
+            // 🎯 cor original
+            Color baseColor = sharedMaterial.GetColor(colorProperty);
+
+            // 🎲 cor aleatória da paleta
+            Color paletteColor = palette[rng.Range(0, palette.Length)];
+
+            // 🔀 mistura com sistema atual
+            Color sceneColor = baseColor;
+
+            if (sceneSettings != null)
+            {
+                Color tint = Color.Lerp(
+                    sceneSettings.decorativeMushroomTintA,
+                    sceneSettings.decorativeMushroomTintB,
+                    rng.Value()
+                );
+
+                sceneColor = Color.Lerp(baseColor, tint, sceneSettings.decorativeMushroomTintStrength);
+            }
+
+            // 🔥 mistura final (fica MUITO melhor)
+            Color finalColor = Color.Lerp(sceneColor, paletteColor, 0.6f);
+
+            // 🎲 variação natural
+            float variation = rng.Range(0.8f, 1.2f);
+            finalColor *= variation;
+
+            // ⚡ PERFORMANCE (não duplica material)
+            MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(propertyBlock);
+
+            propertyBlock.SetColor(colorProperty, finalColor);
+
+            // ✨ GLOW (emission)
+            if (sharedMaterial.HasProperty("_EmissionColor"))
+            {
+                propertyBlock.SetColor("_EmissionColor", finalColor * 2.5f);
+            }
+
+            renderer.SetPropertyBlock(propertyBlock);
         }
     }
 

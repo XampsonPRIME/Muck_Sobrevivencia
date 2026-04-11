@@ -96,6 +96,7 @@ public class DayNightCycle : MonoBehaviour
         if (sun == null || moon == null)
             return;
 
+        SceneTerrainSettings sceneSettings = SceneTerrainContext.GetActiveSettings();
         float sunAngle = timeOfDay * 360f;
 
         float sunIntensity = Mathf.Clamp01(Mathf.Sin(timeOfDay * Mathf.PI));
@@ -105,24 +106,46 @@ public class DayNightCycle : MonoBehaviour
         sun.transform.rotation = Quaternion.Euler(sunAngle - 90f, 170f, 0);
         moon.transform.rotation = Quaternion.Euler(sunAngle + 90f, 170f, 0);
 
-        // 💡 LUZ (corrigido)
-        sun.intensity = Mathf.Lerp(0.1f, 1.2f, sunIntensity);
-        sun.color = Color.Lerp(new Color(1f, 0.5f, 0.3f), Color.white, sunIntensity);
-
-        moon.intensity = Mathf.Lerp(0.2f, 0.5f, moonIntensity);
-        moon.color = new Color(0.6f, 0.7f, 1f);
-
-        // 🌍 AMBIENT LIGHT (corrigido - nunca preto!)
         Color dayAmbient = new Color(1f, 0.95f, 0.8f);
         Color nightAmbient = new Color(0.1f, 0.15f, 0.3f);
-        RenderSettings.ambientLight = Color.Lerp(nightAmbient, dayAmbient, sunIntensity);
-
-        // 🌫️ FOG DINÂMICO (ESSENCIAL)
         Color dayFog = new Color(0.93f, 0.85f, 0.6f);
         Color nightFog = new Color(0.05f, 0.08f, 0.15f);
+        float minSunIntensity = 0.1f;
+        float maxSunIntensity = 1.2f;
+        float minMoonIntensity = 0.2f;
+        float maxMoonIntensity = 0.5f;
+        Color sunDawnDuskColor = new Color(1f, 0.5f, 0.3f);
+        Color sunDayColor = Color.white;
+        Color moonLightColor = new Color(0.6f, 0.7f, 1f);
+        float dayFogDensity = 0.002f;
+        float nightFogDensity = 0.015f;
 
+        if (sceneSettings != null && sceneSettings.applySceneAtmosphere)
+        {
+            dayAmbient = sceneSettings.dayAmbientLight;
+            nightAmbient = sceneSettings.nightAmbientLight;
+            dayFog = sceneSettings.dayFogColor;
+            nightFog = sceneSettings.nightFogColor;
+            minSunIntensity = sceneSettings.minSunIntensity;
+            maxSunIntensity = sceneSettings.maxSunIntensity;
+            minMoonIntensity = sceneSettings.minMoonIntensity;
+            maxMoonIntensity = sceneSettings.maxMoonIntensity;
+            sunDawnDuskColor = sceneSettings.sunDawnDuskColor;
+            sunDayColor = sceneSettings.sunDayColor;
+            moonLightColor = sceneSettings.moonLightColor;
+            dayFogDensity = sceneSettings.dayFogDensity;
+            nightFogDensity = sceneSettings.nightFogDensity;
+        }
+
+        sun.intensity = Mathf.Lerp(minSunIntensity, maxSunIntensity, sunIntensity);
+        sun.color = Color.Lerp(sunDawnDuskColor, sunDayColor, sunIntensity);
+
+        moon.intensity = Mathf.Lerp(minMoonIntensity, maxMoonIntensity, moonIntensity);
+        moon.color = moonLightColor;
+
+        RenderSettings.ambientLight = Color.Lerp(nightAmbient, dayAmbient, sunIntensity);
         RenderSettings.fogColor = Color.Lerp(nightFog, dayFog, sunIntensity);
-        RenderSettings.fogDensity = Mathf.Lerp(0.015f, 0.002f, sunIntensity);
+        RenderSettings.fogDensity = Mathf.Lerp(nightFogDensity, dayFogDensity, sunIntensity);
 
         // 🌌 Skybox exposição (opcional mas MUITO bom)
         if (skyboxMaterial != null)

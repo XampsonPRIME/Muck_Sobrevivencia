@@ -5,6 +5,9 @@ Shader "Custom/BiomeShader_URP"
         _SandTex ("Sand", 2D) = "white" {}
         _GrassTex ("Grass", 2D) = "white" {}
         _SnowTex ("Snow", 2D) = "white" {}
+
+        _EnchantedColor ("Enchanted Color", Color) = (0.2, 0.35, 0.25, 1)
+
         _RoadColor ("Road Color", Color) = (0.95, 0.90, 0.72, 1)
         _RoadBlendThreshold ("Road Blend Threshold", Range(0, 1)) = 0.55
         _RoadBlendSoftness ("Road Blend Softness", Range(0.001, 0.25)) = 0.06
@@ -12,7 +15,7 @@ Shader "Custom/BiomeShader_URP"
 
     SubShader
     {
-        Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" "Queue"="Geometry" }
+        Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" }
 
         Pass
         {
@@ -20,7 +23,6 @@ Shader "Custom/BiomeShader_URP"
             Tags { "LightMode"="UniversalForward" }
 
             HLSLPROGRAM
-            #pragma target 3.0
             #pragma vertex vert
             #pragma fragment frag
 
@@ -40,24 +42,23 @@ Shader "Custom/BiomeShader_URP"
                 float4 color : COLOR;
             };
 
-            TEXTURE2D(_SandTex);
-            SAMPLER(sampler_SandTex);
-            TEXTURE2D(_GrassTex);
-            SAMPLER(sampler_GrassTex);
-            TEXTURE2D(_SnowTex);
-            SAMPLER(sampler_SnowTex);
+            TEXTURE2D(_SandTex); SAMPLER(sampler_SandTex);
+            TEXTURE2D(_GrassTex); SAMPLER(sampler_GrassTex);
+            TEXTURE2D(_SnowTex); SAMPLER(sampler_SnowTex);
+
+            float4 _EnchantedColor;
             float4 _RoadColor;
             float _RoadBlendThreshold;
             float _RoadBlendSoftness;
 
             Varyings vert(Attributes input)
             {
-                Varyings output;
-                VertexPositionInputs positionInputs = GetVertexPositionInputs(input.positionOS.xyz);
-                output.positionHCS = positionInputs.positionCS;
-                output.uv = input.uv * 20.0;
-                output.color = input.color;
-                return output;
+                Varyings o;
+                VertexPositionInputs pos = GetVertexPositionInputs(input.positionOS.xyz);
+                o.positionHCS = pos.positionCS;
+                o.uv = input.uv * 10.0; // menos repetição
+                o.color = input.color;
+                return o;
             }
 
             half4 frag(Varyings input) : SV_Target
@@ -66,81 +67,40 @@ Shader "Custom/BiomeShader_URP"
                 half3 grass = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, input.uv).rgb;
                 half3 snow = SAMPLE_TEXTURE2D(_SnowTex, sampler_SnowTex, input.uv).rgb;
 
-                half3 mixed = lerp(sand, grass, saturate(input.color.g));
-                mixed = lerp(mixed, snow, saturate(input.color.r));
-                half roadMask = smoothstep(
+                // 🌲 BASE REALISTA (enchanted)
+                half3 enchanted = _EnchantedColor.rgb;
+
+                // variação MUITO suave (natural)
+                float noise = sin(input.uv.x * 0.5) * cos(input.uv.y * 0.5);
+                enchanted *= lerp(0.95, 1.05, noise);
+
+                // leve escurecimento em áreas (profundidade)
+                float shade = saturate(input.uv.y * 0.1);
+                enchanted *= lerp(0.85, 1.1, shade);
+
+                // 🎯 máscaras
+                float forestMask = saturate(input.color.g);
+                float snowMask = saturate(input.color.r);
+                float enchantedMask = saturate(input.color.b);
+                float roadMask = saturate(input.color.a);
+
+                half3 mixed = sand;
+                mixed = lerp(mixed, grass, forestMask);
+                mixed = lerp(mixed, snow, snowMask);
+                mixed = lerp(mixed, enchanted, enchantedMask);
+
+                float roadBlend = smoothstep(
                     _RoadBlendThreshold - _RoadBlendSoftness,
                     _RoadBlendThreshold + _RoadBlendSoftness,
-                    saturate(input.color.b)
+                    roadMask
                 );
-                mixed = lerp(mixed, _RoadColor.rgb, roadMask);
-                return half4(mixed, 1.0);
+
+                mixed = lerp(mixed, _RoadColor.rgb, roadBlend);
+
+                return half4(mixed, 1);
             }
+
             ENDHLSL
         }
     }
-
-    SubShader
-    {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
-
-        Pass
-        {
-            CGPROGRAM
-            #pragma target 3.0
-            #pragma vertex vert
-            #pragma fragment frag
-            #include "UnityCG.cginc"
-
-            sampler2D _SandTex;
-            sampler2D _GrassTex;
-            sampler2D _SnowTex;
-            fixed4 _RoadColor;
-            float _RoadBlendThreshold;
-            float _RoadBlendSoftness;
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-                float4 color : COLOR;
-            };
-
-            struct v2f
-            {
-                float4 vertex : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float4 color : COLOR;
-            };
-
-            v2f vert(appdata input)
-            {
-                v2f output;
-                output.vertex = UnityObjectToClipPos(input.vertex);
-                output.uv = input.uv * 20.0;
-                output.color = input.color;
-                return output;
-            }
-
-            fixed4 frag(v2f input) : SV_Target
-            {
-                fixed3 sand = tex2D(_SandTex, input.uv).rgb;
-                fixed3 grass = tex2D(_GrassTex, input.uv).rgb;
-                fixed3 snow = tex2D(_SnowTex, input.uv).rgb;
-
-                fixed3 mixed = lerp(sand, grass, saturate(input.color.g));
-                mixed = lerp(mixed, snow, saturate(input.color.r));
-                fixed roadMask = smoothstep(
-                    _RoadBlendThreshold - _RoadBlendSoftness,
-                    _RoadBlendThreshold + _RoadBlendSoftness,
-                    saturate(input.color.b)
-                );
-                mixed = lerp(mixed, _RoadColor.rgb, roadMask);
-                return fixed4(mixed, 1.0);
-            }
-            ENDCG
-        }
-    }
-
-    Fallback "Standard"
 }

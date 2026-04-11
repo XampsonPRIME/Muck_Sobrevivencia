@@ -6,6 +6,7 @@ ShaderImporter:
   - _SandTex: {fileID: 2800000, guid: b86ecf0a264084cf28b13284f6b3c116, type: 3}
   - _GrassTex: {fileID: 2800000, guid: 660ad5dfaea614c74afad70d5cf18ea9, type: 3}
   - _SnowTex: {fileID: 2800000, guid: a5ec766306d1d4e439a56ac1b85490e8, type: 3}
+  - _EnchantedTex: {fileID: 2800000, guid: 54b7556014a6340f89263f240e3cb135, type: 3}
   nonModifiableTextures: []
   userData: 
   assetBundleName: 

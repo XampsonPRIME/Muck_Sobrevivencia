@@ -386,6 +386,34 @@ public class LanMultiplayerManager : MonoBehaviour
         return MultiplayerSceneSetCatalog.CaptureLoadedScenes();
     }
 
+    public bool TravelToSceneSet(string sceneSetId)
+    {
+        MultiplayerSceneSetState targetSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, null);
+        if (targetSceneSet == null)
+            return false;
+
+        if (Mode == SessionMode.Client)
+        {
+            StatusMessage = "Somente o host pode trocar de mapa";
+            return false;
+        }
+
+        bool applied = MultiplayerSceneSetCatalog.ApplyToRuntime(targetSceneSet);
+        if (!applied)
+            return false;
+
+        StatusMessage = $"Carregando pacote {MultiplayerSceneSetCatalog.BuildDisplayLabel(targetSceneSet)}...";
+
+        if (IsServerAuthority)
+        {
+            BroadcastCurrentSceneSet();
+            BroadcastWorldState();
+            UpdateDiscoveryAnnouncement();
+        }
+
+        return true;
+    }
+
     public bool StartDedicatedServer(int port, int? savedWorldSeed = null, string sceneName = null, string sceneSetId = null)
     {
         ShutdownSession();
@@ -1236,6 +1264,36 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
         }
 
+        if (entityKind == nameof(MushroomMonsterEnemy))
+        {
+            MushroomMonsterEnemy mushroomMonster = FindEntity<MushroomMonsterEnemy>(entityId);
+            if (mushroomMonster == null)
+                return;
+
+            mushroomMonster.ApplyNetworkHit(damage, out int goldAmount, out int xpAmount, out int remainingHealth, out bool destroyed);
+            BroadcastPacket(CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entityId,
+                entityKind = entityKind,
+                position = mushroomMonster != null ? mushroomMonster.transform.position : Vector3.zero,
+                rotation = mushroomMonster != null ? mushroomMonster.transform.rotation : Quaternion.identity,
+                level = 1,
+                health = remainingHealth,
+                destroyed = destroyed
+            }));
+
+            if (goldAmount > 0 || xpAmount > 0)
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    goldAmount = goldAmount,
+                    xpAmount = xpAmount,
+                    message = $"+{goldAmount} gold"
+                });
+
+            return;
+        }
+
         if (entityKind == nameof(ResourceNode))
         {
             ResourceNode node = FindEntity<ResourceNode>(entityId);
@@ -1395,6 +1453,18 @@ public class LanMultiplayerManager : MonoBehaviour
 
             if (miniKrug != null)
                 miniKrug.ApplyNetworkState(state.position, state.rotation, state.level, state.health, state.destroyed);
+
+            return;
+        }
+
+        if (state.entityKind == nameof(MushroomMonsterEnemy))
+        {
+            MushroomMonsterEnemy mushroomMonster = FindEntity<MushroomMonsterEnemy>(state.entityId);
+            if (mushroomMonster == null && !state.destroyed)
+                mushroomMonster = CreateRemoteMushroomMonster(state);
+
+            if (mushroomMonster != null)
+                mushroomMonster.ApplyNetworkState(state.position, state.rotation, state.level, state.health, state.destroyed);
 
             return;
         }
@@ -1709,6 +1779,25 @@ public class LanMultiplayerManager : MonoBehaviour
             }));
         }
 
+        MushroomMonsterEnemy[] mushroomMonsters = FindObjectsByType<MushroomMonsterEnemy>(FindObjectsSortMode.None);
+        for (int i = 0; i < mushroomMonsters.Length; i++)
+        {
+            LanNetworkEntity entity = mushroomMonsters[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(mushroomMonsters[i]);
+
+            BroadcastPacket(CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(MushroomMonsterEnemy),
+                position = mushroomMonsters[i].transform.position,
+                rotation = mushroomMonsters[i].transform.rotation,
+                level = 1,
+                health = mushroomMonsters[i].CurrentHealth,
+                destroyed = false
+            }));
+        }
+
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
@@ -1874,6 +1963,25 @@ public class LanMultiplayerManager : MonoBehaviour
             }));
         }
 
+        MushroomMonsterEnemy[] mushroomMonsters = FindObjectsByType<MushroomMonsterEnemy>(FindObjectsSortMode.None);
+        for (int i = 0; i < mushroomMonsters.Length; i++)
+        {
+            LanNetworkEntity entity = mushroomMonsters[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(mushroomMonsters[i]);
+
+            SendPacket(connection, CreatePacket("enemy_state", new LanEnemyState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(MushroomMonsterEnemy),
+                position = mushroomMonsters[i].transform.position,
+                rotation = mushroomMonsters[i].transform.rotation,
+                level = 1,
+                health = mushroomMonsters[i].CurrentHealth,
+                destroyed = false
+            }));
+        }
+
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
@@ -2002,6 +2110,12 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
         }
 
+        if (target is MushroomMonsterEnemy mushroomMonster)
+        {
+            mushroomMonster.PlayLocalHitFeedback(damage);
+            return;
+        }
+
         if (target is BossEnemy bossEnemy)
             bossEnemy.PlayLocalHitFeedback(damage);
     }
@@ -2066,6 +2180,23 @@ public class LanMultiplayerManager : MonoBehaviour
             miniKrug = miniKrugObject.AddComponent<MiniKrug>();
 
         return miniKrug;
+    }
+
+    MushroomMonsterEnemy CreateRemoteMushroomMonster(LanEnemyState state)
+    {
+        GameObject mushroomPrefab = Resources.Load<GameObject>("Enemies/MushroomMonster");
+        if (mushroomPrefab == null)
+            return null;
+
+        GameObject mushroomObject = Instantiate(mushroomPrefab, state.position, state.rotation);
+        mushroomObject.name = mushroomPrefab.name;
+        LanNetworkEntity.Ensure(mushroomObject.transform, state.entityId);
+
+        MushroomMonsterEnemy mushroomMonster = mushroomObject.GetComponent<MushroomMonsterEnemy>();
+        if (mushroomMonster == null)
+            mushroomMonster = mushroomObject.AddComponent<MushroomMonsterEnemy>();
+
+        return mushroomMonster;
     }
 
     public bool TryGetSuggestedEnemyLevel(Vector3 origin, out int level)
@@ -2307,6 +2438,9 @@ public class LanMultiplayerManager : MonoBehaviour
         if (target.GetComponentInParent<MiniKrug>() is MiniKrug miniKrug)
             return LanNetworkEntity.Ensure(miniKrug);
 
+        if (target.GetComponentInParent<MushroomMonsterEnemy>() is MushroomMonsterEnemy mushroomMonster)
+            return LanNetworkEntity.Ensure(mushroomMonster);
+
         if (target.GetComponentInParent<BossEnemy>() is BossEnemy boss)
             return LanNetworkEntity.Ensure(boss);
 
@@ -2326,6 +2460,9 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (target.GetComponentInParent<MiniKrug>() != null)
             return nameof(MiniKrug);
+
+        if (target.GetComponentInParent<MushroomMonsterEnemy>() != null)
+            return nameof(MushroomMonsterEnemy);
 
         if (target.GetComponentInParent<BossEnemy>() != null)
             return nameof(BossEnemy);
@@ -2407,6 +2544,9 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         if (enemy is MiniKrug miniKrug)
             return miniKrug.EnemyLevel;
+
+        if (enemy is MushroomMonsterEnemy)
+            return 1;
 
         if (enemy is BossEnemy bossEnemy)
             return bossEnemy.BossLevel;

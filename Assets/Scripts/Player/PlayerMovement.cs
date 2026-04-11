@@ -75,6 +75,7 @@ public class PlayerMovement : MonoBehaviour
     public float spawnRayDistance = 120f;
     public float spawnGroundPadding = 0.08f;
     public float spawnAirDropHeight = 10f;
+    public float voidRespawnY = -30f;
     public LayerMask spawnGroundMask = ~0;
 
     CharacterController controller;
@@ -208,6 +209,7 @@ public class PlayerMovement : MonoBehaviour
         HandleHunger();
         HandleThirst();
         HandleHealthRegeneration();
+        HandleWorldBoundsFailSafe();
 
         if (damageTestAction.WasPressedThisFrame())
         {
@@ -246,6 +248,33 @@ public class PlayerMovement : MonoBehaviour
 
         spawnPosition = safePosition;
         spawnRotation = rotation;
+        yRotation = transform.eulerAngles.y;
+        xRotation = thirdPerson ? thirdPersonPitch : 0f;
+        ApplyCameraPose();
+    }
+
+    public void WarpToPosition(Vector3 position, Quaternion rotation, bool updateSpawnPoint)
+    {
+        moveInput = Vector2.zero;
+        lookInput = Vector2.zero;
+        isRunning = false;
+        yVelocity = 0f;
+
+        if (controller != null)
+            controller.enabled = false;
+
+        Vector3 safePosition = ResolveSafeSpawnPosition(position);
+        transform.SetPositionAndRotation(safePosition, rotation);
+
+        if (controller != null)
+            controller.enabled = true;
+
+        if (updateSpawnPoint)
+        {
+            spawnPosition = safePosition;
+            spawnRotation = rotation;
+        }
+
         yRotation = transform.eulerAngles.y;
         xRotation = thirdPerson ? thirdPersonPitch : 0f;
         ApplyCameraPose();
@@ -686,6 +715,39 @@ public class PlayerMovement : MonoBehaviour
             targetLocalPosition,
             Time.deltaTime * 10f
         );
+    }
+
+    void HandleWorldBoundsFailSafe()
+    {
+        if (transform.position.y < voidRespawnY)
+        {
+            ForceSafeReposition();
+            return;
+        }
+
+        if (WorldGenerator.Instance == null || !WorldGenerator.Instance.TryGetPlayableBounds(out Bounds playableBounds))
+            return;
+
+        Vector3 position = transform.position;
+        float margin = 2f;
+        if (position.x < playableBounds.min.x - margin ||
+            position.x > playableBounds.max.x + margin ||
+            position.z < playableBounds.min.z - margin ||
+            position.z > playableBounds.max.z + margin)
+        {
+            ForceSafeReposition();
+        }
+    }
+
+    void ForceSafeReposition()
+    {
+        controller.enabled = false;
+        Vector3 safePosition = ResolveSafeSpawnPosition(spawnPosition);
+        transform.SetPositionAndRotation(safePosition, spawnRotation);
+        controller.enabled = true;
+        yVelocity = 0f;
+        moveInput = Vector2.zero;
+        lookInput = Vector2.zero;
     }
 
     Vector3 ResolveSafeSpawnPosition(Vector3 desiredPosition)

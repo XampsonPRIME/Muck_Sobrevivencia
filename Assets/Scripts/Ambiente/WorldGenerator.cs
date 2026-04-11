@@ -3,9 +3,12 @@ using System.Collections.Generic;
 
 public class WorldGenerator : MonoBehaviour
 {
+    public static WorldGenerator Instance { get; private set; }
+
     Transform player;
     RiverSystem riverSystem;
     DistantMountains distantMountains;
+    Transform worldBorderRoot;
 
     public GameObject chunkPrefab;
     public RiverSystem riverSystemPrefab;
@@ -17,6 +20,10 @@ public class WorldGenerator : MonoBehaviour
     public int maxChunkCreationsPerFrame = 1;
     public Vector2 worldCenter = Vector2.zero;
     public Vector2 worldSize = new Vector2(800f, 800f);
+    public bool createWorldBorder = true;
+    public float worldBorderInset = 20f;
+    public float worldBorderHeight = 120f;
+    public float worldBorderThickness = 12f;
 
     private readonly Dictionary<Vector2Int, GameObject> chunks = new Dictionary<Vector2Int, GameObject>();
     readonly Queue<Vector2Int> pendingChunkQueue = new Queue<Vector2Int>();
@@ -27,6 +34,10 @@ public class WorldGenerator : MonoBehaviour
 
     void Start()
     {
+        if (Instance != null && Instance != this)
+            return;
+
+        Instance = this;
         player = LanMultiplayerManager.FindWorldFocusTransform();
     }
 
@@ -84,6 +95,7 @@ public class WorldGenerator : MonoBehaviour
         initialized = true;
         riverSystem.Initialize(player.position);
         SetupDistantMountains();
+        BuildWorldBorder();
         UpdateChunkTargets(force: true);
     }
 
@@ -213,6 +225,63 @@ public class WorldGenerator : MonoBehaviour
                chunkWorldX < maxX &&
                chunkWorldZ >= minZ &&
                chunkWorldZ < maxZ;
+    }
+
+    public bool TryGetPlayableBounds(out Bounds bounds)
+    {
+        float inset = Mathf.Max(0f, worldBorderInset);
+        float innerWidth = Mathf.Max(1f, worldSize.x - inset * 2f);
+        float innerDepth = Mathf.Max(1f, worldSize.y - inset * 2f);
+        bounds = new Bounds(
+            new Vector3(worldCenter.x, 0f, worldCenter.y),
+            new Vector3(innerWidth, Mathf.Max(10f, worldBorderHeight), innerDepth)
+        );
+        return true;
+    }
+
+    void BuildWorldBorder()
+    {
+        if (!createWorldBorder)
+        {
+            if (worldBorderRoot != null)
+                Destroy(worldBorderRoot.gameObject);
+            return;
+        }
+
+        if (worldBorderRoot == null)
+        {
+            worldBorderRoot = new GameObject("WorldBorder").transform;
+            worldBorderRoot.SetParent(transform, false);
+        }
+
+        float inset = Mathf.Max(0f, worldBorderInset);
+        float thickness = Mathf.Max(1f, worldBorderThickness);
+        float height = Mathf.Max(20f, worldBorderHeight);
+        float halfWidth = Mathf.Max(1f, worldSize.x * 0.5f - inset);
+        float halfDepth = Mathf.Max(1f, worldSize.y * 0.5f - inset);
+        Vector3 center = new Vector3(worldCenter.x, height * 0.5f, worldCenter.y);
+
+        CreateOrUpdateBorderWall("NorthWall", worldBorderRoot, new Vector3(center.x, center.y, center.z + halfDepth), new Vector3(halfWidth * 2f, height, thickness));
+        CreateOrUpdateBorderWall("SouthWall", worldBorderRoot, new Vector3(center.x, center.y, center.z - halfDepth), new Vector3(halfWidth * 2f, height, thickness));
+        CreateOrUpdateBorderWall("EastWall", worldBorderRoot, new Vector3(center.x + halfWidth, center.y, center.z), new Vector3(thickness, height, halfDepth * 2f));
+        CreateOrUpdateBorderWall("WestWall", worldBorderRoot, new Vector3(center.x - halfWidth, center.y, center.z), new Vector3(thickness, height, halfDepth * 2f));
+    }
+
+    static void CreateOrUpdateBorderWall(string name, Transform parent, Vector3 position, Vector3 size)
+    {
+        Transform child = parent.Find(name);
+        GameObject wallObject = child != null ? child.gameObject : new GameObject(name);
+        wallObject.transform.SetParent(parent, false);
+        wallObject.transform.position = position;
+        wallObject.layer = 0;
+
+        BoxCollider collider = wallObject.GetComponent<BoxCollider>();
+        if (collider == null)
+            collider = wallObject.AddComponent<BoxCollider>();
+
+        collider.isTrigger = false;
+        collider.size = size;
+        collider.center = Vector3.zero;
     }
 
     void SetupDistantMountains()

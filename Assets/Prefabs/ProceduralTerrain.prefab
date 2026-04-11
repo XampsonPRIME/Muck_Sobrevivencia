@@ -130,6 +130,8 @@ MonoBehaviour:
   depth: 200
   terrainScale: 100
   heightMultiplier: 20
+  useHeightmapWhenAvailable: 1
+  worldHeightmap: {fileID: 0}
   desertX: 0.2
   desertZ: 0.3
   forestX: 0.7

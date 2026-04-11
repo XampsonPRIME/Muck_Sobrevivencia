@@ -3,6 +3,7 @@ using Unity.AI.Navigation;
 using System.Collections;
 using System.Collections.Generic;
 
+[ExecuteAlways]
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider))]
 public class ProceduralTerrain : MonoBehaviour
 {
@@ -18,6 +19,8 @@ public class ProceduralTerrain : MonoBehaviour
 
     public float terrainScale = 40f;
     public float heightMultiplier = 12f;
+    public bool useHeightmapWhenAvailable = true;
+    public WorldHeightmapData worldHeightmap;
 
     [Header("🌍 Biomas")]
     [Range(0f, 1f)] public float desertX = 0.2f;
@@ -97,15 +100,30 @@ public class ProceduralTerrain : MonoBehaviour
 
     List<Mountain> mountains = new List<Mountain>();
 
+    void OnEnable()
+    {
+        if (!Application.isPlaying)
+            GenerateEditorPreview();
+    }
+
     void Start()
     {
+        if (!Application.isPlaying)
+            return;
+
         SetupCenters();
         GenerateMountains();
-        GenerateTerrain();
+        GenerateTerrain(includeDetails: true);
         SpawnLake(); // 👈 IMPORTANTE
 
         if (navMeshSurface != null)
             StartCoroutine(BuildNavMeshDelayed());
+    }
+
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+            GenerateEditorPreview();
     }
 
     void SetupCenters()
@@ -163,6 +181,14 @@ public class ProceduralTerrain : MonoBehaviour
 
     float GetHeight(Vector2 point)
     {
+        WorldHeightmapData activeHeightmap = GetActiveHeightmap();
+        if (useHeightmapWhenAvailable &&
+            activeHeightmap != null &&
+            activeHeightmap.TrySampleHeight(new Vector2(transform.position.x + point.x, transform.position.z + point.y), out float sampledHeight))
+        {
+            return sampledHeight;
+        }
+
         float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
 
         h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
@@ -211,15 +237,32 @@ public class ProceduralTerrain : MonoBehaviour
         return h;
     }
 
-    void GenerateTerrain()
+    WorldHeightmapData GetActiveHeightmap()
+    {
+        return SceneTerrainContext.GetHeightmapForScene(gameObject.scene, worldHeightmap);
+    }
+
+    void GenerateEditorPreview()
+    {
+        if (Application.isPlaying)
+            return;
+
+        SetupCenters();
+        GenerateMountains();
+        GenerateTerrain(includeDetails: false);
+    }
+
+    void GenerateTerrain(bool includeDetails)
     {
         mesh = new Mesh();
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         GetComponent<MeshFilter>().mesh = mesh;
+        GetComponent<MeshRenderer>().sharedMaterial = GetComponent<MeshRenderer>().sharedMaterial;
 
         vertices = new Vector3[(width + 1) * (depth + 1)];
         colors = new Color[(width + 1) * (depth + 1)];
         uvs = new Vector2[(width + 1) * (depth + 1)];
+        lakePlaced = false;
 
         for (int z = 0, i = 0; z <= depth; z++)
         {
@@ -249,6 +292,10 @@ public class ProceduralTerrain : MonoBehaviour
         }
 
         BuildMesh();
+
+        if (!includeDetails)
+            return;
+
         SpawnVegetation();
         SpawnRockClusters();
     }

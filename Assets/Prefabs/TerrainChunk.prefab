@@ -129,6 +129,8 @@ MonoBehaviour:
   size: 50
   terrainScale: 40
   heightMultiplier: 8
+  useHeightmapWhenAvailable: 1
+  worldHeightmap: {fileID: 0}
   player: {fileID: 0}
   safeZoneRadius: 10
   biomeScale: 0.003
@@ -151,6 +153,12 @@ MonoBehaviour:
   - prefab: {fileID: 6459140991037640186, guid: 18da621a17ab246cba0ff6b4137ed2cf, type: 3}
     yOffset: 0
     biome: 1
+  - prefab: {fileID: 1749420383345158772, guid: 7e9362da8db664c9da5ffcd4668be754, type: 3}
+    yOffset: 0
+    biome: 3
+  - prefab: {fileID: 6459140991037640186, guid: 18da621a17ab246cba0ff6b4137ed2cf, type: 3}
+    yOffset: 0
+    biome: 3
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
   treeDensity: 0.01
   maxTreesPerChunk: 3

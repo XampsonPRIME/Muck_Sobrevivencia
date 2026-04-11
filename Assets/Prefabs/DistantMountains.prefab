@@ -105,7 +105,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DistantMountains
   followTarget: {fileID: 0}
   mountainCount: 18
-  ringRadius: 270
+  ringRadius: 230
   angleJitter: 5
   mountainWidthMin: 140
   mountainWidthMax: 240

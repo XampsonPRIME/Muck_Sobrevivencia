@@ -5,7 +5,6 @@ public static class RoadSystem
 {
     static readonly List<RoadPath> activeRoads = new List<RoadPath>();
     static bool defaultRoadInitialized;
-    static RoadMaskData cachedRoadMask;
 
     public static void Register(RoadPath road)
     {
@@ -135,9 +134,6 @@ public static class RoadSystem
 
     static RoadMaskData GetActiveRoadMask()
     {
-        if (cachedRoadMask == null)
-            cachedRoadMask = Resources.Load<RoadMaskData>("World/DefaultRoadMaskData");
-
-        return cachedRoadMask;
+        return SceneTerrainContext.GetActiveRoadMask();
     }
 }
