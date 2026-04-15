@@ -98,7 +98,7 @@ public class PlayerMagic : MonoBehaviour
         if (cooldownHudView != null)
             return;
 
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = SceneObjectCache.Find<Canvas>(gameObject.scene, true);
         if (canvas == null)
             return;
 

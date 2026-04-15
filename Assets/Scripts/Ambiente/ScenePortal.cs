@@ -30,7 +30,15 @@ public class ScenePortal : MonoBehaviour
         if (!CanTrigger())
             return;
 
-        if (other == null || other.GetComponentInParent<PlayerMovement>() == null)
+        if (other == null)
+            return;
+
+        PlayerMovement triggerPlayer = other.GetComponentInParent<PlayerMovement>();
+        if (triggerPlayer == null || LanMultiplayerManager.IsReplica(triggerPlayer))
+            return;
+
+        PlayerMovement localGameplayPlayer = LanMultiplayerManager.FindGameplayPlayer();
+        if (localGameplayPlayer != null && triggerPlayer != localGameplayPlayer)
             return;
 
         TryTravel();

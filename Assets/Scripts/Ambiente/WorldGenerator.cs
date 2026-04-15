@@ -7,6 +7,7 @@ public class WorldGenerator : MonoBehaviour
     Transform player;
     RiverSystem riverSystem;
     DistantMountains distantMountains;
+    Transform generatedWorldRoot;
 
     public GameObject chunkPrefab;
     public RiverSystem riverSystemPrefab;
@@ -23,6 +24,7 @@ public class WorldGenerator : MonoBehaviour
     Vector2Int lastPlayerChunk;
     bool hasLastPlayerChunk;
     bool initialized;
+    bool loggedMissingPlayerError;
 
     void Start()
     {
@@ -61,16 +63,8 @@ public class WorldGenerator : MonoBehaviour
     void InitializeWorld()
     {
         player = LanMultiplayerManager.FindWorldFocusTransform();
-        RiverSystem[] riverSystems = FindObjectsByType<RiverSystem>(FindObjectsSortMode.None);
-        riverSystem = null;
-        for (int i = 0; i < riverSystems.Length; i++)
-        {
-            if (riverSystems[i] != null && riverSystems[i].gameObject.scene == gameObject.scene)
-            {
-                riverSystem = riverSystems[i];
-                break;
-            }
-        }
+        EnsureGeneratedWorldRoot();
+        riverSystem = FindSceneComponent<RiverSystem>();
 
         if (riverSystem == null)
         {
@@ -79,12 +73,14 @@ public class WorldGenerator : MonoBehaviour
                 riverSystem = Instantiate(riverSystemPrefab, Vector3.zero, Quaternion.identity);
                 riverSystem.name = "RiverSystem";
                 SceneManager.MoveGameObjectToScene(riverSystem.gameObject, gameObject.scene);
+                riverSystem.transform.SetParent(generatedWorldRoot, true);
             }
             else
             {
                 GameObject riverObject = new GameObject("RiverSystem");
                 riverSystem = riverObject.AddComponent<RiverSystem>();
                 SceneManager.MoveGameObjectToScene(riverObject, gameObject.scene);
+                riverObject.transform.SetParent(generatedWorldRoot, true);
             }
         }
 
@@ -108,9 +104,15 @@ public class WorldGenerator : MonoBehaviour
     {
         if (player == null)
         {
-            Debug.LogError("PLAYER NÃO ATRIBUÍDO!");
+            if (!loggedMissingPlayerError)
+            {
+                Debug.LogWarning("WorldGenerator aguardando player para iniciar geração do mundo.", this);
+                loggedMissingPlayerError = true;
+            }
             return;
         }
+
+        loggedMissingPlayerError = false;
 
         Vector2Int playerChunk = GetPlayerChunkCoord();
 
@@ -186,6 +188,8 @@ public class WorldGenerator : MonoBehaviour
 
         GameObject chunk = Instantiate(chunkPrefab, position, Quaternion.identity);
         SceneManager.MoveGameObjectToScene(chunk, gameObject.scene);
+        EnsureGeneratedWorldRoot();
+        chunk.transform.SetParent(generatedWorldRoot, true);
 
         TerrainChunk terrain = chunk.GetComponent<TerrainChunk>();
 
@@ -206,7 +210,8 @@ public class WorldGenerator : MonoBehaviour
         if (!enableDistantMountains || player == null)
             return;
 
-        distantMountains = FindFirstObjectByType<DistantMountains>();
+        EnsureGeneratedWorldRoot();
+        distantMountains = FindSceneComponent<DistantMountains>();
         if (distantMountains == null)
         {
             if (distantMountainsPrefab != null)
@@ -214,15 +219,54 @@ public class WorldGenerator : MonoBehaviour
                 distantMountains = Instantiate(distantMountainsPrefab, Vector3.zero, Quaternion.identity);
                 distantMountains.name = "DistantMountains";
                 SceneManager.MoveGameObjectToScene(distantMountains.gameObject, gameObject.scene);
+                distantMountains.transform.SetParent(generatedWorldRoot, true);
             }
             else
             {
                 GameObject mountainObject = new GameObject("DistantMountains");
                 distantMountains = mountainObject.AddComponent<DistantMountains>();
                 SceneManager.MoveGameObjectToScene(mountainObject, gameObject.scene);
+                mountainObject.transform.SetParent(generatedWorldRoot, true);
             }
         }
 
         distantMountains.Initialize(player);
+    }
+
+    void EnsureGeneratedWorldRoot()
+    {
+        if (generatedWorldRoot != null)
+            return;
+
+        string rootName = $"GeneratedWorld_{gameObject.scene.name}";
+        GameObject[] roots = gameObject.scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            if (roots[i] != null && roots[i].name == rootName)
+            {
+                generatedWorldRoot = roots[i].transform;
+                return;
+            }
+        }
+
+        GameObject rootObject = new GameObject(rootName);
+        SceneManager.MoveGameObjectToScene(rootObject, gameObject.scene);
+        generatedWorldRoot = rootObject.transform;
+    }
+
+    T FindSceneComponent<T>() where T : Component
+    {
+        GameObject[] roots = gameObject.scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            if (roots[i] == null)
+                continue;
+
+            T component = roots[i].GetComponentInChildren<T>(true);
+            if (component != null)
+                return component;
+        }
+
+        return null;
     }
 }

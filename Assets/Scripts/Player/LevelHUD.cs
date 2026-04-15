@@ -44,7 +44,7 @@ public class LevelHUD : MonoBehaviour
 
     void EnsureUI()
     {
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = SceneObjectCache.Find<Canvas>(gameObject.scene, true);
         if (canvas == null)
             return;
 

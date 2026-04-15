@@ -97,7 +97,7 @@ public class PortalTravelManager : MonoBehaviour
             return;
         }
 
-        PlayerMovement player = FindFirstObjectByType<PlayerMovement>();
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
         if (player == null)
             return;
 
@@ -109,7 +109,7 @@ public class PortalTravelManager : MonoBehaviour
             desiredPosition = spawnPoint.transform.position;
             desiredRotation = spawnPoint.transform.rotation;
         }
-        else if (!TryFindFallbackGround(out desiredPosition))
+        else if (!TryFindFallbackGround(pendingTravel.sceneName, out desiredPosition))
         {
             return;
         }
@@ -152,7 +152,7 @@ public class PortalTravelManager : MonoBehaviour
         return false;
     }
 
-    bool TryFindFallbackGround(out Vector3 fallbackPosition)
+    bool TryFindFallbackGround(string sceneName, out Vector3 fallbackPosition)
     {
         Vector3[] samples =
         {
@@ -171,6 +171,12 @@ public class PortalTravelManager : MonoBehaviour
         {
             Vector3 rayOrigin = samples[i] + Vector3.up * 200f;
             if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 500f, ~0, QueryTriggerInteraction.Ignore))
+                continue;
+
+            if (!string.IsNullOrWhiteSpace(sceneName) &&
+                hit.collider != null &&
+                hit.collider.gameObject.scene.IsValid() &&
+                !string.Equals(hit.collider.gameObject.scene.name, sceneName, System.StringComparison.Ordinal))
                 continue;
 
             fallbackPosition = hit.point;

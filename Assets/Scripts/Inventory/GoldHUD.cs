@@ -35,7 +35,7 @@ public class GoldHUD : MonoBehaviour
 
     void Start()
     {
-        cycle = DayNightCycle.Instance ?? FindFirstObjectByType<DayNightCycle>();
+        cycle = DayNightCycle.Instance ?? SceneObjectCache.Find<DayNightCycle>(gameObject.scene, true);
         ResolvePlayerReferences();
         EnsureUI();
         HideOriginalClockTexts();
@@ -44,7 +44,7 @@ public class GoldHUD : MonoBehaviour
 
     void Update()
     {
-        cycle = DayNightCycle.Instance ?? FindFirstObjectByType<DayNightCycle>();
+        cycle = DayNightCycle.Instance ?? SceneObjectCache.Find<DayNightCycle>(gameObject.scene, true);
 
         ResolvePlayerReferences();
 
@@ -125,7 +125,7 @@ public class GoldHUD : MonoBehaviour
         if (cycle != null && cycle.dayText != null)
             return cycle.dayText.canvas != null ? cycle.dayText.canvas.rootCanvas : null;
 
-        return FindFirstObjectByType<Canvas>();
+        return SceneObjectCache.Find<Canvas>(gameObject.scene, true);
     }
 
     TextMeshProUGUI EnsureText(Transform parent, string objectName, Vector2 anchoredPosition, Vector2 size)

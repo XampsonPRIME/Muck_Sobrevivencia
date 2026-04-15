@@ -245,11 +245,8 @@ public class DayNightCycle : MonoBehaviour
 
     bool IsEnchantedForestScene()
     {
-        Scene owningScene = gameObject.scene;
-        if (owningScene.IsValid() && owningScene.isLoaded)
-            return string.Equals(owningScene.name, "EnchantedForest", System.StringComparison.Ordinal);
-
-        return string.Equals(SceneManager.GetActiveScene().name, "EnchantedForest", System.StringComparison.Ordinal);
+        string worldSceneName = SceneWorldDataResolver.ResolveWorldSceneName(gameObject.scene);
+        return string.Equals(worldSceneName, "EnchantedForest", System.StringComparison.Ordinal);
     }
 
     void EnsureEnchantedForestDust()

@@ -170,8 +170,9 @@ public class TerrainChunk : MonoBehaviour
 
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
-        GetComponent<MeshRenderer>().material = terrainMaterial;
-        ApplySceneTerrainPalette(GetComponent<MeshRenderer>());
+        MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
+        PrepareTerrainMaterial(meshRenderer);
+        ApplySceneTerrainPalette(meshRenderer);
         sceneHeightmapData = SceneWorldDataResolver.ResolveHeightmapData(gameObject.scene);
         sceneRoadMaskData = SceneWorldDataResolver.ResolveRoadMaskData(gameObject.scene);
         sceneRiverSystem = ResolveSceneRiverSystem();
@@ -223,13 +224,44 @@ public class TerrainChunk : MonoBehaviour
         StartCoroutine(GenerateChunkDetails(offset));
     }
 
+    void PrepareTerrainMaterial(MeshRenderer renderer)
+    {
+        if (renderer == null)
+            return;
+
+        if (terrainMaterial != null)
+        {
+            renderer.material = terrainMaterial;
+        }
+        else
+        {
+            Shader fallbackShader = Shader.Find("Custom/BiomeShader_URP") ??
+                                    Shader.Find("Universal Render Pipeline/Lit") ??
+                                    Shader.Find("Standard");
+
+            if (fallbackShader != null)
+                renderer.material = new Material(fallbackShader);
+        }
+
+        Material runtimeMaterial = renderer.material;
+        if (runtimeMaterial == null)
+            return;
+
+        if (!runtimeMaterial.HasProperty("_UseFlatColors"))
+        {
+            Shader biomeShader = Shader.Find("Custom/BiomeShader_URP");
+            if (biomeShader != null)
+                runtimeMaterial.shader = biomeShader;
+        }
+    }
+
     void ApplySceneTerrainPalette(MeshRenderer renderer)
     {
         if (renderer == null)
             return;
 
         Material runtimeMaterial = renderer.material;
-        if (runtimeMaterial == null)
+        if (runtimeMaterial == null || !runtimeMaterial.HasProperty("_UseFlatColors"))
             return;
 
         string sceneName = gameObject.scene.name;

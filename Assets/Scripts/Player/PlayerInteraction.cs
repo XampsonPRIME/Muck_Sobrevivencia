@@ -145,7 +145,7 @@ public class PlayerInteraction : MonoBehaviour
             inventory = GetComponent<Inventory>();
 
         if (hotbar == null)
-            hotbar = FindFirstObjectByType<Hotbar>();
+            hotbar = SceneObjectCache.Find<Hotbar>(gameObject.scene, true);
 
         if (cameraHolder == null && playerMovement != null)
             cameraHolder = playerMovement.cameraHolder;
@@ -367,7 +367,7 @@ public class PlayerInteraction : MonoBehaviour
         {
             deathLoot.Collect(inventory, hotbar);
 
-            InventoryUI inventoryUi = FindFirstObjectByType<InventoryUI>();
+            InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
             if (inventoryUi != null)
                 inventoryUi.Refresh();
 
@@ -385,7 +385,7 @@ public class PlayerInteraction : MonoBehaviour
         {
             magicPickup.Collect(inventory, hotbar);
 
-            InventoryUI inventoryUi = FindFirstObjectByType<InventoryUI>();
+            InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
             if (inventoryUi != null)
                 inventoryUi.Refresh();
 

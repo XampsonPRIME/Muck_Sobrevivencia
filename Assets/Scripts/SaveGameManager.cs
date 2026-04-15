@@ -613,8 +613,8 @@ public class SaveGameManager : MonoBehaviour
         }
 
         inventoryUI?.Refresh();
-        FindFirstObjectByType<GoldHUD>()?.Refresh();
-        FindFirstObjectByType<LevelHUD>()?.Refresh();
+        SceneObjectCache.Find<GoldHUD>(gameObject.scene, true)?.Refresh();
+        SceneObjectCache.Find<LevelHUD>(gameObject.scene, true)?.Refresh();
 
         bool wasPaused = GameState.IsPaused;
         if (wasPaused)
@@ -725,16 +725,20 @@ public class SaveGameManager : MonoBehaviour
             playerMovement = LanMultiplayerManager.FindGameplayPlayer();
 
         if (playerInteraction == null)
-            playerInteraction = playerMovement != null ? playerMovement.GetComponent<PlayerInteraction>() : FindFirstObjectByType<PlayerInteraction>();
+            playerInteraction = playerMovement != null
+                ? playerMovement.GetComponent<PlayerInteraction>()
+                : SceneObjectCache.Find<PlayerInteraction>(gameObject.scene, true);
 
         if (inventory == null)
-            inventory = playerMovement != null ? playerMovement.GetComponent<Inventory>() : FindFirstObjectByType<Inventory>();
+            inventory = playerMovement != null
+                ? playerMovement.GetComponent<Inventory>()
+                : SceneObjectCache.Find<Inventory>(gameObject.scene, true);
 
         if (hotbar == null)
-            hotbar = FindFirstObjectByType<Hotbar>();
+            hotbar = SceneObjectCache.Find<Hotbar>(gameObject.scene, true);
 
         if (dayNightCycle == null)
-            dayNightCycle = FindFirstObjectByType<DayNightCycle>();
+            dayNightCycle = SceneObjectCache.Find<DayNightCycle>(gameObject.scene, true);
 
         if (progression == null && playerMovement != null)
             progression = playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
@@ -743,7 +747,7 @@ public class SaveGameManager : MonoBehaviour
             playerMagic = playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
 
         if (inventoryUI == null)
-            inventoryUI = FindFirstObjectByType<InventoryUI>();
+            inventoryUI = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
     }
 
     void ExitLobby()
