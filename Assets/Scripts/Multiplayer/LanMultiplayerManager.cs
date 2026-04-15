@@ -386,6 +386,30 @@ public class LanMultiplayerManager : MonoBehaviour
         return MultiplayerSceneSetCatalog.CaptureLoadedScenes();
     }
 
+    public bool TravelToSceneSet(string sceneSetId, string fallbackSceneName = null)
+    {
+        MultiplayerSceneSetState targetSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, fallbackSceneName);
+        if (targetSceneSet == null)
+            return false;
+
+        if (Mode == SessionMode.Client)
+        {
+            StatusMessage = "A troca de mapa precisa ser feita pelo host.";
+            return false;
+        }
+
+        if (!MultiplayerSceneSetCatalog.ApplyToRuntime(targetSceneSet))
+            return false;
+
+        if (IsServerAuthority && IsMultiplayerActive)
+        {
+            BroadcastCurrentSceneSet();
+            UpdateDiscoveryAnnouncement();
+        }
+
+        return true;
+    }
+
     public bool StartDedicatedServer(int port, int? savedWorldSeed = null, string sceneName = null, string sceneSetId = null)
     {
         ShutdownSession();

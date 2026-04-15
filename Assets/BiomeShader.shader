@@ -5,6 +5,10 @@ Shader "Custom/BiomeShader_URP"
         _SandTex ("Sand", 2D) = "white" {}
         _GrassTex ("Grass", 2D) = "white" {}
         _SnowTex ("Snow", 2D) = "white" {}
+        _SandColor ("Sand Color", Color) = (0.82, 0.76, 0.52, 1)
+        _GrassColor ("Grass Color", Color) = (0.46, 0.67, 0.28, 1)
+        _SnowColor ("Snow Color", Color) = (0.88, 0.92, 0.96, 1)
+        _UseFlatColors ("Use Flat Colors", Float) = 0
     }
 
     SubShader
@@ -43,6 +47,10 @@ Shader "Custom/BiomeShader_URP"
             SAMPLER(sampler_GrassTex);
             TEXTURE2D(_SnowTex);
             SAMPLER(sampler_SnowTex);
+            half4 _SandColor;
+            half4 _GrassColor;
+            half4 _SnowColor;
+            float _UseFlatColors;
 
             Varyings vert(Attributes input)
             {
@@ -59,6 +67,10 @@ Shader "Custom/BiomeShader_URP"
                 half3 sand = SAMPLE_TEXTURE2D(_SandTex, sampler_SandTex, input.uv).rgb;
                 half3 grass = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, input.uv).rgb;
                 half3 snow = SAMPLE_TEXTURE2D(_SnowTex, sampler_SnowTex, input.uv).rgb;
+
+                sand = lerp(sand, _SandColor.rgb, saturate(_UseFlatColors));
+                grass = lerp(grass, _GrassColor.rgb, saturate(_UseFlatColors));
+                snow = lerp(snow, _SnowColor.rgb, saturate(_UseFlatColors));
 
                 half3 mixed = lerp(sand, grass, saturate(input.color.g));
                 mixed = lerp(mixed, snow, saturate(input.color.r));
@@ -83,6 +95,10 @@ Shader "Custom/BiomeShader_URP"
             sampler2D _SandTex;
             sampler2D _GrassTex;
             sampler2D _SnowTex;
+            fixed4 _SandColor;
+            fixed4 _GrassColor;
+            fixed4 _SnowColor;
+            float _UseFlatColors;
 
             struct appdata
             {
@@ -112,6 +128,10 @@ Shader "Custom/BiomeShader_URP"
                 fixed3 sand = tex2D(_SandTex, input.uv).rgb;
                 fixed3 grass = tex2D(_GrassTex, input.uv).rgb;
                 fixed3 snow = tex2D(_SnowTex, input.uv).rgb;
+
+                sand = lerp(sand, _SandColor.rgb, saturate(_UseFlatColors));
+                grass = lerp(grass, _GrassColor.rgb, saturate(_UseFlatColors));
+                snow = lerp(snow, _SnowColor.rgb, saturate(_UseFlatColors));
 
                 fixed3 mixed = lerp(sand, grass, saturate(input.color.g));
                 mixed = lerp(mixed, snow, saturate(input.color.r));

@@ -251,6 +251,40 @@ public class PlayerMovement : MonoBehaviour
         ApplyCameraPose();
     }
 
+    public bool TryGetSafeSpawnPosition(Vector3 desiredPosition, out Vector3 safePosition)
+    {
+        if (TryGetGroundedSpawnPosition(desiredPosition, out safePosition))
+            return true;
+
+        Vector3 fallbackPosition = transform.position;
+        return TryGetGroundedSpawnPosition(fallbackPosition, out safePosition);
+    }
+
+    public bool WarpToSafePosition(Vector3 desiredPosition, Quaternion rotation)
+    {
+        if (!TryGetSafeSpawnPosition(desiredPosition, out Vector3 safePosition))
+            return false;
+
+        if (controller != null)
+            controller.enabled = false;
+
+        transform.SetPositionAndRotation(safePosition, rotation);
+
+        if (controller != null)
+            controller.enabled = true;
+
+        spawnPosition = safePosition;
+        spawnRotation = rotation;
+        yVelocity = 0f;
+        moveInput = Vector2.zero;
+        lookInput = Vector2.zero;
+        isRunning = false;
+        yRotation = transform.eulerAngles.y;
+        xRotation = thirdPerson ? thirdPersonPitch : 0f;
+        ApplyCameraPose();
+        return true;
+    }
+
     public void ResetToFreshStart()
     {
         GameState.IsPlayerDead = false;

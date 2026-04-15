@@ -37,6 +37,13 @@ public static class MultiplayerSceneSetCatalog
             displayName = "BossFight",
             activeSceneName = "Main",
             sceneNames = new[] { "Main", "PlayerTest", "Boss1" }
+        },
+        new SceneSetDefinition
+        {
+            id = "EnchantedForest",
+            displayName = "Floresta Encantada",
+            activeSceneName = "EnchantedForest",
+            sceneNames = new[] { "EnchantedForest", "PlayerTest" }
         }
     };
 

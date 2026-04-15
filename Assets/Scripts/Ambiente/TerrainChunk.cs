@@ -59,8 +59,8 @@ public class TerrainChunk : MonoBehaviour
     public TreeData[] trees;
     public GameObject mushroomPrefab;
 
-    public float treeDensity = 0.38f;
-    public int maxTreesPerChunk = 48;
+    public float treeDensity = 0.12f;
+    public int maxTreesPerChunk = 22;
     public float mushroomDensity = 0.001f;
     public int rockClusterCount = 3;
     public int generationYieldInterval = 120;
@@ -83,7 +83,7 @@ public class TerrainChunk : MonoBehaviour
     public float riverMaxSegmentGap = 4.5f;
 
     public float minDistanceBetweenObjects = 12f;
-    public float minTreeDistance = 4.5f;
+    public float minTreeDistance = 6.2f;
 
     [Header("Rochas")]
     public GameObject rockSmallPrefab;
@@ -107,6 +107,11 @@ public class TerrainChunk : MonoBehaviour
 
     [Header("Material")]
     public Material terrainMaterial;
+
+    static readonly int UseFlatColorsId = Shader.PropertyToID("_UseFlatColors");
+    static readonly int SandColorId = Shader.PropertyToID("_SandColor");
+    static readonly int GrassColorId = Shader.PropertyToID("_GrassColor");
+    static readonly int SnowColorId = Shader.PropertyToID("_SnowColor");
 
     bool alreadyGenerated = false;
 
@@ -153,6 +158,7 @@ public class TerrainChunk : MonoBehaviour
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
         GetComponent<MeshRenderer>().material = terrainMaterial;
+        ApplySceneTerrainPalette(GetComponent<MeshRenderer>());
 
         vertices = new Vector3[(size + 1) * (size + 1)];
         colors = new Color[vertices.Length];
@@ -196,6 +202,28 @@ public class TerrainChunk : MonoBehaviour
 
         BuildMesh();
         StartCoroutine(GenerateChunkDetails(offset));
+    }
+
+    void ApplySceneTerrainPalette(MeshRenderer renderer)
+    {
+        if (renderer == null)
+            return;
+
+        Material runtimeMaterial = renderer.material;
+        if (runtimeMaterial == null)
+            return;
+
+        string sceneName = gameObject.scene.name;
+        if (string.Equals(sceneName, "EnchantedForest", System.StringComparison.Ordinal))
+        {
+            runtimeMaterial.SetFloat(UseFlatColorsId, 1f);
+            runtimeMaterial.SetColor(SandColorId, new Color(0.74f, 0.9f, 0.5f, 1f));
+            runtimeMaterial.SetColor(GrassColorId, new Color(0.68f, 0.84f, 0.44f, 1f));
+            runtimeMaterial.SetColor(SnowColorId, new Color(0.82f, 0.95f, 0.72f, 1f));
+            return;
+        }
+
+        runtimeMaterial.SetFloat(UseFlatColorsId, 0f);
     }
 
     IEnumerator GenerateChunkDetails(Vector2 offset)
@@ -642,7 +670,7 @@ public class TerrainChunk : MonoBehaviour
         int iterationsSinceYield = 0;
 
 
-        for (int i = 0; i < vertices.Length; i += 4)
+        for (int i = 0; i < vertices.Length; i += 2)
         {
             iterationsSinceYield++;
             if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
@@ -664,7 +692,7 @@ public class TerrainChunk : MonoBehaviour
             if (player != null && Vector3.Distance(worldPos, player.position) < forwardSafeDistance && IsInPlayerPath(worldPos))
                 continue;
 
-            if (normal.y < 0.85f)
+            if (normal.y < 0.78f)
                 continue;
 
             Vector2 point = new Vector2(pos.x + offset.x, pos.z + offset.y);
@@ -677,7 +705,7 @@ public class TerrainChunk : MonoBehaviour
 
 
 
-            if (biome == BiomeType.Forest && cluster < 0.32f)
+            if (biome == BiomeType.Forest && cluster < 0.18f)
                 continue;
 
             float density = treeDensity;
