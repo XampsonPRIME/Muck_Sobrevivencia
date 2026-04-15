@@ -58,6 +58,12 @@ public class TerrainChunk : MonoBehaviour
     [Header("Vegetação")]
     public TreeData[] trees;
     public GameObject mushroomPrefab;
+    public GameObject enchantedForestMushroomSinglePrefab;
+    public GameObject enchantedForestMushroomClusterPrefab;
+    [Range(0f, 1f)] public float enchantedForestClusterChance = 0.35f;
+    public Vector2 enchantedForestMushroomScaleRange = new Vector2(0.8f, 1.25f);
+    public float enchantedForestMushroomYOffset = 0.08f;
+    public float enchantedForestMushroomMinDistance = 3.6f;
 
     public float treeDensity = 0.12f;
     public int maxTreesPerChunk = 22;
@@ -129,6 +135,8 @@ public class TerrainChunk : MonoBehaviour
     List<Vector3> usedPositions = new List<Vector3>();
     List<Vector3> cowGroupPositions = new List<Vector3>();
     static Material riverMaterial;
+    static GameObject cachedEnchantedForestSingleMushroom;
+    static GameObject cachedEnchantedForestClusterMushroom;
 
     int BuildChunkSeed(Vector2 offset, int salt)
     {
@@ -240,6 +248,9 @@ public class TerrainChunk : MonoBehaviour
 
     BiomeType GetBiome(Vector2 point)
     {
+        if (IsEnchantedForestScene())
+            return BiomeType.Forest;
+
         float biome = Mathf.PerlinNoise(point.x * biomeScale, point.y * biomeScale);
 
         if (biome < 0.33f)
@@ -709,6 +720,8 @@ public class TerrainChunk : MonoBehaviour
                 continue;
 
             float density = treeDensity;
+            int maxTreesForChunk = maxTreesPerChunk;
+            float minTreeSpacing = minTreeDistance;
 
             switch (biome)
             {
@@ -725,9 +738,16 @@ public class TerrainChunk : MonoBehaviour
                     break;
             }
 
+            if (IsEnchantedForestScene() && biome == BiomeType.Forest)
+            {
+                density = Mathf.Clamp01(density * 1.55f);
+                maxTreesForChunk = Mathf.Max(maxTreesPerChunk, 34);
+                minTreeSpacing = Mathf.Min(minTreeDistance, 5f);
+            }
+
 
             // 🌲 ÁRVORES
-            if (treeCount < maxTreesPerChunk && rng.Value() < density)
+            if (treeCount < maxTreesForChunk && rng.Value() < density)
             {
                 List<TreeData> validTrees = new List<TreeData>();
 
@@ -745,7 +765,7 @@ public class TerrainChunk : MonoBehaviour
                     TreeData selected = validTrees[rng.Range(0, validTrees.Count)];
                     Vector3 groundPoint = GetGroundPoint(worldPos);
 
-                    if (IsTooClose(groundPoint, minTreeDistance))
+                    if (IsTooClose(groundPoint, minTreeSpacing))
                         continue;
 
                     GameObject tree = Instantiate(
@@ -763,8 +783,17 @@ public class TerrainChunk : MonoBehaviour
             }
 
             // 🍄
-            if (biome == BiomeType.Forest && rng.Value() < mushroomDensity) // chance do cluster
+            if (!IsEnchantedForestScene())
+                continue;
+
+            float mushroomSpawnChance = Mathf.Clamp01(mushroomDensity * 8f);
+            if (biome == BiomeType.Forest && rng.Value() < mushroomSpawnChance)
             {
+                if (IsEnchantedForestScene() && TrySpawnEnchantedForestMushroom(rng, worldPos))
+                {
+                    continue;
+                }
+
                 int mushroomCount = 3;
 
                 for (int m = 0; m < mushroomCount; m++)
@@ -778,7 +807,6 @@ public class TerrainChunk : MonoBehaviour
                     Vector3 finalPos = worldPos + offsetPos;
                     Vector3 finalGroundPoint = GetGroundPoint(finalPos);
 
-                    // 🚫 evita sobreposição
                     if (IsTooClose(finalGroundPoint))
                         continue;
 
@@ -793,6 +821,76 @@ public class TerrainChunk : MonoBehaviour
                 }
             }
         }
+    }
+
+    bool TrySpawnEnchantedForestMushroom(ChunkRandom rng, Vector3 worldPos)
+    {
+        GameObject mushroomToSpawn = rng.Value() < enchantedForestClusterChance
+            ? GetEnchantedForestClusterMushroomPrefab()
+            : GetEnchantedForestSingleMushroomPrefab();
+
+        if (mushroomToSpawn == null)
+            return false;
+
+        Vector3 offsetPos = new Vector3(
+            rng.Range(-2.4f, 2.4f),
+            0f,
+            rng.Range(-2.4f, 2.4f)
+        );
+
+        Vector3 finalGroundPoint = GetGroundPoint(worldPos + offsetPos);
+        if (IsTooClose(finalGroundPoint, enchantedForestMushroomMinDistance))
+            return false;
+
+        GameObject mushroomInstance = Instantiate(
+            mushroomToSpawn,
+            finalGroundPoint + Vector3.up * enchantedForestMushroomYOffset,
+            Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
+            transform
+        );
+
+        float minScale = Mathf.Min(enchantedForestMushroomScaleRange.x, enchantedForestMushroomScaleRange.y);
+        float maxScale = Mathf.Max(enchantedForestMushroomScaleRange.x, enchantedForestMushroomScaleRange.y);
+        float scaleMultiplier = rng.Range(minScale, maxScale);
+        mushroomInstance.transform.localScale *= scaleMultiplier;
+
+        if (mushroomInstance.GetComponent<BreathingScale>() == null)
+        {
+            BreathingScale breathing = mushroomInstance.AddComponent<BreathingScale>();
+            breathing.speed = rng.Range(0.9f, 1.5f);
+            breathing.amplitude = rng.Range(0.03f, 0.07f);
+            breathing.verticalBias = 1.1f;
+        }
+
+        usedPositions.Add(finalGroundPoint);
+        return true;
+    }
+
+    GameObject GetEnchantedForestSingleMushroomPrefab()
+    {
+        if (enchantedForestMushroomSinglePrefab != null)
+            return enchantedForestMushroomSinglePrefab;
+
+        if (cachedEnchantedForestSingleMushroom == null)
+            cachedEnchantedForestSingleMushroom = Resources.Load<GameObject>("World/Scenes/EnchantedForest/cocumelom");
+
+        return cachedEnchantedForestSingleMushroom;
+    }
+
+    GameObject GetEnchantedForestClusterMushroomPrefab()
+    {
+        if (enchantedForestMushroomClusterPrefab != null)
+            return enchantedForestMushroomClusterPrefab;
+
+        if (cachedEnchantedForestClusterMushroom == null)
+            cachedEnchantedForestClusterMushroom = Resources.Load<GameObject>("World/Scenes/EnchantedForest/cocumeloscluster");
+
+        return cachedEnchantedForestClusterMushroom;
+    }
+
+    bool IsEnchantedForestScene()
+    {
+        return string.Equals(gameObject.scene.name, "EnchantedForest", System.StringComparison.Ordinal);
     }
 
     bool IsTooClose(Vector3 pos, float minDistance = -1f)

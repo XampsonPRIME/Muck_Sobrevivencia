@@ -367,6 +367,10 @@ public class LanMultiplayerManager : MonoBehaviour
     public bool StartSolo()
     {
         ShutdownSession();
+        MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
+        if (startupSceneSet != null)
+            MultiplayerSceneSetCatalog.ApplyToRuntime(startupSceneSet);
+
         worldSeed = Environment.TickCount;
         SessionId = null;
         Mode = SessionMode.Solo;
@@ -431,7 +435,7 @@ public class LanMultiplayerManager : MonoBehaviour
             Mode = SessionMode.DedicatedServer;
             State = SessionState.Ready;
             LastErrorMessage = null;
-            MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, sceneName);
+            MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
             StatusMessage = $"Servidor dedicado ativo em {CurrentAddress}:{CurrentPort} [{SessionId}]";
             knownStates.Clear();
 
@@ -463,6 +467,10 @@ public class LanMultiplayerManager : MonoBehaviour
     public bool StartHost(int port, int? savedWorldSeed)
     {
         ShutdownSession();
+        MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
+        if (startupSceneSet != null)
+            MultiplayerSceneSetCatalog.ApplyToRuntime(startupSceneSet);
+
         ResolveLocalPlayer();
 
         try

@@ -47,6 +47,11 @@ public static class MultiplayerSceneSetCatalog
         }
     };
 
+    public static MultiplayerSceneSetState GetDefaultStartupState()
+    {
+        return CreateFromDefinition(FindById("Overworld"));
+    }
+
     public static MultiplayerSceneSetState CaptureLoadedScenes()
     {
         List<string> loadedSceneNames = new List<string>();
@@ -87,6 +92,8 @@ public static class MultiplayerSceneSetCatalog
 
     public static MultiplayerSceneSetState ResolveStartupState(string sceneSetId, string sceneName)
     {
+        MultiplayerSceneSetState defaultState = GetDefaultStartupState();
+
         if (!string.IsNullOrWhiteSpace(sceneSetId))
         {
             SceneSetDefinition definition = FindById(sceneSetId);
@@ -107,7 +114,7 @@ public static class MultiplayerSceneSetCatalog
             });
         }
 
-        return CaptureLoadedScenes();
+        return defaultState ?? CaptureLoadedScenes();
     }
 
     public static MultiplayerSceneSetState Normalize(MultiplayerSceneSetState state)
@@ -178,10 +185,17 @@ public static class MultiplayerSceneSetCatalog
             return false;
 
         string primarySceneName = ResolveActiveSceneName(normalized.activeSceneName, normalized.sceneNames);
+        List<string> loadedSceneNamesBefore = GetLoadedSceneNames();
         bool primaryLoaded = IsSceneLoaded(primarySceneName);
 
         if (!primaryLoaded)
-            SceneManager.LoadScene(primarySceneName, LoadSceneMode.Single);
+        {
+            LoadSceneMode loadMode = loadedSceneNamesBefore.Count == 0
+                ? LoadSceneMode.Single
+                : LoadSceneMode.Additive;
+
+            SceneManager.LoadScene(primarySceneName, loadMode);
+        }
 
         for (int i = 0; i < normalized.sceneNames.Length; i++)
         {

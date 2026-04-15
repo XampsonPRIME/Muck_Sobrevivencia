@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 public class WorldGenerator : MonoBehaviour
 {
@@ -68,11 +69,13 @@ public class WorldGenerator : MonoBehaviour
             {
                 riverSystem = Instantiate(riverSystemPrefab, Vector3.zero, Quaternion.identity);
                 riverSystem.name = "RiverSystem";
+                SceneManager.MoveGameObjectToScene(riverSystem.gameObject, gameObject.scene);
             }
             else
             {
                 GameObject riverObject = new GameObject("RiverSystem");
                 riverSystem = riverObject.AddComponent<RiverSystem>();
+                SceneManager.MoveGameObjectToScene(riverObject, gameObject.scene);
             }
         }
 
@@ -173,6 +176,7 @@ public class WorldGenerator : MonoBehaviour
         Vector3 position = new Vector3(coord.x * chunkSize, 0, coord.y * chunkSize);
 
         GameObject chunk = Instantiate(chunkPrefab, position, Quaternion.identity);
+        SceneManager.MoveGameObjectToScene(chunk, gameObject.scene);
 
         TerrainChunk terrain = chunk.GetComponent<TerrainChunk>();
 
@@ -200,11 +204,13 @@ public class WorldGenerator : MonoBehaviour
             {
                 distantMountains = Instantiate(distantMountainsPrefab, Vector3.zero, Quaternion.identity);
                 distantMountains.name = "DistantMountains";
+                SceneManager.MoveGameObjectToScene(distantMountains.gameObject, gameObject.scene);
             }
             else
             {
                 GameObject mountainObject = new GameObject("DistantMountains");
                 distantMountains = mountainObject.AddComponent<DistantMountains>();
+                SceneManager.MoveGameObjectToScene(mountainObject, gameObject.scene);
             }
         }
 

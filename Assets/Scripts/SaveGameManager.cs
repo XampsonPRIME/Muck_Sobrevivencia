@@ -248,7 +248,7 @@ public class SaveGameManager : MonoBehaviour
         if (data == null)
             return false;
 
-        MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState("Overworld", "Main");
+        MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
         if (startupSceneSet == null)
             return false;
 
@@ -542,8 +542,10 @@ public class SaveGameManager : MonoBehaviour
         playerMagic.LoadState(data.hasUnlockedAreaMagic);
 
         Quaternion rotation = Quaternion.Euler(0f, data.playerRotY, 0f);
+        Vector3 savedPosition = new Vector3(data.playerPosX, data.playerPosY, data.playerPosZ);
+        ResolveSavedStartTransform(data.sceneName, ref savedPosition, ref rotation);
         playerMovement.ApplySavedState(
-            new Vector3(data.playerPosX, data.playerPosY, data.playerPosZ),
+            savedPosition,
             rotation,
             data.thirdPerson,
             data.health,
@@ -752,6 +754,22 @@ public class SaveGameManager : MonoBehaviour
         Cursor.visible = false;
     }
 
+    void ResolveSavedStartTransform(string savedSceneName, ref Vector3 position, ref Quaternion rotation)
+    {
+        if (string.Equals(savedSceneName, "Main", StringComparison.Ordinal))
+            return;
+
+        if (playerMovement != null)
+        {
+            position = playerMovement.transform.position;
+            rotation = playerMovement.transform.rotation;
+            return;
+        }
+
+        position = Vector3.zero;
+        rotation = Quaternion.identity;
+    }
+
     void QueueClientSessionLoadIfAvailable(LanMultiplayerManager manager)
     {
         if (manager == null || manager.Mode != LanMultiplayerManager.SessionMode.Client || !manager.IsSessionReady)
@@ -795,8 +813,14 @@ public class SaveGameManager : MonoBehaviour
         playerMagic.LoadState(pendingMultiplayerSessionLoad.hasUnlockedAreaMagic);
 
         Quaternion rotation = Quaternion.Euler(0f, pendingMultiplayerSessionLoad.playerRotY, 0f);
+        Vector3 savedPosition = new Vector3(
+            pendingMultiplayerSessionLoad.playerPosX,
+            pendingMultiplayerSessionLoad.playerPosY,
+            pendingMultiplayerSessionLoad.playerPosZ
+        );
+        ResolveSavedStartTransform(pendingMultiplayerSessionLoad.sceneName, ref savedPosition, ref rotation);
         playerMovement.ApplySavedState(
-            new Vector3(pendingMultiplayerSessionLoad.playerPosX, pendingMultiplayerSessionLoad.playerPosY, pendingMultiplayerSessionLoad.playerPosZ),
+            savedPosition,
             rotation,
             pendingMultiplayerSessionLoad.thirdPerson,
             pendingMultiplayerSessionLoad.health,
@@ -849,8 +873,14 @@ public class SaveGameManager : MonoBehaviour
         playerMagic.LoadState(pendingClientSessionLoad.hasUnlockedAreaMagic);
 
         Quaternion rotation = Quaternion.Euler(0f, pendingClientSessionLoad.playerRotY, 0f);
+        Vector3 savedPosition = new Vector3(
+            pendingClientSessionLoad.playerPosX,
+            pendingClientSessionLoad.playerPosY,
+            pendingClientSessionLoad.playerPosZ
+        );
+        ResolveSavedStartTransform(pendingClientSessionLoad.sceneName, ref savedPosition, ref rotation);
         playerMovement.ApplySavedState(
-            new Vector3(pendingClientSessionLoad.playerPosX, pendingClientSessionLoad.playerPosY, pendingClientSessionLoad.playerPosZ),
+            savedPosition,
             rotation,
             pendingClientSessionLoad.thirdPerson,
             pendingClientSessionLoad.health,
