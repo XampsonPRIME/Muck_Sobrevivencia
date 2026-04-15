@@ -238,11 +238,11 @@ public class ProceduralTerrain : MonoBehaviour
                 float dSnow = Vector2.Distance(p, snowCenter);
 
                 if (dSnow < snowRadius)
-                    colors[i] = new Color(1, 0, 0); // neve
+                    colors[i] = new Color(1, 0, 0, 0); // neve
                 else if (dDesert < dForest && dDesert < dDense)
-                    colors[i] = new Color(0, 0, 0); // deserto
+                    colors[i] = new Color(0, 0, 0, 0); // deserto
                 else
-                    colors[i] = new Color(0, 1, 0); // floresta
+                    colors[i] = new Color(0, 1, 0, 0); // floresta
 
                 i++;
             }

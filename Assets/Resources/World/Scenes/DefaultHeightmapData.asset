@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 194e2267780844eb98d72d7e0fcf73b2, type: 3}
+  m_Name: DefaultHeightmapData
+  m_EditorClassIdentifier: Assembly-CSharp::WorldHeightmapData
+  heightmap: {fileID: 2800000, guid: e2a78cd06eb6045929a4ef8e0afd0544, type: 3}
+  worldOrigin: {x: -400, y: -400}
+  worldSize: {x: 800, y: 800}
+  minHeight: 0
+  maxHeight: 14
+  clampOutsideBounds: 1
+  applyRiverCarving: 1
+  riverCarvingStrength: 1
+  riverWidthScale: 0.5
+  riverWaterInsetScale: 0.52
+  applyRoadFlattening: 0
+  heightResponse: 1.8
+  smoothSampleRadius: 0.006
+  smoothSampleKernel: 2

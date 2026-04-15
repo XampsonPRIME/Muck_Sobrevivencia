@@ -8,6 +8,7 @@ Shader "Custom/BiomeShader_URP"
         _SandColor ("Sand Color", Color) = (0.82, 0.76, 0.52, 1)
         _GrassColor ("Grass Color", Color) = (0.46, 0.67, 0.28, 1)
         _SnowColor ("Snow Color", Color) = (0.88, 0.92, 0.96, 1)
+        _RoadColor ("Road Color", Color) = (0.82, 0.74, 0.58, 1)
         _UseFlatColors ("Use Flat Colors", Float) = 0
     }
 
@@ -50,6 +51,7 @@ Shader "Custom/BiomeShader_URP"
             half4 _SandColor;
             half4 _GrassColor;
             half4 _SnowColor;
+            half4 _RoadColor;
             float _UseFlatColors;
 
             Varyings vert(Attributes input)
@@ -74,6 +76,7 @@ Shader "Custom/BiomeShader_URP"
 
                 half3 mixed = lerp(sand, grass, saturate(input.color.g));
                 mixed = lerp(mixed, snow, saturate(input.color.r));
+                mixed = lerp(mixed, _RoadColor.rgb, saturate(input.color.a));
                 return half4(mixed, 1.0);
             }
             ENDHLSL
@@ -98,6 +101,7 @@ Shader "Custom/BiomeShader_URP"
             fixed4 _SandColor;
             fixed4 _GrassColor;
             fixed4 _SnowColor;
+            fixed4 _RoadColor;
             float _UseFlatColors;
 
             struct appdata
@@ -135,6 +139,7 @@ Shader "Custom/BiomeShader_URP"
 
                 fixed3 mixed = lerp(sand, grass, saturate(input.color.g));
                 mixed = lerp(mixed, snow, saturate(input.color.r));
+                mixed = lerp(mixed, _RoadColor.rgb, saturate(input.color.a));
                 return fixed4(mixed, 1.0);
             }
             ENDCG

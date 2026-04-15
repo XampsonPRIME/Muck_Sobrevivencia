@@ -61,7 +61,16 @@ public class WorldGenerator : MonoBehaviour
     void InitializeWorld()
     {
         player = LanMultiplayerManager.FindWorldFocusTransform();
-        riverSystem = FindFirstObjectByType<RiverSystem>();
+        RiverSystem[] riverSystems = FindObjectsByType<RiverSystem>(FindObjectsSortMode.None);
+        riverSystem = null;
+        for (int i = 0; i < riverSystems.Length; i++)
+        {
+            if (riverSystems[i] != null && riverSystems[i].gameObject.scene == gameObject.scene)
+            {
+                riverSystem = riverSystems[i];
+                break;
+            }
+        }
 
         if (riverSystem == null)
         {

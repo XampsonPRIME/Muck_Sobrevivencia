@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 public class TerrainChunk : MonoBehaviour
 {
@@ -118,6 +119,7 @@ public class TerrainChunk : MonoBehaviour
     static readonly int SandColorId = Shader.PropertyToID("_SandColor");
     static readonly int GrassColorId = Shader.PropertyToID("_GrassColor");
     static readonly int SnowColorId = Shader.PropertyToID("_SnowColor");
+    static readonly int RoadColorId = Shader.PropertyToID("_RoadColor");
 
     bool alreadyGenerated = false;
 
@@ -137,6 +139,9 @@ public class TerrainChunk : MonoBehaviour
     static Material riverMaterial;
     static GameObject cachedEnchantedForestSingleMushroom;
     static GameObject cachedEnchantedForestClusterMushroom;
+    WorldHeightmapData sceneHeightmapData;
+    RoadMaskData sceneRoadMaskData;
+    RiverSystem sceneRiverSystem;
 
     int BuildChunkSeed(Vector2 offset, int salt)
     {
@@ -167,6 +172,9 @@ public class TerrainChunk : MonoBehaviour
         GetComponent<MeshFilter>().mesh = mesh;
         GetComponent<MeshRenderer>().material = terrainMaterial;
         ApplySceneTerrainPalette(GetComponent<MeshRenderer>());
+        sceneHeightmapData = SceneWorldDataResolver.ResolveHeightmapData(gameObject.scene);
+        sceneRoadMaskData = SceneWorldDataResolver.ResolveRoadMaskData(gameObject.scene);
+        sceneRiverSystem = ResolveSceneRiverSystem();
 
         vertices = new Vector3[(size + 1) * (size + 1)];
         colors = new Color[vertices.Length];
@@ -194,17 +202,20 @@ public class TerrainChunk : MonoBehaviour
                 switch (biome)
                 {
                     case BiomeType.Desert:
-                        colors[i] = new Color(0, 0, 1); // areia
+                        colors[i] = new Color(0, 0, 1, 0); // areia
                         break;
 
                     case BiomeType.Forest:
-                        colors[i] = new Color(0, 1, 0); // grama
+                        colors[i] = new Color(0, 1, 0, 0); // grama
                         break;
 
                     case BiomeType.Snow:
-                        colors[i] = new Color(1, 0, 0); // neve
+                        colors[i] = new Color(1, 0, 0, 0); // neve
                         break;
                 }
+
+                if (IsRoadZone(point))
+                    colors[i].a = 1f;
             }
         }
 
@@ -228,10 +239,12 @@ public class TerrainChunk : MonoBehaviour
             runtimeMaterial.SetColor(SandColorId, new Color(0.74f, 0.9f, 0.5f, 1f));
             runtimeMaterial.SetColor(GrassColorId, new Color(0.68f, 0.84f, 0.44f, 1f));
             runtimeMaterial.SetColor(SnowColorId, new Color(0.82f, 0.95f, 0.72f, 1f));
+            runtimeMaterial.SetColor(RoadColorId, new Color(0.76f, 0.88f, 0.56f, 1f));
             return;
         }
 
         runtimeMaterial.SetFloat(UseFlatColorsId, 0f);
+        runtimeMaterial.SetColor(RoadColorId, new Color(0.83f, 0.74f, 0.56f, 1f));
     }
 
     IEnumerator GenerateChunkDetails(Vector2 offset)
@@ -283,17 +296,34 @@ public class TerrainChunk : MonoBehaviour
     {
         float h = GetTerrainSurfaceHeight(point);
 
+        if (sceneHeightmapData != null && sceneHeightmapData.applyRoadFlattening && IsRoadZone(point))
+            h = GetRoadFlattenedHeight(point, h);
+
         if (TryGetRiverBlend(point, out float riverBlend))
         {
-            float riverDepthValue = RiverSystem.Instance != null ? RiverSystem.Instance.RiverDepth : riverDepth;
+            float riverDepthValue = sceneRiverSystem != null ? sceneRiverSystem.RiverDepth : riverDepth;
             float riverBedHeight = h - riverDepthValue * riverBlend;
             h = Mathf.Min(h, riverBedHeight);
         }
         return h;
     }
 
+    float GetRoadFlattenedHeight(Vector2 point, float baseHeight)
+    {
+        float radius = 6f;
+        float h0 = GetTerrainSurfaceHeight(point + new Vector2(-radius, 0f));
+        float h1 = GetTerrainSurfaceHeight(point + new Vector2(radius, 0f));
+        float h2 = GetTerrainSurfaceHeight(point + new Vector2(0f, -radius));
+        float h3 = GetTerrainSurfaceHeight(point + new Vector2(0f, radius));
+        float average = (baseHeight + h0 + h1 + h2 + h3) / 5f;
+        return Mathf.Lerp(baseHeight, average, 0.75f);
+    }
+
     float GetTerrainSurfaceHeight(Vector2 point)
     {
+        if (sceneHeightmapData != null)
+            return sceneHeightmapData.SampleWorldHeight(point);
+
         float h = Mathf.PerlinNoise(point.x / terrainScale, point.y / terrainScale) * heightMultiplier;
         h += Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f) * 2f;
         return h;
@@ -306,13 +336,13 @@ public class TerrainChunk : MonoBehaviour
 
     bool TryGetRiverBlend(Vector2 point, out float blend)
     {
-        if (!enableRiver || RiverSystem.Instance == null)
+        if (!enableRiver || sceneRiverSystem == null)
         {
             blend = 0f;
             return false;
         }
 
-        return RiverSystem.Instance.TryGetBlend(point, GetBiome(point) == BiomeType.Forest, out blend);
+        return sceneRiverSystem.TryGetBlend(point, GetBiome(point) == BiomeType.Forest, out blend);
     }
 
     float GetRiverDistance(Vector2 point)
@@ -329,10 +359,27 @@ public class TerrainChunk : MonoBehaviour
 
     bool IsRiverZone(Vector2 point, float extraMargin = 0f)
     {
-        if (!enableRiver || RiverSystem.Instance == null)
+        if (!enableRiver || sceneRiverSystem == null)
             return false;
 
-        return RiverSystem.Instance.IsRiverZone(point, GetBiome(point) == BiomeType.Forest, extraMargin);
+        return sceneRiverSystem.IsRiverZone(point, GetBiome(point) == BiomeType.Forest, extraMargin);
+    }
+
+    RiverSystem ResolveSceneRiverSystem()
+    {
+        RiverSystem[] riverSystems = FindObjectsByType<RiverSystem>(FindObjectsSortMode.None);
+        for (int i = 0; i < riverSystems.Length; i++)
+        {
+            if (riverSystems[i] != null && riverSystems[i].gameObject.scene == gameObject.scene)
+                return riverSystems[i];
+        }
+
+        return null;
+    }
+
+    bool IsRoadZone(Vector2 point)
+    {
+        return sceneRoadMaskData != null && sceneRoadMaskData.IsRoad(point);
     }
 
     void SpawnRiverWater()
@@ -712,6 +759,9 @@ public class TerrainChunk : MonoBehaviour
             if (IsRiverZone(point, 1.5f))
                 continue;
 
+            if (IsRoadZone(point))
+                continue;
+
             float cluster = Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f);
 
 
@@ -963,6 +1013,9 @@ public class TerrainChunk : MonoBehaviour
             if (IsRiverZone(basePoint, 2f))
                 continue;
 
+            if (IsRoadZone(basePoint))
+                continue;
+
             // 🚫 evita spawn perto do player
             if (player != null && Vector3.Distance(basePos, player.position) < 14f)
                 continue;
@@ -990,6 +1043,9 @@ public class TerrainChunk : MonoBehaviour
                 spawnPos = GetGroundPoint(spawnPos);
 
                 if (IsRiverZone(new Vector2(spawnPos.x, spawnPos.z), 2f))
+                    continue;
+
+                if (IsRoadZone(new Vector2(spawnPos.x, spawnPos.z)))
                     continue;
 
                 // 🚫 evita perto do player
@@ -1114,6 +1170,9 @@ public class TerrainChunk : MonoBehaviour
                 continue;
 
             if (IsRiverZone(point, 3f))
+                continue;
+
+            if (IsRoadZone(point))
                 continue;
 
             if (IsTooClose(worldPos))
