@@ -1,5 +1,6 @@
 using UnityEngine;
 
+<<<<<<< HEAD
 public class PortalSpawnPoint : MonoBehaviour
 {
     public string spawnPointId = "Default";
@@ -32,5 +33,18 @@ public class PortalSpawnPoint : MonoBehaviour
         Gizmos.color = gizmoColor;
         Gizmos.DrawSphere(transform.position, gizmoRadius);
         Gizmos.DrawLine(transform.position, transform.position + transform.forward * 2f);
+=======
+[DisallowMultipleComponent]
+public class PortalSpawnPoint : MonoBehaviour
+{
+    public string spawnPointId = "Default";
+
+    public bool Matches(string requestedId)
+    {
+        if (string.IsNullOrWhiteSpace(requestedId))
+            return string.IsNullOrWhiteSpace(spawnPointId) || spawnPointId == "Default";
+
+        return string.Equals(spawnPointId, requestedId, System.StringComparison.OrdinalIgnoreCase);
+>>>>>>> develop
     }
 }

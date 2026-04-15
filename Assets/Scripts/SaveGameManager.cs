@@ -248,8 +248,8 @@ public class SaveGameManager : MonoBehaviour
         if (data == null)
             return false;
 
-        MultiplayerSceneSetState savedSceneSet = BuildSavedSceneSet(data);
-        if (savedSceneSet == null)
+        MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState("Overworld", "Main");
+        if (startupSceneSet == null)
             return false;
 
         if (!LanMultiplayerManager.Instance.StartHost(port, data.worldSeed))
@@ -261,7 +261,7 @@ public class SaveGameManager : MonoBehaviour
         GameState.IsPaused = false;
         ExitLobby();
 
-        MultiplayerSceneSetCatalog.ApplyToRuntime(savedSceneSet);
+        MultiplayerSceneSetCatalog.ApplyToRuntime(startupSceneSet);
 
         TryApplyPendingMultiplayerSessionLoad();
         return true;
@@ -779,10 +779,6 @@ public class SaveGameManager : MonoBehaviour
     void TryApplyPendingMultiplayerSessionLoad()
     {
         if (pendingMultiplayerSessionLoad == null)
-            return;
-
-        MultiplayerSceneSetState pendingSceneSet = BuildSavedSceneSet(pendingMultiplayerSessionLoad);
-        if (pendingSceneSet == null || !MultiplayerSceneSetCatalog.LoadedScenesMatch(pendingSceneSet))
             return;
 
         LanMultiplayerManager manager = LanMultiplayerManager.Instance;

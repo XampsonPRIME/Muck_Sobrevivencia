@@ -169,11 +169,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8293215957773833957, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
       propertyPath: maxStamina
+<<<<<<< HEAD
       value: 800
       objectReference: {fileID: 0}
     - target: {fileID: 8293215957773833957, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
       propertyPath: currentStamina
       value: 800
+=======
+      value: 1000
+>>>>>>> develop
       objectReference: {fileID: 0}
     - target: {fileID: 8401812318578981924, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
       propertyPath: m_Name

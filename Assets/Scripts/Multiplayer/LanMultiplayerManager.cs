@@ -386,14 +386,21 @@ public class LanMultiplayerManager : MonoBehaviour
         return MultiplayerSceneSetCatalog.CaptureLoadedScenes();
     }
 
+<<<<<<< HEAD
     public bool TravelToSceneSet(string sceneSetId)
     {
         MultiplayerSceneSetState targetSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, null);
+=======
+    public bool TravelToSceneSet(string sceneSetId, string fallbackSceneName = null)
+    {
+        MultiplayerSceneSetState targetSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, fallbackSceneName);
+>>>>>>> develop
         if (targetSceneSet == null)
             return false;
 
         if (Mode == SessionMode.Client)
         {
+<<<<<<< HEAD
             StatusMessage = "Somente o host pode trocar de mapa";
             return false;
         }
@@ -408,6 +415,18 @@ public class LanMultiplayerManager : MonoBehaviour
         {
             BroadcastCurrentSceneSet();
             BroadcastWorldState();
+=======
+            StatusMessage = "A troca de mapa precisa ser feita pelo host.";
+            return false;
+        }
+
+        if (!MultiplayerSceneSetCatalog.ApplyToRuntime(targetSceneSet))
+            return false;
+
+        if (IsServerAuthority && IsMultiplayerActive)
+        {
+            BroadcastCurrentSceneSet();
+>>>>>>> develop
             UpdateDiscoveryAnnouncement();
         }
 

@@ -99,7 +99,11 @@ Material:
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
+<<<<<<< HEAD
     - _Exposure: 1.2973598
+=======
+    - _Exposure: 1.2666168
+>>>>>>> develop
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0

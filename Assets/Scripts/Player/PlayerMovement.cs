@@ -253,22 +253,42 @@ public class PlayerMovement : MonoBehaviour
         ApplyCameraPose();
     }
 
+<<<<<<< HEAD
     public void WarpToPosition(Vector3 position, Quaternion rotation, bool updateSpawnPoint)
     {
         moveInput = Vector2.zero;
         lookInput = Vector2.zero;
         isRunning = false;
         yVelocity = 0f;
+=======
+    public bool TryGetSafeSpawnPosition(Vector3 desiredPosition, out Vector3 safePosition)
+    {
+        if (TryGetGroundedSpawnPosition(desiredPosition, out safePosition))
+            return true;
+
+        Vector3 fallbackPosition = transform.position;
+        return TryGetGroundedSpawnPosition(fallbackPosition, out safePosition);
+    }
+
+    public bool WarpToSafePosition(Vector3 desiredPosition, Quaternion rotation)
+    {
+        if (!TryGetSafeSpawnPosition(desiredPosition, out Vector3 safePosition))
+            return false;
+>>>>>>> develop
 
         if (controller != null)
             controller.enabled = false;
 
+<<<<<<< HEAD
         Vector3 safePosition = ResolveSafeSpawnPosition(position);
+=======
+>>>>>>> develop
         transform.SetPositionAndRotation(safePosition, rotation);
 
         if (controller != null)
             controller.enabled = true;
 
+<<<<<<< HEAD
         if (updateSpawnPoint)
         {
             spawnPosition = safePosition;
@@ -278,6 +298,18 @@ public class PlayerMovement : MonoBehaviour
         yRotation = transform.eulerAngles.y;
         xRotation = thirdPerson ? thirdPersonPitch : 0f;
         ApplyCameraPose();
+=======
+        spawnPosition = safePosition;
+        spawnRotation = rotation;
+        yVelocity = 0f;
+        moveInput = Vector2.zero;
+        lookInput = Vector2.zero;
+        isRunning = false;
+        yRotation = transform.eulerAngles.y;
+        xRotation = thirdPerson ? thirdPersonPitch : 0f;
+        ApplyCameraPose();
+        return true;
+>>>>>>> develop
     }
 
     public void ResetToFreshStart()

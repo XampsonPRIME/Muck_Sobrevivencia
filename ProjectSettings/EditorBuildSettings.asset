@@ -15,7 +15,11 @@ EditorBuildSettings:
     path: Assets/Scenes/Boss1.unity
     guid: 5fd277a1bae334c688a487c033d71b1d
   - enabled: 1
+<<<<<<< HEAD
     path: Assets/EnchantedForest.unity
+=======
+    path: Assets/Scenes/EnchantedForest.unity
+>>>>>>> develop
     guid: df38d3c6e078412da49f6125e0b51b58
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

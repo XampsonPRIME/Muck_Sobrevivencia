@@ -160,8 +160,8 @@ MonoBehaviour:
     yOffset: 0
     biome: 3
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
-  treeDensity: 0.01
-  maxTreesPerChunk: 3
+  treeDensity: 0.12
+  maxTreesPerChunk: 22
   mushroomDensity: 0.03
   rockClusterCount: 3
   generationYieldInterval: 120
@@ -181,7 +181,7 @@ MonoBehaviour:
   riverSurfaceSmoothing: 0.7
   riverMaxSegmentGap: 4.5
   minDistanceBetweenObjects: 7
-  minTreeDistance: 10
+  minTreeDistance: 6.2
   rockSmallPrefab: {fileID: 4611803431950446891, guid: d1e087c0d2b404e379ca3a5b0b8c91c9, type: 3}
   rockMediumPrefab: {fileID: 687441992539456540, guid: 79412605d3b7c40f4a9b20e5da838760, type: 3}
   rockLargePrefab: {fileID: 3923582216426070236, guid: 47f48952e3e114c95a12366e66c84319, type: 3}
