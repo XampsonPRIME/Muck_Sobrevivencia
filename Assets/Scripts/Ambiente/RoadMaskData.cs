@@ -16,6 +16,9 @@ public class RoadMaskData : ScriptableObject
         if (roadMask == null)
             return 0f;
 
+        if (clampOutsideBounds && !ContainsWorldPoint(worldPoint))
+            return 0f;
+
         Vector2 uv = WorldToUv(worldPoint);
         int kernel = Mathf.Max(0, smoothSampleKernel);
         if (kernel == 0 || smoothSampleRadius <= 0f)
@@ -41,6 +44,19 @@ public class RoadMaskData : ScriptableObject
     public bool IsRoad(Vector2 worldPoint)
     {
         return SampleMask01(worldPoint) >= roadThreshold;
+    }
+
+    public bool ContainsWorldPoint(Vector2 worldPoint)
+    {
+        float minX = worldOrigin.x;
+        float minY = worldOrigin.y;
+        float maxX = worldOrigin.x + worldSize.x;
+        float maxY = worldOrigin.y + worldSize.y;
+
+        return worldPoint.x >= Mathf.Min(minX, maxX) &&
+               worldPoint.x <= Mathf.Max(minX, maxX) &&
+               worldPoint.y >= Mathf.Min(minY, maxY) &&
+               worldPoint.y <= Mathf.Max(minY, maxY);
     }
 
     Vector2 WorldToUv(Vector2 worldPoint)

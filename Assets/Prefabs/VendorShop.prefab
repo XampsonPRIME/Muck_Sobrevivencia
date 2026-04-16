@@ -641,10 +641,38 @@ MonoBehaviour:
   vendorName: Senhor Lupin
   loadOffersFromResources: 1
   resourcesFolder: VendorItems
-  defaultStock: 1
+  defaultStock: 10
   defaultInfiniteStock: 0
   stockOverrides: []
-  offers: []
+  offers:
+  - itemPrefab: {fileID: -4178111295504079915, guid: de97904b68f40413487a10dcea046b7d, type: 3}
+    startingStock: 10
+    infiniteStock: 0
+    currentStock: 10
+  - itemPrefab: {fileID: -4178111295504079915, guid: 7e1efa8ac5f0141c6bb3918a8ca1a6ef, type: 3}
+    startingStock: 10
+    infiniteStock: 0
+    currentStock: 10
+  - itemPrefab: {fileID: 892179492812012713, guid: c006af69db5fd463da4f86a8b03b060c, type: 3}
+    startingStock: 10
+    infiniteStock: 0
+    currentStock: 10
+  - itemPrefab: {fileID: 892179492812012713, guid: 5980773da7cd8434aad0f952693d4f29, type: 3}
+    startingStock: 10
+    infiniteStock: 0
+    currentStock: 10
+  - itemPrefab: {fileID: 675325374166930406, guid: f51a292b832ee4059af6035423ec0441, type: 3}
+    startingStock: 10
+    infiniteStock: 0
+    currentStock: 10
+  - itemPrefab: {fileID: 100200000000000105, guid: 2156aa67a76dd4d608faf2aed325420c, type: 3}
+    startingStock: 10
+    infiniteStock: 0
+    currentStock: 10
+  - itemPrefab: {fileID: 1933423102441146631, guid: 3b90cf26d73e24f8faf9d9d01732f3a8, type: 3}
+    startingStock: 10
+    infiniteStock: 0
+    currentStock: 10
 --- !u!1 &8806070749663803253
 GameObject:
   m_ObjectHideFlags: 0

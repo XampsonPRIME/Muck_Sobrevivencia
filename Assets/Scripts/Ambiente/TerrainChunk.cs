@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
+using UnityEngine.Rendering;
 
 public class TerrainChunk : MonoBehaviour
 {
@@ -68,9 +69,29 @@ public class TerrainChunk : MonoBehaviour
 
     public float treeDensity = 0.12f;
     public int maxTreesPerChunk = 22;
+    public float forestTreeHeightMultiplier = 1.45f;
+    public float forestTreeWidthMultiplier = 1.12f;
     public float mushroomDensity = 0.001f;
     public int rockClusterCount = 3;
     public int generationYieldInterval = 120;
+
+    [Header("Grama Leve")]
+    [Range(0f, 1f)] public float forestGrassDensity = 1f;
+    public int maxForestGrassPerChunk = 2200;
+    public float forestGrassMinDistance = 0.12f;
+    public int forestGrassSampleStep = 2;
+    [Range(0f, 1f)] public float forestGrassExtraCoverage = 0.8f;
+    public Vector2 forestGrassWidthRange = new Vector2(1.2f, 1.8f);
+    public Vector2 forestGrassHeightRange = new Vector2(0.42f, 0.62f);
+    public float forestGrassSpawnJitter = 0.42f;
+    public float forestGrassYOffset = 0.02f;
+    public float forestGrassRoadPadding = 1.6f;
+    public float forestGrassRenderDistance = 72f;
+    public float forestGrassWindStrength = 0.08f;
+    public float forestGrassWindSpeed = 1.65f;
+    public float forestGrassBendStrength = 0.1f;
+    public Color forestGrassBaseColor = new Color(0.36f, 0.46f, 0.12f, 1f);
+    public Color forestGrassTipColor = new Color(0.54f, 0.62f, 0.2f, 1f);
 
     [Header("Rio")]
     public bool enableRiver = true;
@@ -120,6 +141,13 @@ public class TerrainChunk : MonoBehaviour
     static readonly int GrassColorId = Shader.PropertyToID("_GrassColor");
     static readonly int SnowColorId = Shader.PropertyToID("_SnowColor");
     static readonly int RoadColorId = Shader.PropertyToID("_RoadColor");
+    static readonly int GrassBaseColorId = Shader.PropertyToID("_BaseColor");
+    static readonly int GrassTipColorId = Shader.PropertyToID("_TipColor");
+    static readonly int GrassWindStrengthId = Shader.PropertyToID("_WindStrength");
+    static readonly int GrassWindSpeedId = Shader.PropertyToID("_WindSpeed");
+    static readonly int GrassBendStrengthId = Shader.PropertyToID("_BendStrength");
+    static readonly int GrassTimeOffsetId = Shader.PropertyToID("_WindTimeOffset");
+    const int GrassBatchSize = 1023;
 
     bool alreadyGenerated = false;
 
@@ -136,12 +164,18 @@ public class TerrainChunk : MonoBehaviour
 
     List<Vector3> usedPositions = new List<Vector3>();
     List<Vector3> cowGroupPositions = new List<Vector3>();
+    List<Matrix4x4[]> forestGrassBatches = new List<Matrix4x4[]>();
+    List<int> forestGrassBatchCounts = new List<int>();
     static Material riverMaterial;
+    static Mesh forestGrassMesh;
     static GameObject cachedEnchantedForestSingleMushroom;
     static GameObject cachedEnchantedForestClusterMushroom;
     WorldHeightmapData sceneHeightmapData;
     RoadMaskData sceneRoadMaskData;
     RiverSystem sceneRiverSystem;
+    Material forestGrassMaterialInstance;
+    MaterialPropertyBlock forestGrassPropertyBlock;
+    float forestGrassRenderDistanceSqr;
 
     int BuildChunkSeed(Vector2 offset, int salt)
     {
@@ -170,6 +204,7 @@ public class TerrainChunk : MonoBehaviour
 
         mesh = new Mesh();
         GetComponent<MeshFilter>().mesh = mesh;
+        forestGrassRenderDistanceSqr = forestGrassRenderDistance * forestGrassRenderDistance;
         MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
         PrepareTerrainMaterial(meshRenderer);
         ApplySceneTerrainPalette(meshRenderer);
@@ -222,6 +257,17 @@ public class TerrainChunk : MonoBehaviour
 
         BuildMesh();
         StartCoroutine(GenerateChunkDetails(offset));
+    }
+
+    void LateUpdate()
+    {
+        RenderForestGrass();
+    }
+
+    void OnDestroy()
+    {
+        if (forestGrassMaterialInstance != null)
+            Destroy(forestGrassMaterialInstance);
     }
 
     void PrepareTerrainMaterial(MeshRenderer renderer)
@@ -412,6 +458,44 @@ public class TerrainChunk : MonoBehaviour
     bool IsRoadZone(Vector2 point)
     {
         return sceneRoadMaskData != null && sceneRoadMaskData.IsRoad(point);
+    }
+
+    bool IsNearRoadZone(Vector2 point, float padding)
+    {
+        if (sceneRoadMaskData == null)
+            return false;
+
+        if (!sceneRoadMaskData.ContainsWorldPoint(point))
+            return false;
+
+        float edgeThreshold = Mathf.Max(0.42f, sceneRoadMaskData.roadThreshold * 0.9f);
+
+        if (sceneRoadMaskData.SampleMask01(point) >= edgeThreshold)
+            return true;
+
+        if (padding <= 0.01f)
+            return false;
+
+        Vector2[] offsets =
+        {
+            Vector2.zero,
+            new Vector2(padding, 0f),
+            new Vector2(-padding, 0f),
+            new Vector2(0f, padding),
+            new Vector2(0f, -padding),
+            new Vector2(padding * 0.72f, padding * 0.72f),
+            new Vector2(-padding * 0.72f, padding * 0.72f),
+            new Vector2(padding * 0.72f, -padding * 0.72f),
+            new Vector2(-padding * 0.72f, -padding * 0.72f)
+        };
+
+        for (int i = 0; i < offsets.Length; i++)
+        {
+            if (sceneRoadMaskData.SampleMask01(point + offsets[i]) >= edgeThreshold)
+                return true;
+        }
+
+        return false;
     }
 
     void SpawnRiverWater()
@@ -756,6 +840,10 @@ public class TerrainChunk : MonoBehaviour
     {
         ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 101));
         usedPositions.Clear();
+        forestGrassBatches.Clear();
+        forestGrassBatchCounts.Clear();
+        List<Vector3> grassPositions = new List<Vector3>();
+        List<Matrix4x4> grassMatrices = new List<Matrix4x4>(Mathf.Max(maxForestGrassPerChunk, 1024));
         int treeCount = 0;
         int iterationsSinceYield = 0;
 
@@ -773,14 +861,10 @@ public class TerrainChunk : MonoBehaviour
             Vector3 normal = mesh.normals[i];
 
             Vector3 worldPos = pos + transform.position;
-
-            // 🚫 zona ao redor
-            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius)
-                continue;
-
-            // 🚫 na frente do player
-            if (player != null && Vector3.Distance(worldPos, player.position) < forwardSafeDistance && IsInPlayerPath(worldPos))
-                continue;
+            bool isNearPlayer = player != null && Vector3.Distance(worldPos, player.position) < safeRadius;
+            bool isInPlayerPath = player != null &&
+                                  Vector3.Distance(worldPos, player.position) < forwardSafeDistance &&
+                                  IsInPlayerPath(worldPos);
 
             if (normal.y < 0.78f)
                 continue;
@@ -796,7 +880,8 @@ public class TerrainChunk : MonoBehaviour
 
             float cluster = Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f);
 
-
+            if (isNearPlayer || isInPlayerPath)
+                continue;
 
             if (biome == BiomeType.Forest && cluster < 0.18f)
                 continue;
@@ -857,6 +942,16 @@ public class TerrainChunk : MonoBehaviour
                         transform
                     );
 
+                    if (biome == BiomeType.Forest)
+                    {
+                        Vector3 scale = tree.transform.localScale;
+                        tree.transform.localScale = new Vector3(
+                            scale.x * forestTreeWidthMultiplier,
+                            scale.y * forestTreeHeightMultiplier,
+                            scale.z * forestTreeWidthMultiplier
+                        );
+                    }
+
                     AlignObjectBaseToGround(tree, groundPoint, selected.yOffset);
 
                     usedPositions.Add(groundPoint);
@@ -903,6 +998,9 @@ public class TerrainChunk : MonoBehaviour
                 }
             }
         }
+
+        GenerateForestGrassMatrices(offset, grassMatrices, grassPositions);
+        CacheForestGrassBatches(grassMatrices);
     }
 
     bool TrySpawnEnchantedForestMushroom(ChunkRandom rng, Vector3 worldPos)
@@ -979,12 +1077,259 @@ public class TerrainChunk : MonoBehaviour
     {
         float distanceLimit = minDistance >= 0f ? minDistance : minDistanceBetweenObjects;
 
-        foreach (var p in usedPositions)
+        return IsTooCloseToPositions(usedPositions, pos, distanceLimit);
+    }
+
+    bool IsTooCloseToPositions(List<Vector3> positions, Vector3 pos, float minDistance)
+    {
+        for (int i = 0; i < positions.Count; i++)
         {
-            if (Vector3.Distance(p, pos) < distanceLimit)
+            if (Vector3.Distance(positions[i], pos) < minDistance)
                 return true;
         }
+
         return false;
+    }
+
+    void CacheForestGrassBatches(List<Matrix4x4> matrices)
+    {
+        forestGrassBatches.Clear();
+        forestGrassBatchCounts.Clear();
+
+        for (int i = 0; i < matrices.Count; i += GrassBatchSize)
+        {
+            int count = Mathf.Min(GrassBatchSize, matrices.Count - i);
+            Matrix4x4[] batch = new Matrix4x4[count];
+            matrices.CopyTo(i, batch, 0, count);
+            forestGrassBatches.Add(batch);
+            forestGrassBatchCounts.Add(count);
+        }
+    }
+
+    void GenerateForestGrassMatrices(Vector2 offset, List<Matrix4x4> grassMatrices, List<Vector3> grassPositions)
+    {
+        ChunkRandom grassRng = new ChunkRandom(BuildChunkSeed(offset, 111));
+        float grassDensity = forestGrassDensity;
+        int maxGrassForChunk = maxForestGrassPerChunk;
+        int sampleStep = Mathf.Max(1, forestGrassSampleStep);
+
+        if (IsEnchantedForestScene())
+        {
+            grassDensity = Mathf.Clamp01(grassDensity);
+            maxGrassForChunk = Mathf.Max(maxGrassForChunk, 2800);
+        }
+
+        int secondaryOffset = sampleStep > 1 ? Mathf.Max(1, sampleStep / 2) : 0;
+        int passCount = secondaryOffset > 0 ? 2 : 1;
+
+        for (int pass = 0; pass < passCount && grassMatrices.Count < maxGrassForChunk; pass++)
+        {
+            int startOffset = pass == 0 ? 0 : secondaryOffset;
+            float passCoverage = pass == 0 ? 1f : forestGrassExtraCoverage;
+
+            for (int z = startOffset; z <= size && grassMatrices.Count < maxGrassForChunk; z += sampleStep)
+            {
+                for (int x = startOffset; x <= size && grassMatrices.Count < maxGrassForChunk; x += sampleStep)
+                {
+                    int index = z * (size + 1) + x;
+                    if (index < 0 || index >= vertices.Length)
+                        continue;
+
+                    if (mesh.normals[index].y < 0.72f)
+                        continue;
+
+                    if (grassRng.Value() > grassDensity * passCoverage)
+                        continue;
+
+                    float localX = x + grassRng.Range(-forestGrassSpawnJitter, forestGrassSpawnJitter);
+                    float localZ = z + grassRng.Range(-forestGrassSpawnJitter, forestGrassSpawnJitter);
+                    Vector2 point = new Vector2(offset.x + localX, offset.y + localZ);
+
+                    if (GetBiome(point) != BiomeType.Forest)
+                        continue;
+
+                    if (IsRiverZone(point, 0.45f))
+                        continue;
+
+                    if (IsNearRoadZone(point, forestGrassRoadPadding))
+                        continue;
+
+                    float height = SampleTerrainHeight(localX, localZ);
+                    Vector3 grassGroundPoint = new Vector3(
+                        transform.position.x + localX,
+                        transform.position.y + height + forestGrassYOffset,
+                        transform.position.z + localZ
+                    );
+
+                    if (player != null && Vector3.Distance(grassGroundPoint, player.position) <= 0.8f)
+                        continue;
+
+                    if (IsTooCloseToPositions(grassPositions, grassGroundPoint, forestGrassMinDistance))
+                        continue;
+
+                    float grassWidthScale = grassRng.Range(
+                        Mathf.Min(forestGrassWidthRange.x, forestGrassWidthRange.y),
+                        Mathf.Max(forestGrassWidthRange.x, forestGrassWidthRange.y));
+                    float grassHeightScale = grassRng.Range(
+                        Mathf.Min(forestGrassHeightRange.x, forestGrassHeightRange.y),
+                        Mathf.Max(forestGrassHeightRange.x, forestGrassHeightRange.y));
+
+                    Matrix4x4 matrix = Matrix4x4.TRS(
+                        grassGroundPoint,
+                        Quaternion.Euler(0f, grassRng.Range(0f, 360f), 0f),
+                        new Vector3(grassWidthScale, grassHeightScale, grassWidthScale)
+                    );
+
+                    grassMatrices.Add(matrix);
+                    grassPositions.Add(grassGroundPoint);
+                }
+            }
+        }
+    }
+
+    void RenderForestGrass()
+    {
+        if (forestGrassBatchCounts.Count == 0)
+            return;
+
+        if (player == null)
+            player = LanMultiplayerManager.FindWorldFocusTransform();
+
+        if (player != null)
+        {
+            Vector3 closestPoint = new Vector3(
+                Mathf.Clamp(player.position.x, transform.position.x, transform.position.x + size),
+                player.position.y,
+                Mathf.Clamp(player.position.z, transform.position.z, transform.position.z + size)
+            );
+
+            if ((closestPoint - player.position).sqrMagnitude > forestGrassRenderDistanceSqr)
+                return;
+        }
+
+        Material grassMaterial = GetForestGrassMaterial();
+        Mesh grassMesh = GetForestGrassMesh();
+        if (grassMaterial == null || grassMesh == null)
+            return;
+
+        if (forestGrassPropertyBlock == null)
+            forestGrassPropertyBlock = new MaterialPropertyBlock();
+
+        forestGrassPropertyBlock.Clear();
+        forestGrassPropertyBlock.SetColor(GrassBaseColorId, forestGrassBaseColor);
+        forestGrassPropertyBlock.SetColor(GrassTipColorId, forestGrassTipColor);
+        forestGrassPropertyBlock.SetFloat(GrassWindStrengthId, forestGrassWindStrength);
+        forestGrassPropertyBlock.SetFloat(GrassWindSpeedId, forestGrassWindSpeed);
+        forestGrassPropertyBlock.SetFloat(GrassBendStrengthId, forestGrassBendStrength);
+        forestGrassPropertyBlock.SetFloat(GrassTimeOffsetId, transform.position.x * 0.031f + transform.position.z * 0.017f);
+
+        for (int i = 0; i < forestGrassBatches.Count; i++)
+        {
+            Graphics.DrawMeshInstanced(
+                grassMesh,
+                0,
+                grassMaterial,
+                forestGrassBatches[i],
+                forestGrassBatchCounts[i],
+                forestGrassPropertyBlock,
+                ShadowCastingMode.Off,
+                false,
+                gameObject.layer,
+                null,
+                LightProbeUsage.Off
+            );
+        }
+    }
+
+    Material GetForestGrassMaterial()
+    {
+        if (forestGrassMaterialInstance != null)
+            return forestGrassMaterialInstance;
+
+        Shader shader = Shader.Find("Custom/ForestGrassInstanced");
+        if (shader == null)
+            return null;
+
+        forestGrassMaterialInstance = new Material(shader)
+        {
+            enableInstancing = true
+        };
+        forestGrassMaterialInstance.name = "ForestGrassRuntime";
+        return forestGrassMaterialInstance;
+    }
+
+    Mesh GetForestGrassMesh()
+    {
+        if (forestGrassMesh != null)
+            return forestGrassMesh;
+
+        forestGrassMesh = new Mesh
+        {
+            name = "ForestGrassTuft"
+        };
+
+        List<Vector3> meshVertices = new List<Vector3>();
+        List<Vector2> meshUvs = new List<Vector2>();
+        List<int> meshTriangles = new List<int>();
+
+        AddGrassSpike(meshVertices, meshUvs, meshTriangles, 0f, new Vector3(0f, 0f, 0.02f), 0.48f, 0.28f, 0.92f);
+        AddGrassSpike(meshVertices, meshUvs, meshTriangles, 42f, new Vector3(0.1f, 0f, 0.02f), 0.36f, 0.2f, 0.82f);
+        AddGrassSpike(meshVertices, meshUvs, meshTriangles, -46f, new Vector3(-0.1f, 0f, 0.01f), 0.35f, 0.2f, 0.8f);
+        AddGrassSpike(meshVertices, meshUvs, meshTriangles, 92f, new Vector3(0.04f, 0f, -0.1f), 0.32f, 0.18f, 0.76f);
+        AddGrassSpike(meshVertices, meshUvs, meshTriangles, -96f, new Vector3(-0.05f, 0f, -0.1f), 0.31f, 0.18f, 0.74f);
+        AddGrassSpike(meshVertices, meshUvs, meshTriangles, 138f, new Vector3(0.13f, 0f, -0.04f), 0.26f, 0.16f, 0.68f);
+        AddGrassSpike(meshVertices, meshUvs, meshTriangles, -142f, new Vector3(-0.13f, 0f, -0.03f), 0.26f, 0.16f, 0.68f);
+
+        forestGrassMesh.SetVertices(meshVertices);
+        forestGrassMesh.SetUVs(0, meshUvs);
+        forestGrassMesh.SetTriangles(meshTriangles, 0);
+        forestGrassMesh.RecalculateNormals();
+        forestGrassMesh.RecalculateBounds();
+
+        return forestGrassMesh;
+    }
+
+    void AddGrassSpike(
+        List<Vector3> meshVertices,
+        List<Vector2> meshUvs,
+        List<int> meshTriangles,
+        float angleY,
+        Vector3 offset,
+        float width,
+        float depth,
+        float height)
+    {
+        Quaternion rotation = Quaternion.Euler(0f, angleY, 0f);
+        Vector3 baseA = new Vector3(-width * 0.5f, 0f, -depth * 0.35f);
+        Vector3 baseB = new Vector3(width * 0.5f, 0f, -depth * 0.35f);
+        Vector3 baseC = new Vector3(0f, 0f, depth * 0.55f);
+        Vector3 tip = new Vector3(0f, height, 0.02f);
+
+        AddGrassTriangle(meshVertices, meshUvs, meshTriangles, rotation * baseA + offset, rotation * baseB + offset, rotation * tip + offset);
+        AddGrassTriangle(meshVertices, meshUvs, meshTriangles, rotation * baseB + offset, rotation * baseC + offset, rotation * tip + offset);
+        AddGrassTriangle(meshVertices, meshUvs, meshTriangles, rotation * baseC + offset, rotation * baseA + offset, rotation * tip + offset);
+    }
+
+    void AddGrassTriangle(
+        List<Vector3> meshVertices,
+        List<Vector2> meshUvs,
+        List<int> meshTriangles,
+        Vector3 baseLeft,
+        Vector3 baseRight,
+        Vector3 tip)
+    {
+        int start = meshVertices.Count;
+        meshVertices.Add(baseLeft);
+        meshVertices.Add(baseRight);
+        meshVertices.Add(tip);
+
+        meshUvs.Add(new Vector2(0f, 0f));
+        meshUvs.Add(new Vector2(1f, 0f));
+        meshUvs.Add(new Vector2(0.5f, 1f));
+
+        meshTriangles.Add(start);
+        meshTriangles.Add(start + 1);
+        meshTriangles.Add(start + 2);
     }
 
     IEnumerator SpawnRockClustersAsync(Vector2 offset)

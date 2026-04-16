@@ -137,10 +137,10 @@ MonoBehaviour:
     yOffset: -0.2
     biome: 1
   - prefab: {fileID: 3656225094160004435, guid: 19bef5f74e9cf4bcfb7b611e792580a5, type: 3}
-    yOffset: 0
+    yOffset: -0.6
     biome: 0
   - prefab: {fileID: 3656225094160004435, guid: 9e3f8e8fa365c4ea5a7c743158fc58c1, type: 3}
-    yOffset: 0
+    yOffset: -0.45
     biome: 0
   - prefab: {fileID: 3656225094160004435, guid: e679013c6fb234f2c88ae4abffff4aa8, type: 3}
     yOffset: 1.4
@@ -154,9 +154,27 @@ MonoBehaviour:
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
   treeDensity: 0.12
   maxTreesPerChunk: 22
+  forestTreeHeightMultiplier: 1.45
+  forestTreeWidthMultiplier: 1.12
   mushroomDensity: 0.03
   rockClusterCount: 3
   generationYieldInterval: 120
+  forestGrassDensity: 1
+  maxForestGrassPerChunk: 2200
+  forestGrassMinDistance: 0.12
+  forestGrassSampleStep: 2
+  forestGrassExtraCoverage: 0.8
+  forestGrassWidthRange: {x: 1.2, y: 1.8}
+  forestGrassHeightRange: {x: 0.42, y: 0.62}
+  forestGrassSpawnJitter: 0.42
+  forestGrassYOffset: 0.02
+  forestGrassRoadPadding: 1.6
+  forestGrassRenderDistance: 72
+  forestGrassWindStrength: 0.08
+  forestGrassWindSpeed: 1.65
+  forestGrassBendStrength: 0.1
+  forestGrassBaseColor: {r: 0.36, g: 0.46, b: 0.12, a: 1}
+  forestGrassTipColor: {r: 0.54, g: 0.62, b: 0.2, a: 1}
   enableRiver: 1
   riverWidth: 4
   riverBankBlend: 2.5

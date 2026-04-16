@@ -356,7 +356,7 @@ MonoBehaviour:
   thirdPersonPitch: 15
   firstPersonOffset: {x: 0, y: 1.6, z: 0}
   thirdPersonOffset: {x: 0, y: 2, z: -3}
-  maxStamina: 100
+  maxStamina: 1000
   currentStamina: 0
   staminaDrain: 20
   staminaRecovery: 15
@@ -365,23 +365,39 @@ MonoBehaviour:
   lowStaminaSpeedMultiplier: 0.45
   maxHealth: 100
   currentHealth: 0
+  healthRegenPerSecond: 4
+  healthRegenDelay: 6
   maxHunger: 100
   currentHunger: 0
   hungerDrainIdle: 0.04
   hungerDrainWalk: 0.12
   hungerDrainRun: 0.3
   hungerDamageRate: 5
+  lowHungerWarningThreshold: 0.5
+  criticalHungerWarningThreshold: 0.05
+  lowHungerWarningResetThreshold: 0.6
   maxThirst: 100
   currentThirst: 0
   thirstDrainIdle: 0.08
   thirstDrainWalk: 0.25
   thirstDrainRun: 0.6
   thirstDamageRate: 2
+  lowThirstWarningThreshold: 0.5
+  criticalThirstWarningThreshold: 0.05
+  lowThirstWarningResetThreshold: 0.6
   waterMovementMultiplier: 0.55
   waterSprintMultiplier: 0.7
   visualWaterSink: 0.85
   cameraWaterSink: 0.18
   waterDetectionOffset: 0.15
+  respawnInvulnerabilityDuration: 3
+  spawnRayHeight: 40
+  spawnRayDistance: 120
+  spawnGroundPadding: 0.08
+  spawnAirDropHeight: 10
+  spawnGroundMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!143 &9221579800806840827
 CharacterController:
   m_ObjectHideFlags: 0
@@ -435,6 +451,7 @@ MonoBehaviour:
   interactDistance: 4
   interactRadius: 0.45
   cameraHolder: {fileID: 7095383786988751147}
+  invertHotbarScroll: 0
   inventory: {fileID: 5729320078328354730}
   hotbar: {fileID: 0}
   hitRate: 0.5
@@ -443,6 +460,8 @@ MonoBehaviour:
   axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
   pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
   bottlePrefab: {fileID: 100200000000000101, guid: e8dbe9fa0afb4916b0f85b28e3ef90b0, type: 3}
+  silverAxePrefab: {fileID: 0}
+  silverPickaxePrefab: {fileID: 0}
   axeHandScale: {x: 0.2, y: 0.2, z: 0.3}
   pickaxeHandScale: {x: 0.2, y: 0.2, z: 0.2}
   startWithAxe: 1
