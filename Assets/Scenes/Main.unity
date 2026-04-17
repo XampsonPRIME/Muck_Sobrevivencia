@@ -172,16 +172,7 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects:
-    - {fileID: 6125935181786245488, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 8479306204121039585, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 716785992631925373, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 6803120343042235995, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 573378279711061690, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 1343014897889575357, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 250158425498699221, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 1172616527265669361, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
-    - {fileID: 5820327181679043288, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
+    m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d55a4b65f6a5d4425bf8f3a774428c31, type: 3}
@@ -248,10 +239,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: UI_Manager
       objectReference: {fileID: 0}
-    - target: {fileID: 1487305614135153377, guid: 742657e98fd37c34b99f65be74935d86, type: 3}
-      propertyPath: staminaFill
-      value: 
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -265,22 +252,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 1892660334093186981, guid: ac85a8379b706b344857c1add26265ae, type: 3}
-      propertyPath: dayText
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 1892660334093186981, guid: ac85a8379b706b344857c1add26265ae, type: 3}
-      propertyPath: hourText
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 1892660334093186981, guid: ac85a8379b706b344857c1add26265ae, type: 3}
-      propertyPath: darkOverlay
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 1892660334093186981, guid: ac85a8379b706b344857c1add26265ae, type: 3}
-      propertyPath: warningText
-      value: 
-      objectReference: {fileID: 0}
     - target: {fileID: 3826632446754268047, guid: ac85a8379b706b344857c1add26265ae, type: 3}
       propertyPath: m_LocalPosition.x
       value: 4.3369
@@ -589,14 +560,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: BossSpawnPoint
       objectReference: {fileID: 0}
-    - target: {fileID: 3847818677128638111, guid: 5994692f1cb744ec79272d9619fb1973, type: 3}
-      propertyPath: bossPrefab
-      value: 
-      objectReference: {fileID: 1382258774799692, guid: 61ae6162cedc141d29d5306a7a77605c, type: 3}
-    - target: {fileID: 3847818677128638111, guid: 5994692f1cb744ec79272d9619fb1973, type: 3}
-      propertyPath: playerPrefab
-      value: 
-      objectReference: {fileID: 8401812318578981924, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

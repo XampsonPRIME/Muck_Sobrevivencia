@@ -19,12 +19,14 @@ public class MiniKrug : MonoBehaviour
     [Header("Combate")]
     public float contactDamage = 8f;
     public float attackRange = 1.25f;
+    public float attackHitPadding = 0.65f;
     public float attackCooldown = 1f;
     public float moveSpeed = 4f;
     public float rotationSpeed = 10f;
     public float targetRefreshInterval = 0.4f;
     public bool pursueTarget = true;
     public float engageRange = 999f;
+    public bool huntPlayerAtNight = true;
 
     [Header("Drop")]
     public int minGoldDrop = 5;
@@ -117,13 +119,14 @@ public class MiniKrug : MonoBehaviour
             RefreshTarget();
 
         bool targetInEngageRange = IsTargetInsideEngageRange();
+        bool canAggressivelyEngageTarget = targetInEngageRange || ShouldIgnoreEngageRangeBecauseOfNight();
 
-        if (pursueTarget && targetInEngageRange)
+        if (pursueTarget && canAggressivelyEngageTarget)
             FollowTarget();
         else
             FaceTarget();
 
-        TryAttackPlayer(targetInEngageRange);
+        TryAttackPlayer(canAggressivelyEngageTarget);
         UpdateUIFacing();
     }
 
@@ -266,13 +269,15 @@ public class MiniKrug : MonoBehaviour
         Vector3 toPlayer = targetTransform.position - transform.position;
         toPlayer.y = 0f;
 
-        if (toPlayer.magnitude > attackRange)
+        if (toPlayer.magnitude > attackRange + Mathf.Max(0f, attackHitPadding))
             return;
 
         ResolveAnimationDriver();
         animationDriver?.PlayAttack();
 
-        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+        if (LanMultiplayerManager.Instance != null &&
+            LanMultiplayerManager.Instance.IsMultiplayerActive &&
+            !string.IsNullOrWhiteSpace(targetPlayerId))
             LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
         else
         {
@@ -294,6 +299,15 @@ public class MiniKrug : MonoBehaviour
         Vector3 toTarget = targetTransform.position - transform.position;
         toTarget.y = 0f;
         return toTarget.sqrMagnitude <= engageRange * engageRange;
+    }
+
+    bool ShouldIgnoreEngageRangeBecauseOfNight()
+    {
+        if (!huntPlayerAtNight)
+            return false;
+
+        DayNightCycle cycle = DayNightCycle.Instance;
+        return cycle != null && cycle.IsNight;
     }
 
     void FaceTarget()

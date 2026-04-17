@@ -44,8 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc866c52d3b043b2bdb5b47371c2bb94, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BossSpawnPoint
-  bossPrefab: {fileID: 100100000, guid: 166fb8ea58ce14828a3fe6b131146f24, type: 3}
-  playerPrefab: {fileID: 100100000, guid: 4d0824d1d5eff421db6f7f1b8cc83407, type: 3}
+  bossPrefab: {fileID: 1382258774799692, guid: 61ae6162cedc141d29d5306a7a77605c, type: 3}
+  playerPrefab: {fileID: 8401812318578981924, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
   spawnOnStart: 1
   ensurePlayerOnStart: 1
   groundRayHeight: 40

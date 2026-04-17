@@ -94,6 +94,7 @@ MonoBehaviour:
   targetRefreshInterval: 0.35
   pursueTarget: 1
   engageRange: 4.25
+  huntPlayerAtNight: 0
   minGoldDrop: 4
   maxGoldDrop: 9
   goldBonusPerLevel: 1

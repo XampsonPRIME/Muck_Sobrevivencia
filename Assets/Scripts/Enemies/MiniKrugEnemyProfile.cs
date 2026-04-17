@@ -21,6 +21,7 @@ public class MiniKrugEnemyProfile : MonoBehaviour
     public float targetRefreshInterval = 0.35f;
     public bool pursueTarget = true;
     public float engageRange = 999f;
+    public bool huntPlayerAtNight = false;
 
     [Header("Drop")]
     public int minGoldDrop = 4;
@@ -61,6 +62,7 @@ public class MiniKrugEnemyProfile : MonoBehaviour
         enemy.targetRefreshInterval = targetRefreshInterval;
         enemy.pursueTarget = pursueTarget;
         enemy.engageRange = engageRange;
+        enemy.huntPlayerAtNight = huntPlayerAtNight;
         enemy.minGoldDrop = minGoldDrop;
         enemy.maxGoldDrop = maxGoldDrop;
         enemy.goldBonusPerLevel = goldBonusPerLevel;

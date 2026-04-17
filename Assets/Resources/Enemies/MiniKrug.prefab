@@ -537,10 +537,12 @@ MonoBehaviour:
   maxHealth: 6
   contactDamage: 8
   attackRange: 1.25
+  attackHitPadding: 0.65
   attackCooldown: 1
   moveSpeed: 4
   rotationSpeed: 10
   targetRefreshInterval: 0.4
+  huntPlayerAtNight: 1
   minGoldDrop: 5
   maxGoldDrop: 10
   groundRayHeight: 10

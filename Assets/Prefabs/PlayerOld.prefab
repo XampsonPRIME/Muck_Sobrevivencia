@@ -356,7 +356,7 @@ MonoBehaviour:
   thirdPersonPitch: 15
   firstPersonOffset: {x: 0, y: 1.6, z: 0}
   thirdPersonOffset: {x: 0, y: 2, z: -3}
-  maxStamina: 500
+  maxStamina: 1000
   currentStamina: 0
   staminaDrain: 20
   staminaRecovery: 15

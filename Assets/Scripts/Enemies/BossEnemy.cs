@@ -470,7 +470,9 @@ public class BossEnemy : MonoBehaviour
         ResolveAnimationDriver();
         animationDriver?.PlayAttack();
 
-        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+        if (LanMultiplayerManager.Instance != null &&
+            LanMultiplayerManager.Instance.IsMultiplayerActive &&
+            !string.IsNullOrWhiteSpace(targetPlayerId))
             LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
         else
         {

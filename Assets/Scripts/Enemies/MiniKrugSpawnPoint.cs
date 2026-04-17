@@ -3,6 +3,8 @@ using UnityEngine;
 
 public class MiniKrugSpawnPoint : MonoBehaviour
 {
+    static MiniKrugSpawnPoint instance;
+
     public GameObject miniKrugPrefab;
     public int krugsPerWave = 4;
     public float minSpawnDistanceFromPlayer = 18f;
@@ -24,6 +26,18 @@ public class MiniKrugSpawnPoint : MonoBehaviour
         spawnerObject.AddComponent<MiniKrugSpawnPoint>();
     }
 
+    void Awake()
+    {
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+
     void Start()
     {
         if (!ShouldRunAuthority())
@@ -43,7 +57,10 @@ public class MiniKrugSpawnPoint : MonoBehaviour
         if (!ShouldRunAuthority())
             return;
 
-        DayNightCycle cycle = DayNightCycle.Instance;
+        if (miniKrugPrefab == null)
+            miniKrugPrefab = FindMiniKrugPrefab();
+
+        DayNightCycle cycle = DayNightCycle.Instance ?? FindFirstObjectByType<DayNightCycle>();
         if (cycle == null)
             return;
 
@@ -102,6 +119,9 @@ public class MiniKrugSpawnPoint : MonoBehaviour
             if (miniKrug == null)
                 miniKrug = miniKrugObject.AddComponent<MiniKrug>();
 
+            // Night-spawned MiniKrugs should immediately hunt the player like the old behavior.
+            miniKrug.pursueTarget = true;
+            miniKrug.engageRange = 0f;
             miniKrug.SetEnemyLevel(DetermineMiniKrugLevel(spawnPos));
             miniKrug.SetSpawnData(this);
             LanNetworkEntity.Ensure(miniKrug);
