@@ -54,6 +54,9 @@ public class MiniKrug : MonoBehaviour
     public float damagePopupLifetime = 0.8f;
     public float damagePopupRiseSpeed = 1.4f;
 
+    [Header("Visual")]
+    public float zombieVisualScale = 1.45f;
+
     int currentHealth;
     float nextAttackTime;
     float nextTargetRefreshTime;
@@ -276,13 +279,15 @@ public class MiniKrug : MonoBehaviour
 
         PlayAttackAnimation();
 
+        PlayerMovement targetPlayer = targetTransform.GetComponent<PlayerMovement>();
+        targetPlayer?.RegisterBossOrMiniBossCombat();
+
         if (LanMultiplayerManager.Instance != null &&
             LanMultiplayerManager.Instance.IsMultiplayerActive &&
             !string.IsNullOrWhiteSpace(targetPlayerId))
             LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
         else
         {
-            PlayerMovement targetPlayer = targetTransform.GetComponent<PlayerMovement>();
             targetPlayer?.TakeDamage(contactDamage);
         }
 
@@ -679,7 +684,7 @@ public class MiniKrug : MonoBehaviour
         visualOverrideInstance.name = "MiniKrugZombieVisual";
         visualOverrideInstance.transform.localPosition = Vector3.zero;
         visualOverrideInstance.transform.localRotation = Quaternion.identity;
-        visualOverrideInstance.transform.localScale = Vector3.one * 0.72f;
+        visualOverrideInstance.transform.localScale = Vector3.one * zombieVisualScale;
 
         ResolveAnimationDrivers();
         PlayIdleAnimation();

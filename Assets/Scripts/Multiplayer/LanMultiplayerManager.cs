@@ -2279,6 +2279,15 @@ public class LanMultiplayerManager : MonoBehaviour
         return !string.IsNullOrWhiteSpace(entityId) && destroyedEntities.ContainsKey(entityId);
     }
 
+    public void ClearDestroyedEntity(string entityId)
+    {
+        if (string.IsNullOrWhiteSpace(entityId))
+            return;
+
+        destroyedEntities.Remove(entityId);
+        pendingEntityUpdates.Remove(entityId);
+    }
+
     public void NotifyEnemyDestroyed(Component enemy)
     {
         if (enemy == null || !IsServerAuthority)

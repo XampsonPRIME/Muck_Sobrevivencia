@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -15,11 +16,13 @@ public class PlayerMagic : MonoBehaviour
     [Range(0f, 1f)] public float areaMagicStaminaCostPercent = 0.8f;
     public float effectDuration = 0.6f;
     public Color effectColor = new Color(0.24f, 0.86f, 1f, 0.9f);
+    public AudioSource magicSfxSource;
 
     PlayerMovement playerMovement;
     InputAction castMagicAction;
     float nextMagicCastTime;
     MagicCooldownHUDView cooldownHudView;
+    Coroutine stopMagicSfxCoroutine;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -38,6 +41,7 @@ public class PlayerMagic : MonoBehaviour
     {
         playerMovement = GetComponent<PlayerMovement>();
         castMagicAction = new InputAction("CastMagic", binding: "<Keyboard>/g");
+        EnsureMagicAudioSource();
     }
 
     void OnEnable()
@@ -122,13 +126,15 @@ public class PlayerMagic : MonoBehaviour
         if (cooldownHudView == null || cooldownHudView.iconImage == null || cooldownHudView.cooldownFillImage == null)
             return;
 
+        MagicSpellConfig config = GetActiveMagicConfig();
+
         bool shouldShow = hasUnlockedAreaMagic && !GameState.IsPlayerDead;
         cooldownHudView.gameObject.SetActive(shouldShow);
 
         if (!shouldShow)
             return;
 
-        cooldownHudView.iconImage.sprite = MagicSpellItemRegistry.GetMagicSprite(MagicSpellConfig.FindConfig());
+        cooldownHudView.iconImage.sprite = MagicSpellItemRegistry.GetMagicSprite(config);
         cooldownHudView.iconImage.enabled = cooldownHudView.iconImage.sprite != null;
 
         float cooldownRemaining = Mathf.Max(0f, nextMagicCastTime - Time.time);
@@ -166,12 +172,14 @@ public class PlayerMagic : MonoBehaviour
 
         playerMovement.currentStamina = Mathf.Max(0f, playerMovement.currentStamina - staminaCost);
         nextMagicCastTime = Time.time + areaMagicCooldown;
+        PlayMagicCastSound(GetActiveMagicConfig());
         SpawnMagicEffect();
 
         Collider[] hits = Physics.OverlapSphere(transform.position, areaMagicRange, ~0, QueryTriggerInteraction.Collide);
         HashSet<MiniKrug> hitMiniKrugs = new HashSet<MiniKrug>();
         HashSet<BossEnemy> hitBosses = new HashSet<BossEnemy>();
         int affectedCount = 0;
+        bool hitBossOrMiniBoss = false;
 
         foreach (Collider hit in hits)
         {
@@ -185,11 +193,13 @@ public class PlayerMagic : MonoBehaviour
                     LanMultiplayerManager.Instance.TryHandleGameplayHit(miniKrug, playerMovement, ToolType.Axe, areaMagicDamage))
                 {
                     affectedCount++;
+                    hitBossOrMiniBoss = true;
                     continue;
                 }
 
                 miniKrug.Hit(areaMagicDamage, playerMovement);
                 affectedCount++;
+                hitBossOrMiniBoss = true;
                 continue;
             }
 
@@ -200,6 +210,7 @@ public class PlayerMagic : MonoBehaviour
                     LanMultiplayerManager.Instance.TryHandleGameplayHit(bossEnemy, playerMovement, ToolType.Axe, areaMagicDamage))
                 {
                     affectedCount++;
+                    hitBossOrMiniBoss = true;
                     continue;
                 }
 
@@ -211,8 +222,12 @@ public class PlayerMagic : MonoBehaviour
 
                 bossEnemy.Hit(areaMagicDamage, playerMovement);
                 affectedCount++;
+                hitBossOrMiniBoss = true;
             }
         }
+
+        if (hitBossOrMiniBoss)
+            playerMovement.RegisterBossOrMiniBossCombat();
 
         MessageSystem.Instance?.ShowMessage(affectedCount > 0 ? "Magia ancestral ativada!" : "A magia explodiu, mas nao atingiu inimigos.");
         return true;
@@ -227,6 +242,71 @@ public class PlayerMagic : MonoBehaviour
         effect.duration = effectDuration;
         effect.maxRadius = areaMagicRange;
         effect.effectColor = effectColor;
+    }
+
+    MagicSpellConfig GetActiveMagicConfig()
+    {
+        return MagicSpellConfig.FindConfig();
+    }
+
+    void EnsureMagicAudioSource()
+    {
+        if (magicSfxSource != null)
+            return;
+
+        AudioSource existingSource = GetComponent<AudioSource>();
+        if (existingSource != null && existingSource != playerMovement?.sfxSource)
+        {
+            magicSfxSource = existingSource;
+        }
+        else
+        {
+            magicSfxSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        magicSfxSource.playOnAwake = false;
+        magicSfxSource.loop = false;
+        magicSfxSource.spatialBlend = 0f;
+    }
+
+    void PlayMagicCastSound(MagicSpellConfig config)
+    {
+        if (config == null || config.castSound == null)
+            return;
+
+        EnsureMagicAudioSource();
+
+        if (magicSfxSource == null)
+            return;
+
+        if (stopMagicSfxCoroutine != null)
+        {
+            StopCoroutine(stopMagicSfxCoroutine);
+            stopMagicSfxCoroutine = null;
+        }
+
+        magicSfxSource.Stop();
+        magicSfxSource.clip = config.castSound;
+        magicSfxSource.volume = Mathf.Clamp01(config.castSoundVolume);
+        magicSfxSource.time = 0f;
+        magicSfxSource.Play();
+
+        float duration = config.castSoundDuration > 0f
+            ? Mathf.Min(config.castSoundDuration, config.castSound.length)
+            : config.castSound.length;
+
+        stopMagicSfxCoroutine = StartCoroutine(StopMagicSfxAfterDelay(duration));
+    }
+
+    IEnumerator StopMagicSfxAfterDelay(float delay)
+    {
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (magicSfxSource != null && magicSfxSource.isPlaying)
+            magicSfxSource.Stop();
+
+        stopMagicSfxCoroutine = null;
     }
 
     void OnDrawGizmosSelected()

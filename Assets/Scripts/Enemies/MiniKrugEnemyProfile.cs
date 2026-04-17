@@ -6,6 +6,9 @@ public class MiniKrugEnemyProfile : MonoBehaviour
     [Header("Identidade")]
     public string rewardDisplayName = "Mushroom Mon";
 
+    [Header("Visual")]
+    public Vector3 spawnScale = new Vector3(1.18f, 1.18f, 1.18f);
+
     [Header("Vida")]
     public int maxHealth = 18;
     public int healthBonusPerLevel = 4;

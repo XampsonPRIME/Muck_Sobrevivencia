@@ -29,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 1, z: -0, w: 0.00000058114523}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.3, y: 0.3, z: 0.3}
+  m_LocalScale: {x: 0.33183, y: 0.33183, z: 0.33183}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4627633284843166}
@@ -82,6 +82,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rewardDisplayName: Mushroom Mon
+  spawnScale: {x: 1.18, y: 1.18, z: 1.18}
   maxHealth: 15
   healthBonusPerLevel: 4
   contactDamage: 12

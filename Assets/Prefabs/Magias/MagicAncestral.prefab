@@ -47,6 +47,9 @@ MonoBehaviour:
   itemName: Magia Ancestral
   magicName: Magia Ancestral
   icon: {fileID: 21300000, guid: 8fe174e4245f14587af0987710925edf, type: 3}
+  castSound: {fileID: 8300000, guid: 05464f21c2c3c42e8a4e6aa5c3b7f836, type: 3}
+  castSoundVolume: 1
+  castSoundDuration: 0
   consumeHoldTime: 0.6
   handLocalPosition: {x: 0.06, y: 0.02, z: 0.12}
   handLocalEulerAngles: {x: 8, y: 0, z: 88}

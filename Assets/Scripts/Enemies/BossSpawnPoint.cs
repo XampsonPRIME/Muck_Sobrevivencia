@@ -6,6 +6,7 @@ public class BossSpawnPoint : MonoBehaviour
     public GameObject bossPrefab;
     public GameObject playerPrefab;
     public bool spawnOnStart = true;
+    public bool respawnEveryDay = true;
     public bool ensurePlayerOnStart = true;
     public float groundRayHeight = 40f;
     public float groundRayDistance = 120f;
@@ -15,12 +16,22 @@ public class BossSpawnPoint : MonoBehaviour
     GameObject spawnedBoss;
     GameObject spawnedPlayer;
 
+    void OnEnable()
+    {
+        DayNightCycle.DayStarted += HandleDayStarted;
+    }
+
+    void OnDisable()
+    {
+        DayNightCycle.DayStarted -= HandleDayStarted;
+    }
+
     void Start()
     {
         if (ensurePlayerOnStart)
             SpawnPlayerIfNeeded();
 
-        if (!spawnOnStart || bossPrefab == null)
+        if (!spawnOnStart || bossPrefab == null || !ShouldRunAuthority())
             return;
 
         SpawnBoss();
@@ -71,6 +82,29 @@ public class BossSpawnPoint : MonoBehaviour
         spawnedBoss = Instantiate(bossPrefab, finalSpawnPosition, transform.rotation);
         spawnedBoss.name = bossPrefab.name;
         LanNetworkEntity.Ensure(spawnedBoss.transform, BuildBossEntityId());
+    }
+
+    void HandleDayStarted(int day)
+    {
+        if (!respawnEveryDay || bossPrefab == null || !ShouldRunAuthority())
+            return;
+
+        if (spawnedBoss != null)
+            return;
+
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager != null)
+            manager.ClearDestroyedEntity(BuildBossEntityId());
+
+        SpawnBoss();
+    }
+
+    bool ShouldRunAuthority()
+    {
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance ?? FindFirstObjectByType<LanMultiplayerManager>();
+        return manager == null ||
+               !manager.IsMultiplayerActive ||
+               manager.IsServerAuthority;
     }
 
     void SpawnPlayerIfNeeded()

@@ -3,10 +3,16 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using System.Collections;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
 {
+    const string CombatMusicResourcePath = "Audio/music_combat";
+    const string AmbientMusicClipName = "Forest_Whispering";
+
+    public static bool IsCombatMusicActive { get; private set; }
+
     [Header("Movimento")]
     public float walkSpeed = 4f;
     public float runSpeed = 8f;
@@ -77,6 +83,19 @@ public class PlayerMovement : MonoBehaviour
     public float spawnAirDropHeight = 10f;
     public LayerMask spawnGroundMask = ~0;
 
+    [Header("Audio")]
+    public AudioSource sfxSource;
+    public AudioClip attackSound;
+    [Range(0f, 1f)] public float attackSoundVolume = 1f;
+    public float attackSoundDuration = 3f;
+    public AudioClip deathSound;
+    [Range(0f, 1f)] public float deathSoundVolume = 1f;
+    public AudioSource combatMusicSource;
+    public AudioClip combatMusicClip;
+    [Range(0f, 1f)] public float combatMusicVolume = 0.75f;
+    public float combatMusicHoldDuration = 6f;
+    public float combatMusicFadeSpeed = 2f;
+
     CharacterController controller;
     PlayerControls controls;
     Animator anim;
@@ -104,6 +123,10 @@ public class PlayerMovement : MonoBehaviour
     Vector3 spawnPosition;
     Quaternion spawnRotation;
     GameObject deathMessageInstance;
+    Coroutine stopSfxCoroutine;
+    float combatMusicUntilTime;
+    readonly List<AudioSource> pausedAmbientMusicSources = new List<AudioSource>();
+    bool ambientMusicPausedForCombat;
 
     GameObject playerModel;
     Vector3 playerModelStartLocalPosition;
@@ -128,6 +151,9 @@ public class PlayerMovement : MonoBehaviour
         hotbar = GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
         spawnPosition = ResolveSafeSpawnPosition(transform.position);
         spawnRotation = transform.rotation;
+        EnsureSfxSource();
+        EnsureCombatMusicSource();
+        LoadCombatMusicClip();
     }
 
     void OnEnable()
@@ -158,6 +184,8 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        HandleCombatMusic();
+
         if (GameState.IsInLobby)
         {
             moveInput = Vector2.zero;
@@ -456,6 +484,23 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    public void PlayAttackSound()
+    {
+        PlaySfx(attackSound, attackSoundVolume, attackSoundDuration);
+    }
+
+    public void PlayDeathSound()
+    {
+        PlaySfx(deathSound, deathSoundVolume);
+    }
+
+    public void RegisterBossOrMiniBossCombat(float duration = -1f)
+    {
+        float holdDuration = duration > 0f ? duration : combatMusicHoldDuration;
+        combatMusicUntilTime = Mathf.Max(combatMusicUntilTime, Time.unscaledTime + Mathf.Max(0.1f, holdDuration));
+        LoadCombatMusicClip();
+    }
+
     void Die()
     {
         GameState.IsPlayerDead = true;
@@ -477,9 +522,189 @@ public class PlayerMovement : MonoBehaviour
         if (inventoryUi != null)
             inventoryUi.Refresh();
 
+        PlayDeathSound();
         ShowDeathMessage();
 
         Debug.Log("Player morreu");
+    }
+
+    void EnsureSfxSource()
+    {
+        if (sfxSource != null)
+            return;
+
+        sfxSource = GetComponent<AudioSource>();
+
+        if (sfxSource == null)
+            sfxSource = gameObject.AddComponent<AudioSource>();
+
+        sfxSource.playOnAwake = false;
+    }
+
+    void EnsureCombatMusicSource()
+    {
+        if (combatMusicSource != null)
+            return;
+
+        AudioSource[] audioSources = GetComponents<AudioSource>();
+        AudioSource magicSource = GetComponent<PlayerMagic>()?.magicSfxSource;
+
+        foreach (AudioSource audioSource in audioSources)
+        {
+            if (audioSource == null || audioSource == sfxSource || audioSource == magicSource)
+                continue;
+
+            combatMusicSource = audioSource;
+            break;
+        }
+
+        if (combatMusicSource == null)
+            combatMusicSource = gameObject.AddComponent<AudioSource>();
+
+        combatMusicSource.playOnAwake = false;
+        combatMusicSource.loop = true;
+        combatMusicSource.spatialBlend = 0f;
+        combatMusicSource.volume = 0f;
+    }
+
+    void LoadCombatMusicClip()
+    {
+        if (combatMusicClip != null)
+            return;
+
+        combatMusicClip = Resources.Load<AudioClip>(CombatMusicResourcePath);
+    }
+
+    void HandleCombatMusic()
+    {
+        EnsureCombatMusicSource();
+        LoadCombatMusicClip();
+
+        if (combatMusicSource == null || combatMusicClip == null)
+            return;
+
+        bool shouldPlayCombatMusic =
+            !GameState.IsInLobby &&
+            !GameState.IsPaused &&
+            !GameState.IsPlayerDead &&
+            Time.unscaledTime < combatMusicUntilTime;
+
+        IsCombatMusicActive = shouldPlayCombatMusic;
+
+        if (combatMusicSource.clip != combatMusicClip)
+            combatMusicSource.clip = combatMusicClip;
+
+        float fadeStep = Mathf.Max(0.01f, combatMusicFadeSpeed) * Time.unscaledDeltaTime;
+        float targetVolume = shouldPlayCombatMusic ? Mathf.Clamp01(combatMusicVolume) : 0f;
+
+        if (shouldPlayCombatMusic && !combatMusicSource.isPlaying)
+            combatMusicSource.Play();
+
+        combatMusicSource.volume = Mathf.MoveTowards(combatMusicSource.volume, targetVolume, fadeStep);
+
+        if (!shouldPlayCombatMusic && combatMusicSource.isPlaying && combatMusicSource.volume <= 0.001f)
+            combatMusicSource.Stop();
+
+        UpdateAmbientMusicPauseState(shouldPlayCombatMusic);
+    }
+
+    void UpdateAmbientMusicPauseState(bool shouldPauseAmbientMusic)
+    {
+        if (shouldPauseAmbientMusic)
+        {
+            if (!ambientMusicPausedForCombat)
+                PauseAmbientMusicSources();
+
+            return;
+        }
+
+        if (ambientMusicPausedForCombat)
+            ResumeAmbientMusicSources();
+    }
+
+    void PauseAmbientMusicSources()
+    {
+        pausedAmbientMusicSources.Clear();
+
+        AudioSource[] audioSources = FindObjectsByType<AudioSource>(FindObjectsSortMode.None);
+        foreach (AudioSource audioSource in audioSources)
+        {
+            if (!IsSceneAmbientMusicSource(audioSource) || !audioSource.isPlaying)
+                continue;
+
+            audioSource.Pause();
+            pausedAmbientMusicSources.Add(audioSource);
+        }
+
+        ambientMusicPausedForCombat = true;
+    }
+
+    void ResumeAmbientMusicSources()
+    {
+        for (int i = 0; i < pausedAmbientMusicSources.Count; i++)
+        {
+            AudioSource audioSource = pausedAmbientMusicSources[i];
+            if (audioSource == null)
+                continue;
+
+            audioSource.UnPause();
+        }
+
+        pausedAmbientMusicSources.Clear();
+        ambientMusicPausedForCombat = false;
+    }
+
+    bool IsSceneAmbientMusicSource(AudioSource audioSource)
+    {
+        if (audioSource == null || audioSource.clip == null)
+            return false;
+
+        if (audioSource == sfxSource || audioSource == combatMusicSource)
+            return false;
+
+        PlayerMagic playerMagic = GetComponent<PlayerMagic>();
+        if (playerMagic != null && audioSource == playerMagic.magicSfxSource)
+            return false;
+
+        return string.Equals(audioSource.clip.name, AmbientMusicClipName, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    void PlaySfx(AudioClip clip, float volume, float maxDuration = 0f)
+    {
+        if (clip == null)
+            return;
+
+        EnsureSfxSource();
+
+        if (sfxSource == null)
+            return;
+
+        if (stopSfxCoroutine != null)
+        {
+            StopCoroutine(stopSfxCoroutine);
+            stopSfxCoroutine = null;
+        }
+
+        sfxSource.Stop();
+        sfxSource.clip = clip;
+        sfxSource.volume = Mathf.Clamp01(volume);
+        sfxSource.loop = false;
+        sfxSource.time = 0f;
+        sfxSource.Play();
+
+        float duration = maxDuration > 0f ? Mathf.Min(maxDuration, clip.length) : clip.length;
+        stopSfxCoroutine = StartCoroutine(StopSfxAfterDelay(duration));
+    }
+
+    IEnumerator StopSfxAfterDelay(float delay)
+    {
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (sfxSource != null && sfxSource.isPlaying)
+            sfxSource.Stop();
+
+        stopSfxCoroutine = null;
     }
 
     void Respawn()

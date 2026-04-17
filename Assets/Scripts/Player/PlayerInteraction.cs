@@ -440,11 +440,15 @@ public class PlayerInteraction : MonoBehaviour
             anim.SetTrigger("Chop");
         }
 
+        playerMovement?.PlayAttackSound();
+
         MiniKrug miniKrug = hit.collider.GetComponent<MiniKrug>() ??
                             hit.collider.GetComponentInParent<MiniKrug>();
 
         if (miniKrug != null)
         {
+            playerMovement?.RegisterBossOrMiniBossCombat();
+
             if (LanMultiplayerManager.Instance != null &&
                 LanMultiplayerManager.Instance.TryHandleGameplayHit(miniKrug, playerMovement, currentTool, toolDamage))
                 return;
@@ -468,6 +472,7 @@ public class PlayerInteraction : MonoBehaviour
                 return;
             }
 
+            playerMovement?.RegisterBossOrMiniBossCombat();
             bossEnemy.Hit(toolDamage, playerMovement);
             return;
         }

@@ -14,7 +14,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 5349e65ca68a64ff1a3d53a23854d1b9, type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.5
+      value: 0.90745
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 5349e65ca68a64ff1a3d53a23854d1b9, type: 3}
       propertyPath: m_LocalScale.z
@@ -123,3 +123,6 @@ MonoBehaviour:
   maxDrop: 5
   itemData: {fileID: 3921127511021913919, guid: 9971841386aff42ac919e44cddeaea9c, type: 3}
   requiredTool: 1
+  emptyHandDamage: 1
+  emptyHandMinDrop: 1
+  emptyHandMaxDrop: 1

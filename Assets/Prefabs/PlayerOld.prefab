@@ -398,6 +398,12 @@ MonoBehaviour:
   spawnGroundMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  sfxSource: {fileID: 0}
+  attackSound: {fileID: 8300000, guid: c424e2b98eadc4de9bf89a532e23cd88, type: 3}
+  attackSoundVolume: 1
+  attackSoundDuration: 0.8
+  deathSound: {fileID: 8300000, guid: af4972954fd0642a1add7937b1664785, type: 3}
+  deathSoundVolume: 1
 --- !u!143 &9221579800806840827
 CharacterController:
   m_ObjectHideFlags: 0

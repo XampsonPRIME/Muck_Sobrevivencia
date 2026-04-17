@@ -2,10 +2,12 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.SceneManagement;
+using System;
 
 public class DayNightCycle : MonoBehaviour
 {
     public static DayNightCycle Instance { get; private set; }
+    public static event Action<int> DayStarted;
 
     public TextMeshProUGUI warningText;
     public Material skyboxMaterial;
@@ -95,6 +97,7 @@ public class DayNightCycle : MonoBehaviour
         {
             timeOfDay -= 1f;
             currentDay++;
+            DayStarted?.Invoke(currentDay);
         }
 
         ApplyCycleVisuals();

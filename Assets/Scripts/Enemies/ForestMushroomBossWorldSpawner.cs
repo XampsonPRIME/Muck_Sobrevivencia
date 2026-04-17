@@ -6,6 +6,7 @@ public class ForestMushroomBossWorldSpawner : MonoBehaviour
     public float spawnCheckInterval = 2f;
     public float minDistanceFromPlayer = 70f;
     public int candidateSalt = 911;
+    public bool respawnEveryDay = true;
 
     GameObject bossPrefab;
     BossEnemy spawnedBoss;
@@ -19,6 +20,16 @@ public class ForestMushroomBossWorldSpawner : MonoBehaviour
 
         GameObject spawnerObject = new GameObject("Forest Mushroom Boss World Spawner");
         spawnerObject.AddComponent<ForestMushroomBossWorldSpawner>();
+    }
+
+    void OnEnable()
+    {
+        DayNightCycle.DayStarted += HandleDayStarted;
+    }
+
+    void OnDisable()
+    {
+        DayNightCycle.DayStarted -= HandleDayStarted;
     }
 
     void Update()
@@ -59,6 +70,21 @@ public class ForestMushroomBossWorldSpawner : MonoBehaviour
             return;
 
         LanNetworkEntity.Ensure(spawnedBoss.transform, ForestMushroomBossFactory.EntityId);
+    }
+
+    void HandleDayStarted(int day)
+    {
+        if (!respawnEveryDay || !ShouldRunAuthority() || SceneHasManualBossSpawner())
+            return;
+
+        if (spawnedBoss != null)
+            return;
+
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager != null)
+            manager.ClearDestroyedEntity(ForestMushroomBossFactory.EntityId);
+
+        nextSpawnCheckTime = 0f;
     }
 
     bool TryFindSpawnPosition(out Vector3 spawnPosition)

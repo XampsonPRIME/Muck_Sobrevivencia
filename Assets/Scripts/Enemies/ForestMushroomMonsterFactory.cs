@@ -68,7 +68,7 @@ public static class ForestMushroomMonsterFactory
             enemy.RefreshBaseStats();
         }
 
-        enemyObject.transform.localScale = Vector3.one;
+        enemyObject.transform.localScale = profile != null ? profile.spawnScale : Vector3.one;
 
         return enemy;
     }

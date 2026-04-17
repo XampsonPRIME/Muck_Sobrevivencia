@@ -470,13 +470,15 @@ public class BossEnemy : MonoBehaviour
         ResolveAnimationDriver();
         animationDriver?.PlayAttack();
 
+        PlayerMovement targetPlayer = targetTransform.GetComponent<PlayerMovement>();
+        targetPlayer?.RegisterBossOrMiniBossCombat();
+
         if (LanMultiplayerManager.Instance != null &&
             LanMultiplayerManager.Instance.IsMultiplayerActive &&
             !string.IsNullOrWhiteSpace(targetPlayerId))
             LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
         else
         {
-            PlayerMovement targetPlayer = targetTransform.GetComponent<PlayerMovement>();
             targetPlayer?.TakeDamage(contactDamage);
         }
 
@@ -508,6 +510,7 @@ public class BossEnemy : MonoBehaviour
         isPerformingAreaAttack = true;
         ResolveAnimationDriver();
         animationDriver?.PlayAttack();
+        targetTransform?.GetComponent<PlayerMovement>()?.RegisterBossOrMiniBossCombat();
 
         Vector3 attackCenter = targetPosition;
         if (TryGetGroundPosition(attackCenter, out Vector3 groundedTarget))

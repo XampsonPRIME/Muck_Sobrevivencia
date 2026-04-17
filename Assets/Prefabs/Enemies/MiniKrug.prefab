@@ -552,6 +552,7 @@ MonoBehaviour:
   healthUiVisibleDuration: 2
   damagePopupLifetime: 0.8
   damagePopupRiseSpeed: 1.4
+  zombieVisualScale: 1.45
 --- !u!1 &5444975603017879059
 GameObject:
   m_ObjectHideFlags: 0
