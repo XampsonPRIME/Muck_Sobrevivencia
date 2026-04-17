@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,6 +28,18 @@ public class BossEnemy : MonoBehaviour
     public float detectionRange = 18f;
     public float targetRefreshInterval = 0.35f;
 
+    [Header("Ataque em Area")]
+    public bool enableAreaAttack;
+    public float areaAttackDamage = 34f;
+    public float areaAttackRadius = 4.4f;
+    public float areaAttackTriggerRange = 7f;
+    public float areaAttackCooldown = 6f;
+    public float areaAttackTelegraphDuration = 1.05f;
+    public float areaAttackMinRange = 2.25f;
+    public float areaAttackIndicatorYOffset = 0.04f;
+    public float areaAttackIndicatorThickness = 0.08f;
+    public Color areaAttackIndicatorColor = new Color(1f, 0.28f, 0.18f, 0.45f);
+
     [Header("Territorio")]
     public float maxChaseDistanceFromSpawn = 9f;
     public float patrolRadius = 3.5f;
@@ -42,6 +55,9 @@ public class BossEnemy : MonoBehaviour
     public float groundRayHeight = 12f;
     public float maxGroundRayDistance = 30f;
     public LayerMask groundMask = ~0;
+    public Vector3 colliderCenter = new Vector3(0f, 1.2f, 0f);
+    public float colliderRadius = 0.85f;
+    public float colliderHeight = 2.4f;
 
     [Header("Feedback")]
     public Vector3 uiWorldOffset = new Vector3(0f, 2.4f, 0f);
@@ -53,6 +69,7 @@ public class BossEnemy : MonoBehaviour
     float nextAttackTime;
     float nextTargetRefreshTime;
     float nextPatrolRefreshTime;
+    float nextAreaAttackTime;
     float healthUiHideTime;
     int baseMaxHealth;
     float baseContactDamage;
@@ -65,6 +82,7 @@ public class BossEnemy : MonoBehaviour
     public int BossLevel => bossLevel;
     public int MinimumPlayerLevel => Mathf.Max(1, minimumPlayerLevel <= 0 ? bossLevel : minimumPlayerLevel);
     public string DisplayName => string.IsNullOrWhiteSpace(bossDisplayName) ? gameObject.name : bossDisplayName;
+    public bool IsPendingDestroy => isPendingDestroy;
 
     Vector3 spawnPosition;
     Vector3 patrolTarget;
@@ -75,6 +93,11 @@ public class BossEnemy : MonoBehaviour
     Canvas worldCanvas;
     Image healthFillImage;
     TextMeshProUGUI healthText;
+    BossLegacyAnimationDriver animationDriver;
+    Coroutine areaAttackRoutine;
+    Coroutine destroyRoutine;
+    bool isPerformingAreaAttack;
+    bool isPendingDestroy;
     static Material bodyMaterial;
     static Material accentMaterial;
 
@@ -100,6 +123,8 @@ public class BossEnemy : MonoBehaviour
         UpdateHealthUI(false);
         RefreshTarget();
         PickPatrolTarget(true);
+        ResolveAnimationDriver();
+        animationDriver?.PlayIdle();
     }
 
     void EnsureVisibleModel()
@@ -199,6 +224,12 @@ public class BossEnemy : MonoBehaviour
         if (worldCanvas == null || healthFillImage == null || healthText == null)
             EnsureCombatUI();
 
+        if (isPendingDestroy)
+        {
+            UpdateUIFacing();
+            return;
+        }
+
         if (ShouldUseNetworkAuthority())
         {
             UpdateUIFacing();
@@ -208,6 +239,19 @@ public class BossEnemy : MonoBehaviour
         if (Time.time >= nextTargetRefreshTime || targetTransform == null)
             RefreshTarget();
 
+        if (isPerformingAreaAttack)
+        {
+            FaceTarget();
+            UpdateUIFacing();
+            return;
+        }
+
+        if (TryStartAreaAttack())
+        {
+            UpdateUIFacing();
+            return;
+        }
+
         UpdateMovement();
         TryAttackPlayer();
         UpdateUIFacing();
@@ -215,9 +259,14 @@ public class BossEnemy : MonoBehaviour
 
     public void Hit(int damage, PlayerMovement attacker)
     {
+        if (isPendingDestroy)
+            return;
+
         int finalDamage = Mathf.Max(1, damage);
         currentHealth -= finalDamage;
         lastAttacker = attacker;
+        ResolveAnimationDriver();
+        animationDriver?.PlayDamage();
         ShowDamagePopup(finalDamage);
         ShowHealthUITemporarily();
         UpdateHealthUI(true);
@@ -228,8 +277,20 @@ public class BossEnemy : MonoBehaviour
 
     public void ApplyNetworkHit(int damage, out int goldAmount, out int xpAmount, out bool unlockMagic, out int remainingHealth, out bool destroyed)
     {
+        if (isPendingDestroy)
+        {
+            goldAmount = 0;
+            xpAmount = 0;
+            unlockMagic = false;
+            remainingHealth = 0;
+            destroyed = true;
+            return;
+        }
+
         int finalDamage = Mathf.Max(1, damage);
         currentHealth -= finalDamage;
+        ResolveAnimationDriver();
+        animationDriver?.PlayDamage();
         ShowDamagePopup(finalDamage);
         ShowHealthUITemporarily();
         UpdateHealthUI(true);
@@ -241,7 +302,7 @@ public class BossEnemy : MonoBehaviour
         remainingHealth = Mathf.Max(0, currentHealth);
 
         if (destroyed)
-            Destroy(gameObject);
+            BeginDeathSequence();
     }
 
     public void ApplyNetworkState(int networkHealth, bool destroyed)
@@ -250,7 +311,7 @@ public class BossEnemy : MonoBehaviour
         UpdateHealthUI(!destroyed);
 
         if (destroyed)
-            Destroy(gameObject);
+            BeginDeathSequence();
     }
 
     public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkLevel, int networkHealth, bool destroyed)
@@ -282,6 +343,8 @@ public class BossEnemy : MonoBehaviour
         if (worldCanvas == null || healthFillImage == null || healthText == null)
             EnsureCombatUI();
 
+        ResolveAnimationDriver();
+        animationDriver?.PlayDamage();
         ShowDamagePopup(Mathf.Max(1, damage));
         ShowHealthUITemporarily();
         UpdateHealthUI(true);
@@ -378,6 +441,21 @@ public class BossEnemy : MonoBehaviour
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
 
+    void FaceTarget()
+    {
+        if (targetTransform == null)
+            return;
+
+        Vector3 toTarget = targetTransform.position - transform.position;
+        toTarget.y = 0f;
+
+        if (toTarget.sqrMagnitude <= 0.0001f)
+            return;
+
+        Quaternion targetRotation = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+    }
+
     void TryAttackPlayer()
     {
         if (targetTransform == null || Time.time < nextAttackTime)
@@ -389,6 +467,9 @@ public class BossEnemy : MonoBehaviour
         if (toPlayer.magnitude > attackRange)
             return;
 
+        ResolveAnimationDriver();
+        animationDriver?.PlayAttack();
+
         if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
             LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
         else
@@ -398,6 +479,77 @@ public class BossEnemy : MonoBehaviour
         }
 
         nextAttackTime = Time.time + attackCooldown;
+    }
+
+    bool TryStartAreaAttack()
+    {
+        if (!enableAreaAttack || targetTransform == null || Time.time < nextAreaAttackTime)
+            return false;
+
+        Vector3 toPlayer = targetTransform.position - transform.position;
+        toPlayer.y = 0f;
+        float distanceToPlayer = toPlayer.magnitude;
+
+        if (distanceToPlayer > areaAttackTriggerRange || distanceToPlayer < areaAttackMinRange)
+            return false;
+
+        nextAreaAttackTime = Time.time + areaAttackCooldown;
+        if (areaAttackRoutine != null)
+            StopCoroutine(areaAttackRoutine);
+
+        areaAttackRoutine = StartCoroutine(PerformAreaAttack(targetTransform.position));
+        return true;
+    }
+
+    IEnumerator PerformAreaAttack(Vector3 targetPosition)
+    {
+        isPerformingAreaAttack = true;
+        ResolveAnimationDriver();
+        animationDriver?.PlayAttack();
+
+        Vector3 attackCenter = targetPosition;
+        if (TryGetGroundPosition(attackCenter, out Vector3 groundedTarget))
+            attackCenter = groundedTarget;
+
+        BossAreaAttackIndicator indicator = BossAreaAttackIndicator.Create(
+            attackCenter + Vector3.up * areaAttackIndicatorYOffset,
+            areaAttackRadius,
+            areaAttackIndicatorThickness,
+            areaAttackIndicatorColor,
+            Mathf.Max(0.1f, areaAttackTelegraphDuration));
+
+        yield return new WaitForSeconds(Mathf.Max(0.1f, areaAttackTelegraphDuration));
+
+        if (indicator != null)
+            indicator.TriggerImpact();
+
+        ApplyAreaAttackDamage(attackCenter);
+        isPerformingAreaAttack = false;
+        areaAttackRoutine = null;
+    }
+
+    void ApplyAreaAttackDamage(Vector3 attackCenter)
+    {
+        if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
+        {
+            LanMultiplayerManager.Instance.ApplyEnemyAreaDamage(attackCenter, areaAttackRadius, areaAttackDamage);
+            return;
+        }
+
+        PlayerMovement[] players = LanMultiplayerManager.GetGameplayPlayers();
+        float radiusSqr = areaAttackRadius * areaAttackRadius;
+
+        for (int i = 0; i < players.Length; i++)
+        {
+            PlayerMovement player = players[i];
+            if (player == null)
+                continue;
+
+            Vector3 toPlayer = player.transform.position - attackCenter;
+            toPlayer.y = 0f;
+            if (toPlayer.sqrMagnitude <= radiusSqr)
+                player.TakeDamage(areaAttackDamage);
+        }
     }
 
     void RefreshTarget()
@@ -520,10 +672,13 @@ public class BossEnemy : MonoBehaviour
 
     void Die()
     {
+        if (isPendingDestroy)
+            return;
+
         DropMagicPickup();
         AwardExperienceIfKilledByPlayer();
         DropGoldIfKilledByPlayer();
-        Destroy(gameObject);
+        BeginDeathSequence();
     }
 
     void AwardExperienceIfKilledByPlayer()
@@ -533,7 +688,7 @@ public class BossEnemy : MonoBehaviour
 
         PlayerProgression progression = lastAttacker.GetComponent<PlayerProgression>();
         if (progression != null)
-            progression.AddExperience(xpReward, "Boss");
+            progression.AddExperience(xpReward, DisplayName);
     }
 
     void DropGoldIfKilledByPlayer()
@@ -685,13 +840,17 @@ public class BossEnemy : MonoBehaviour
     void EnsureMainCollider()
     {
         Collider col = GetComponent<Collider>();
-        if (col == null)
-        {
-            CapsuleCollider capsule = gameObject.AddComponent<CapsuleCollider>();
-            capsule.center = new Vector3(0f, 1.2f, 0f);
-            capsule.radius = 0.85f;
-            capsule.height = 2.4f;
-        }
+        CapsuleCollider capsule = col as CapsuleCollider;
+
+        if (col != null && capsule == null)
+            return;
+
+        if (capsule == null)
+            capsule = gameObject.AddComponent<CapsuleCollider>();
+
+        capsule.center = colliderCenter;
+        capsule.radius = Mathf.Max(0.05f, colliderRadius);
+        capsule.height = Mathf.Max(colliderRadius * 2f, colliderHeight);
     }
 
     void EnsureStablePhysics()
@@ -773,5 +932,77 @@ public class BossEnemy : MonoBehaviour
         minGoldDrop = baseMinGoldDrop + bonusLevels * Mathf.Max(0, goldBonusPerLevel);
         maxGoldDrop = Mathf.Max(minGoldDrop, baseMaxGoldDrop + bonusLevels * Mathf.Max(0, goldBonusPerLevel));
         xpReward = baseXpReward + bonusLevels * Mathf.Max(0, xpBonusPerLevel);
+    }
+
+    public void RefreshBaseStats()
+    {
+        baseStatsCached = false;
+        CacheBaseStats();
+        ApplyLevelScaling(bossLevel);
+
+        if (currentHealth > 0)
+            currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+
+        UpdateHealthUI(worldCanvas != null && worldCanvas.gameObject.activeSelf);
+    }
+
+    void ResolveAnimationDriver()
+    {
+        if (animationDriver == null)
+            animationDriver = GetComponent<BossLegacyAnimationDriver>() ?? GetComponentInChildren<BossLegacyAnimationDriver>(true);
+    }
+
+    void BeginDeathSequence()
+    {
+        if (isPendingDestroy)
+            return;
+
+        isPendingDestroy = true;
+        currentHealth = 0;
+        isPerformingAreaAttack = false;
+        nextAttackTime = float.MaxValue;
+        nextAreaAttackTime = float.MaxValue;
+        targetTransform = null;
+        targetPlayerId = null;
+
+        if (areaAttackRoutine != null)
+        {
+            StopCoroutine(areaAttackRoutine);
+            areaAttackRoutine = null;
+        }
+
+        Collider[] colliders = GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+            colliders[i].enabled = false;
+
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb != null && !rb.isKinematic)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        UpdateHealthUI(false);
+        ResolveAnimationDriver();
+
+        float destroyDelay = 0.05f;
+        if (animationDriver != null)
+        {
+            animationDriver.PlayDeath();
+            destroyDelay = Mathf.Max(destroyDelay, animationDriver.DeathDuration);
+        }
+
+        if (destroyRoutine != null)
+            StopCoroutine(destroyRoutine);
+
+        destroyRoutine = StartCoroutine(DestroyAfterDelay(destroyDelay));
+    }
+
+    IEnumerator DestroyAfterDelay(float delay)
+    {
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        Destroy(gameObject);
     }
 }

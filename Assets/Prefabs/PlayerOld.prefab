@@ -356,18 +356,18 @@ MonoBehaviour:
   thirdPersonPitch: 15
   firstPersonOffset: {x: 0, y: 1.6, z: 0}
   thirdPersonOffset: {x: 0, y: 2, z: -3}
-  maxStamina: 1000
+  maxStamina: 500
   currentStamina: 0
   staminaDrain: 20
   staminaRecovery: 15
   sprintResumeThresholdPercent: 0.5
   lowStaminaThresholdPercent: 0.25
   lowStaminaSpeedMultiplier: 0.45
-  maxHealth: 100
+  maxHealth: 500
   currentHealth: 0
   healthRegenPerSecond: 4
   healthRegenDelay: 6
-  maxHunger: 100
+  maxHunger: 500
   currentHunger: 0
   hungerDrainIdle: 0.04
   hungerDrainWalk: 0.12
@@ -376,7 +376,7 @@ MonoBehaviour:
   lowHungerWarningThreshold: 0.5
   criticalHungerWarningThreshold: 0.05
   lowHungerWarningResetThreshold: 0.6
-  maxThirst: 100
+  maxThirst: 500
   currentThirst: 0
   thirstDrainIdle: 0.08
   thirstDrainWalk: 0.25

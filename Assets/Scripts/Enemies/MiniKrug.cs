@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,11 +23,21 @@ public class MiniKrug : MonoBehaviour
     public float moveSpeed = 4f;
     public float rotationSpeed = 10f;
     public float targetRefreshInterval = 0.4f;
+    public bool pursueTarget = true;
+    public float engageRange = 999f;
 
     [Header("Drop")]
     public int minGoldDrop = 5;
     public int maxGoldDrop = 10;
     public int xpReward = 20;
+
+    [Header("Identidade")]
+    public string rewardDisplayName = "MiniKrug";
+
+    [Header("Colisao")]
+    public Vector3 colliderCenter = new Vector3(0f, 0.42f, 0f);
+    public float colliderRadius = 0.38f;
+    public float colliderHeight = 0.9f;
 
     [Header("Chao")]
     public float groundRayHeight = 10f;
@@ -52,14 +63,19 @@ public class MiniKrug : MonoBehaviour
     bool baseStatsCached;
     public int CurrentHealth => currentHealth;
     public int EnemyLevel => enemyLevel;
+    public bool IsPendingDestroy => isPendingDestroy;
 
     Transform targetTransform;
     string targetPlayerId;
     PlayerMovement lastAttacker;
     MiniKrugSpawnPoint spawnPoint;
+    System.Action<MiniKrug> deathCallback;
     Canvas worldCanvas;
     Image healthFillImage;
     TextMeshProUGUI healthText;
+    MiniKrugLegacyAnimationDriver animationDriver;
+    Coroutine destroyRoutine;
+    bool isPendingDestroy;
 
     void Awake()
     {
@@ -69,19 +85,27 @@ public class MiniKrug : MonoBehaviour
 
     void Start()
     {
-        currentHealth = maxHealth;
+        currentHealth = isPendingDestroy ? 0 : Mathf.Clamp(currentHealth <= 0 ? maxHealth : currentHealth, 0, maxHealth);
         EnsureMainCollider();
         EnsureStablePhysics();
         SnapToGround();
         EnsureCombatUI();
         UpdateHealthUI(false);
         RefreshTarget();
+        ResolveAnimationDriver();
+        animationDriver?.PlayIdle();
     }
 
     void Update()
     {
         if (worldCanvas == null || healthFillImage == null || healthText == null)
             EnsureCombatUI();
+
+        if (isPendingDestroy)
+        {
+            UpdateUIFacing();
+            return;
+        }
 
         if (ShouldUseNetworkAuthority())
         {
@@ -92,14 +116,25 @@ public class MiniKrug : MonoBehaviour
         if (Time.time >= nextTargetRefreshTime || targetTransform == null)
             RefreshTarget();
 
-        FollowTarget();
-        TryAttackPlayer();
+        bool targetInEngageRange = IsTargetInsideEngageRange();
+
+        if (pursueTarget && targetInEngageRange)
+            FollowTarget();
+        else
+            FaceTarget();
+
+        TryAttackPlayer(targetInEngageRange);
         UpdateUIFacing();
     }
 
     public void SetSpawnData(MiniKrugSpawnPoint owner)
     {
         spawnPoint = owner;
+    }
+
+    public void SetDeathCallback(System.Action<MiniKrug> callback)
+    {
+        deathCallback = callback;
     }
 
     public void SetEnemyLevel(int level)
@@ -109,14 +144,31 @@ public class MiniKrug : MonoBehaviour
         UpdateHealthUI(worldCanvas != null && worldCanvas.gameObject.activeSelf);
     }
 
+    public void RefreshBaseStats()
+    {
+        baseStatsCached = false;
+        CacheBaseStats();
+        ApplyLevelScaling(enemyLevel);
+
+        if (currentHealth > 0)
+            currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+
+        UpdateHealthUI(worldCanvas != null && worldCanvas.gameObject.activeSelf);
+    }
+
     public void Hit(int damage, PlayerMovement attacker)
     {
+        if (isPendingDestroy)
+            return;
+
         if (worldCanvas == null || healthFillImage == null || healthText == null)
             EnsureCombatUI();
 
         int finalDamage = Mathf.Max(1, damage);
         currentHealth -= finalDamage;
         lastAttacker = attacker;
+        ResolveAnimationDriver();
+        animationDriver?.PlayDamage();
         ShowDamagePopup(finalDamage);
         ShowHealthUITemporarily();
         UpdateHealthUI(true);
@@ -127,11 +179,22 @@ public class MiniKrug : MonoBehaviour
 
     public void ApplyNetworkHit(int damage, out int goldAmount, out int xpAmount, out int remainingHealth, out bool destroyed)
     {
+        if (isPendingDestroy)
+        {
+            destroyed = true;
+            goldAmount = 0;
+            xpAmount = 0;
+            remainingHealth = 0;
+            return;
+        }
+
         if (worldCanvas == null || healthFillImage == null || healthText == null)
             EnsureCombatUI();
 
         int finalDamage = Mathf.Max(1, damage);
         currentHealth -= finalDamage;
+        ResolveAnimationDriver();
+        animationDriver?.PlayDamage();
         ShowDamagePopup(finalDamage);
         ShowHealthUITemporarily();
         UpdateHealthUI(true);
@@ -143,10 +206,8 @@ public class MiniKrug : MonoBehaviour
 
         if (destroyed)
         {
-            if (spawnPoint != null)
-                spawnPoint.NotifyMiniKrugDeath(this);
-
-            Destroy(gameObject);
+            NotifySpawnOwners();
+            BeginDeathSequence();
         }
     }
 
@@ -158,7 +219,7 @@ public class MiniKrug : MonoBehaviour
         UpdateHealthUI(!destroyed);
 
         if (destroyed)
-            Destroy(gameObject);
+            BeginDeathSequence();
     }
 
     public void PlayLocalHitFeedback(int damage)
@@ -194,9 +255,12 @@ public class MiniKrug : MonoBehaviour
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
 
-    void TryAttackPlayer()
+    void TryAttackPlayer(bool targetInEngageRange)
     {
         if (targetTransform == null || Time.time < nextAttackTime)
+            return;
+
+        if (!targetInEngageRange)
             return;
 
         Vector3 toPlayer = targetTransform.position - transform.position;
@@ -204,6 +268,9 @@ public class MiniKrug : MonoBehaviour
 
         if (toPlayer.magnitude > attackRange)
             return;
+
+        ResolveAnimationDriver();
+        animationDriver?.PlayAttack();
 
         if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
             LanMultiplayerManager.Instance.ApplyEnemyDamage(targetPlayerId, contactDamage);
@@ -214,6 +281,34 @@ public class MiniKrug : MonoBehaviour
         }
 
         nextAttackTime = Time.time + attackCooldown;
+    }
+
+    bool IsTargetInsideEngageRange()
+    {
+        if (targetTransform == null)
+            return false;
+
+        if (engageRange <= 0f)
+            return true;
+
+        Vector3 toTarget = targetTransform.position - transform.position;
+        toTarget.y = 0f;
+        return toTarget.sqrMagnitude <= engageRange * engageRange;
+    }
+
+    void FaceTarget()
+    {
+        if (targetTransform == null)
+            return;
+
+        Vector3 toTarget = targetTransform.position - transform.position;
+        toTarget.y = 0f;
+
+        if (toTarget.sqrMagnitude <= 0.0001f)
+            return;
+
+        Quaternion targetRotation = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
 
     void RefreshTarget()
@@ -320,13 +415,13 @@ public class MiniKrug : MonoBehaviour
 
     void Die()
     {
+        if (isPendingDestroy)
+            return;
+
         AwardExperienceIfKilledByPlayer();
         DropGoldIfKilledByPlayer();
-
-        if (spawnPoint != null)
-            spawnPoint.NotifyMiniKrugDeath(this);
-
-        Destroy(gameObject);
+        NotifySpawnOwners();
+        BeginDeathSequence();
     }
 
     void AwardExperienceIfKilledByPlayer()
@@ -336,7 +431,7 @@ public class MiniKrug : MonoBehaviour
 
         PlayerProgression progression = lastAttacker.GetComponent<PlayerProgression>();
         if (progression != null)
-            progression.AddExperience(xpReward, "MiniKrug");
+            progression.AddExperience(xpReward, rewardDisplayName);
     }
 
     void DropGoldIfKilledByPlayer()
@@ -480,13 +575,17 @@ public class MiniKrug : MonoBehaviour
     void EnsureMainCollider()
     {
         Collider col = GetComponent<Collider>();
-        if (col == null)
-        {
-            CapsuleCollider capsule = gameObject.AddComponent<CapsuleCollider>();
-            capsule.center = new Vector3(0f, 0.42f, 0f);
-            capsule.radius = 0.38f;
-            capsule.height = 0.9f;
-        }
+        CapsuleCollider capsule = col as CapsuleCollider;
+
+        if (col != null && capsule == null)
+            return;
+
+        if (capsule == null)
+            capsule = gameObject.AddComponent<CapsuleCollider>();
+
+        capsule.center = colliderCenter;
+        capsule.radius = Mathf.Max(0.05f, colliderRadius);
+        capsule.height = Mathf.Max(colliderRadius * 2f, colliderHeight);
     }
 
     void EnsureStablePhysics()
@@ -536,5 +635,69 @@ public class MiniKrug : MonoBehaviour
         return LanMultiplayerManager.Instance != null &&
                LanMultiplayerManager.Instance.IsMultiplayerActive &&
                LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client;
+    }
+
+    void ResolveAnimationDriver()
+    {
+        if (animationDriver == null)
+            animationDriver = GetComponent<MiniKrugLegacyAnimationDriver>() ?? GetComponentInChildren<MiniKrugLegacyAnimationDriver>(true);
+    }
+
+    void NotifySpawnOwners()
+    {
+        if (spawnPoint != null)
+            spawnPoint.NotifyMiniKrugDeath(this);
+
+        deathCallback?.Invoke(this);
+        deathCallback = null;
+    }
+
+    void BeginDeathSequence()
+    {
+        if (isPendingDestroy)
+            return;
+
+        isPendingDestroy = true;
+        currentHealth = 0;
+        nextAttackTime = float.MaxValue;
+        targetTransform = null;
+        targetPlayerId = null;
+
+        Collider[] colliders = GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+            colliders[i].enabled = false;
+
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            if (!rb.isKinematic)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+        }
+
+        UpdateHealthUI(false);
+        ResolveAnimationDriver();
+
+        float destroyDelay = 0.05f;
+        if (animationDriver != null)
+        {
+            animationDriver.PlayDeath();
+            destroyDelay = Mathf.Max(destroyDelay, animationDriver.DeathDuration);
+        }
+
+        if (destroyRoutine != null)
+            StopCoroutine(destroyRoutine);
+
+        destroyRoutine = StartCoroutine(DestroyAfterDelay(destroyDelay));
+    }
+
+    IEnumerator DestroyAfterDelay(float delay)
+    {
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        Destroy(gameObject);
     }
 }

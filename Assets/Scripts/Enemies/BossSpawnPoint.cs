@@ -49,7 +49,26 @@ public class BossSpawnPoint : MonoBehaviour
         }
 
         Vector3 spawnPosition = GetGroundedSpawnPosition();
-        spawnedBoss = Instantiate(bossPrefab, spawnPosition + Vector3.up * 0.5f, transform.rotation);
+        Vector3 finalSpawnPosition = spawnPosition + Vector3.up * 0.5f;
+        BossEnemyProfile bossProfile = bossPrefab.GetComponent<BossEnemyProfile>();
+
+        if (bossProfile != null)
+        {
+            BossEnemy bossComponent = ForestMushroomBossFactory.CreateInstance(
+                bossPrefab,
+                finalSpawnPosition,
+                transform.rotation);
+
+            if (bossComponent == null)
+                return;
+
+            spawnedBoss = bossComponent.gameObject;
+            spawnedBoss.name = bossPrefab.name;
+            LanNetworkEntity.Ensure(bossComponent.transform, BuildBossEntityId());
+            return;
+        }
+
+        spawnedBoss = Instantiate(bossPrefab, finalSpawnPosition, transform.rotation);
         spawnedBoss.name = bossPrefab.name;
         LanNetworkEntity.Ensure(spawnedBoss.transform, BuildBossEntityId());
     }

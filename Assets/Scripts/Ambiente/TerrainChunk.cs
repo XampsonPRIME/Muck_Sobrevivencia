@@ -71,6 +71,7 @@ public class TerrainChunk : MonoBehaviour
     public int maxTreesPerChunk = 22;
     public float forestTreeHeightMultiplier = 1.45f;
     public float forestTreeWidthMultiplier = 1.12f;
+    public float treeExclusionPadding = 0.75f;
     public float mushroomDensity = 0.001f;
     public int rockClusterCount = 3;
     public int generationYieldInterval = 120;
@@ -132,6 +133,15 @@ public class TerrainChunk : MonoBehaviour
     public float cowRespawnDelay = 25f;
     public float cowWanderRadius = 8f;
 
+    [Header("Inimigos da Floresta")]
+    public GameObject forestMushroomMonsterPrefab;
+    [Range(0f, 1f)] public float forestMushroomSpawnChance = 0.55f;
+    public int maxForestMushroomGroupsPerChunk = 1;
+    public int forestMushroomEnemiesPerGroup = 1;
+    public float minDistanceBetweenForestMushroomGroups = 20f;
+    public float forestMushroomSpawnRadius = 4.5f;
+    public float forestMushroomRespawnDelay = 40f;
+
 
     [Header("Material")]
     public Material terrainMaterial;
@@ -164,6 +174,7 @@ public class TerrainChunk : MonoBehaviour
 
     List<Vector3> usedPositions = new List<Vector3>();
     List<Vector3> cowGroupPositions = new List<Vector3>();
+    List<Vector3> forestMushroomGroupPositions = new List<Vector3>();
     List<Matrix4x4[]> forestGrassBatches = new List<Matrix4x4[]>();
     List<int> forestGrassBatchCounts = new List<int>();
     static Material riverMaterial;
@@ -172,6 +183,7 @@ public class TerrainChunk : MonoBehaviour
     static GameObject cachedEnchantedForestClusterMushroom;
     WorldHeightmapData sceneHeightmapData;
     RoadMaskData sceneRoadMaskData;
+    TreeExclusionMaskData sceneTreeExclusionMaskData;
     RiverSystem sceneRiverSystem;
     Material forestGrassMaterialInstance;
     MaterialPropertyBlock forestGrassPropertyBlock;
@@ -210,6 +222,7 @@ public class TerrainChunk : MonoBehaviour
         ApplySceneTerrainPalette(meshRenderer);
         sceneHeightmapData = SceneWorldDataResolver.ResolveHeightmapData(gameObject.scene);
         sceneRoadMaskData = SceneWorldDataResolver.ResolveRoadMaskData(gameObject.scene);
+        sceneTreeExclusionMaskData = SceneWorldDataResolver.ResolveTreeExclusionMaskData(gameObject.scene);
         sceneRiverSystem = ResolveSceneRiverSystem();
 
         vertices = new Vector3[(size + 1) * (size + 1)];
@@ -335,6 +348,8 @@ public class TerrainChunk : MonoBehaviour
         yield return SpawnRockClustersAsync(offset);
         yield return null;
         yield return SpawnCowGroupsAsync(offset);
+        yield return null;
+        yield return SpawnForestMushroomGroupsAsync(offset);
     }
 
     BiomeType GetBiome(Vector2 point)
@@ -492,6 +507,41 @@ public class TerrainChunk : MonoBehaviour
         for (int i = 0; i < offsets.Length; i++)
         {
             if (sceneRoadMaskData.SampleMask01(point + offsets[i]) >= edgeThreshold)
+                return true;
+        }
+
+        return false;
+    }
+
+    bool IsTreeBlockedZone(Vector2 point, float padding)
+    {
+        if (sceneTreeExclusionMaskData == null)
+            return false;
+
+        if (!sceneTreeExclusionMaskData.ContainsWorldPoint(point))
+            return false;
+
+        if (sceneTreeExclusionMaskData.IsTreeBlocked(point))
+            return true;
+
+        if (padding <= 0.01f)
+            return false;
+
+        Vector2[] offsets =
+        {
+            new Vector2(padding, 0f),
+            new Vector2(-padding, 0f),
+            new Vector2(0f, padding),
+            new Vector2(0f, -padding),
+            new Vector2(padding * 0.72f, padding * 0.72f),
+            new Vector2(-padding * 0.72f, padding * 0.72f),
+            new Vector2(padding * 0.72f, -padding * 0.72f),
+            new Vector2(-padding * 0.72f, -padding * 0.72f)
+        };
+
+        for (int i = 0; i < offsets.Length; i++)
+        {
+            if (sceneTreeExclusionMaskData.IsTreeBlocked(point + offsets[i]))
                 return true;
         }
 
@@ -876,6 +926,9 @@ public class TerrainChunk : MonoBehaviour
                 continue;
 
             if (IsRoadZone(point))
+                continue;
+
+            if (IsTreeBlockedZone(point, treeExclusionPadding))
                 continue;
 
             float cluster = Mathf.PerlinNoise(point.x * 0.05f, point.y * 0.05f);
@@ -1512,6 +1565,63 @@ public class TerrainChunk : MonoBehaviour
         return worldPos;
     }
 
+    public bool TryGetForestBossSpawnPoint(int seedSalt, float minPlayerDistance, out Vector3 spawnPoint, out float score)
+    {
+        spawnPoint = Vector3.zero;
+        score = float.MaxValue;
+
+        if (vertices == null || vertices.Length == 0 || mesh == null || mesh.normals == null || mesh.normals.Length == 0)
+            return false;
+
+        bool foundCandidate = false;
+        int worldSeed = LanMultiplayerManager.Instance != null ? LanMultiplayerManager.Instance.WorldSeed : 0;
+
+        for (int i = 0; i < vertices.Length; i += 14)
+        {
+            Vector3 localPos = vertices[i];
+            Vector3 worldPos = localPos + transform.position;
+
+            if (player != null && Vector3.Distance(worldPos, player.position) < Mathf.Max(safeRadius + 18f, minPlayerDistance))
+                continue;
+
+            if (mesh.normals[i].y < 0.8f)
+                continue;
+
+            Vector2 point = new Vector2(worldPos.x, worldPos.z);
+            if (GetBiome(point) != BiomeType.Forest)
+                continue;
+
+            if (IsRiverZone(point, 2.6f))
+                continue;
+
+            if (IsNearRoadZone(point, 2.2f))
+                continue;
+
+            Vector3 groundedPoint = GetGroundPoint(worldPos);
+            if (player != null && Vector3.Distance(groundedPoint, player.position) < minPlayerDistance)
+                continue;
+
+            unchecked
+            {
+                int hash = 17;
+                hash = (hash * 31) + worldSeed;
+                hash = (hash * 31) + seedSalt;
+                hash = (hash * 31) + Mathf.RoundToInt(point.x * 100f);
+                hash = (hash * 31) + Mathf.RoundToInt(point.y * 100f);
+                float candidateScore = (hash & 0x7fffffff) / (float)int.MaxValue;
+
+                if (!foundCandidate || candidateScore < score)
+                {
+                    score = candidateScore;
+                    spawnPoint = groundedPoint;
+                    foundCandidate = true;
+                }
+            }
+        }
+
+        return foundCandidate;
+    }
+
     IEnumerator SpawnCowGroupsAsync(Vector2 offset)
     {
         ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 303));
@@ -1607,6 +1717,87 @@ public class TerrainChunk : MonoBehaviour
         spawnPoint.bodyMaterial = cowBodyMaterial;
         spawnPoint.spotMaterial = cowSpotMaterial;
         spawnPoint.hoofMaterial = cowHoofMaterial;
+    }
+
+    IEnumerator SpawnForestMushroomGroupsAsync(Vector2 offset)
+    {
+        int desiredGroups = Mathf.Max(0, maxForestMushroomGroupsPerChunk);
+        GameObject prefab = forestMushroomMonsterPrefab != null ? forestMushroomMonsterPrefab : ForestMushroomMonsterFactory.LoadPrefab();
+
+        if (prefab == null || desiredGroups == 0)
+            yield break;
+
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 171));
+        forestMushroomGroupPositions.Clear();
+        List<Vector3> validPositions = new List<Vector3>();
+        int iterationsSinceYield = 0;
+
+        for (int i = 0; i < vertices.Length; i += 16)
+        {
+            iterationsSinceYield++;
+            if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
+            {
+                iterationsSinceYield = 0;
+                yield return null;
+            }
+
+            Vector3 localPos = vertices[i];
+            Vector3 worldPos = localPos + transform.position;
+
+            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 12f)
+                continue;
+
+            if (mesh.normals[i].y < 0.84f)
+                continue;
+
+            Vector2 point = new Vector2(localPos.x + offset.x, localPos.z + offset.y);
+            if (GetBiome(point) != BiomeType.Forest)
+                continue;
+
+            if (IsRiverZone(point, 2.4f))
+                continue;
+
+            if (IsNearRoadZone(point, 1.8f))
+                continue;
+
+            if (IsTooClose(worldPos, minDistanceBetweenForestMushroomGroups * 0.75f))
+                continue;
+
+            validPositions.Add(worldPos);
+        }
+
+        int groupsSpawned = 0;
+
+        while (groupsSpawned < desiredGroups && validPositions.Count > 0)
+        {
+            yield return null;
+
+            if (rng.Value() > forestMushroomSpawnChance)
+                break;
+
+            int index = rng.Range(0, validPositions.Count);
+            Vector3 chosenPos = validPositions[index];
+
+            CreateForestMushroomSpawnPoint(chosenPos, prefab);
+            forestMushroomGroupPositions.Add(chosenPos);
+            usedPositions.Add(chosenPos);
+            groupsSpawned++;
+
+            validPositions.RemoveAll(pos => Vector3.Distance(pos, chosenPos) < minDistanceBetweenForestMushroomGroups);
+        }
+    }
+
+    void CreateForestMushroomSpawnPoint(Vector3 worldPos, GameObject prefab)
+    {
+        GameObject spawnObject = new GameObject("Forest Mushroom Spawn Point");
+        spawnObject.transform.SetParent(transform, true);
+        spawnObject.transform.position = worldPos;
+
+        ForestMushroomMonsterSpawnPoint spawnPoint = spawnObject.AddComponent<ForestMushroomMonsterSpawnPoint>();
+        spawnPoint.mushroomMonsterPrefab = prefab;
+        spawnPoint.enemiesPerGroup = Mathf.Max(1, forestMushroomEnemiesPerGroup);
+        spawnPoint.spawnRadius = forestMushroomSpawnRadius;
+        spawnPoint.respawnDelay = forestMushroomRespawnDelay;
     }
 
     GameObject GetRandomRock(ChunkRandom rng)

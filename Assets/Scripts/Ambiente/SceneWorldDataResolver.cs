@@ -6,6 +6,7 @@ public static class SceneWorldDataResolver
 {
     static readonly Dictionary<string, WorldHeightmapData> HeightmapCache = new Dictionary<string, WorldHeightmapData>();
     static readonly Dictionary<string, RoadMaskData> RoadMaskCache = new Dictionary<string, RoadMaskData>();
+    static readonly Dictionary<string, TreeExclusionMaskData> TreeExclusionMaskCache = new Dictionary<string, TreeExclusionMaskData>();
 
     public static WorldHeightmapData ResolveHeightmapData(Scene scene)
     {
@@ -23,6 +24,15 @@ public static class SceneWorldDataResolver
             return LoadSceneRoadMask(sceneName);
 
         return LoadDefaultRoadMask();
+    }
+
+    public static TreeExclusionMaskData ResolveTreeExclusionMaskData(Scene scene)
+    {
+        string sceneName = ResolveWorldSceneName(scene);
+        if (!string.IsNullOrWhiteSpace(sceneName))
+            return LoadSceneTreeExclusionMask(sceneName);
+
+        return LoadDefaultTreeExclusionMask();
     }
 
     public static string ResolveWorldSceneName(Scene scene)
@@ -71,6 +81,16 @@ public static class SceneWorldDataResolver
         return sceneData != null ? sceneData : LoadDefaultRoadMask();
     }
 
+    static TreeExclusionMaskData LoadSceneTreeExclusionMask(string sceneName)
+    {
+        if (TreeExclusionMaskCache.TryGetValue(sceneName, out TreeExclusionMaskData cached))
+            return cached != null ? cached : LoadDefaultTreeExclusionMask();
+
+        TreeExclusionMaskData sceneData = Resources.Load<TreeExclusionMaskData>($"World/Scenes/{sceneName}/TreeExclusionMaskData");
+        TreeExclusionMaskCache[sceneName] = sceneData;
+        return sceneData != null ? sceneData : LoadDefaultTreeExclusionMask();
+    }
+
     static WorldHeightmapData LoadDefaultHeightmap()
     {
         const string defaultKey = "__default";
@@ -90,6 +110,18 @@ public static class SceneWorldDataResolver
         {
             cached = Resources.Load<RoadMaskData>("World/Scenes/DefaultRoadMaskData");
             RoadMaskCache[defaultKey] = cached;
+        }
+
+        return cached;
+    }
+
+    static TreeExclusionMaskData LoadDefaultTreeExclusionMask()
+    {
+        const string defaultKey = "__default";
+        if (!TreeExclusionMaskCache.TryGetValue(defaultKey, out TreeExclusionMaskData cached))
+        {
+            cached = Resources.Load<TreeExclusionMaskData>("World/Scenes/DefaultTreeExclusionMaskData");
+            TreeExclusionMaskCache[defaultKey] = cached;
         }
 
         return cached;

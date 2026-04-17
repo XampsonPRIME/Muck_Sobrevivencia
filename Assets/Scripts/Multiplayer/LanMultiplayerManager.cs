@@ -560,6 +560,9 @@ public class LanMultiplayerManager : MonoBehaviour
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
+            if (bosses[i] == null || bosses[i].IsPendingDestroy)
+                continue;
+
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(bosses[i]);
@@ -1434,6 +1437,9 @@ public class LanMultiplayerManager : MonoBehaviour
         if (state.entityKind == nameof(BossEnemy))
         {
             BossEnemy boss = FindEntity<BossEnemy>(state.entityId);
+            if (boss == null && !state.destroyed)
+                boss = CreateRemoteBossEnemy(state);
+
             if (boss != null)
                 boss.ApplyNetworkState(state.position, state.rotation, state.level, state.health, state.destroyed);
         }
@@ -1725,6 +1731,9 @@ public class LanMultiplayerManager : MonoBehaviour
         MiniKrug[] miniKrugs = FindObjectsByType<MiniKrug>(FindObjectsSortMode.None);
         for (int i = 0; i < miniKrugs.Length; i++)
         {
+            if (miniKrugs[i] == null || miniKrugs[i].IsPendingDestroy)
+                continue;
+
             LanNetworkEntity entity = miniKrugs[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(miniKrugs[i]);
@@ -1744,6 +1753,9 @@ public class LanMultiplayerManager : MonoBehaviour
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
+            if (bosses[i] == null || bosses[i].IsPendingDestroy)
+                continue;
+
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(bosses[i]);
@@ -1852,6 +1864,9 @@ public class LanMultiplayerManager : MonoBehaviour
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
+            if (bosses[i] == null || bosses[i].IsPendingDestroy)
+                continue;
+
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 continue;
@@ -1890,6 +1905,9 @@ public class LanMultiplayerManager : MonoBehaviour
         MiniKrug[] miniKrugs = FindObjectsByType<MiniKrug>(FindObjectsSortMode.None);
         for (int i = 0; i < miniKrugs.Length; i++)
         {
+            if (miniKrugs[i] == null || miniKrugs[i].IsPendingDestroy)
+                continue;
+
             LanNetworkEntity entity = miniKrugs[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(miniKrugs[i]);
@@ -1909,6 +1927,9 @@ public class LanMultiplayerManager : MonoBehaviour
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
+            if (bosses[i] == null || bosses[i].IsPendingDestroy)
+                continue;
+
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(bosses[i]);
@@ -2085,19 +2106,48 @@ public class LanMultiplayerManager : MonoBehaviour
 
     MiniKrug CreateRemoteMiniKrug(LanEnemyState state)
     {
-        GameObject miniKrugPrefab = Resources.Load<GameObject>("Enemies/MiniKrug");
+        GameObject miniKrugPrefab = ForestMushroomMonsterFactory.IsForestMushroomEntity(state.entityId)
+            ? ForestMushroomMonsterFactory.LoadPrefab()
+            : Resources.Load<GameObject>("Enemies/MiniKrug");
         if (miniKrugPrefab == null)
             return null;
 
-        GameObject miniKrugObject = Instantiate(miniKrugPrefab, state.position, state.rotation);
-        miniKrugObject.name = miniKrugPrefab.name;
-        LanNetworkEntity.Ensure(miniKrugObject.transform, state.entityId);
+        MiniKrug miniKrug;
 
-        MiniKrug miniKrug = miniKrugObject.GetComponent<MiniKrug>();
-        if (miniKrug == null)
-            miniKrug = miniKrugObject.AddComponent<MiniKrug>();
+        if (ForestMushroomMonsterFactory.IsForestMushroomEntity(state.entityId))
+        {
+            miniKrug = ForestMushroomMonsterFactory.CreateInstance(miniKrugPrefab, state.position, state.rotation);
+            if (miniKrug == null)
+                return null;
+
+            LanNetworkEntity.Ensure(miniKrug.transform, state.entityId);
+        }
+        else
+        {
+            GameObject miniKrugObject = Instantiate(miniKrugPrefab, state.position, state.rotation);
+            miniKrugObject.name = miniKrugPrefab.name;
+            LanNetworkEntity.Ensure(miniKrugObject.transform, state.entityId);
+            miniKrug = miniKrugObject.GetComponent<MiniKrug>();
+        }
 
         return miniKrug;
+    }
+
+    BossEnemy CreateRemoteBossEnemy(LanEnemyState state)
+    {
+        if (!ForestMushroomBossFactory.IsForestMushroomBossEntity(state.entityId))
+            return null;
+
+        GameObject bossPrefab = ForestMushroomBossFactory.LoadPrefab();
+        if (bossPrefab == null)
+            return null;
+
+        BossEnemy boss = ForestMushroomBossFactory.CreateInstance(bossPrefab, state.position, state.rotation);
+        if (boss == null)
+            return null;
+
+        LanNetworkEntity.Ensure(boss.transform, state.entityId);
+        return boss;
     }
 
     public bool TryGetSuggestedEnemyLevel(Vector3 origin, out int level)
@@ -2192,6 +2242,41 @@ public class LanMultiplayerManager : MonoBehaviour
             playerId = targetPlayerId,
             damage = damage
         }));
+    }
+
+    public void ApplyEnemyAreaDamage(Vector3 origin, float radius, float damage)
+    {
+        if (radius <= 0f || damage <= 0f)
+            return;
+
+        float radiusSqr = radius * radius;
+
+        if (localPlayer != null && !GameState.IsPlayerDead)
+        {
+            Vector3 toLocalPlayer = localPlayer.transform.position - origin;
+            toLocalPlayer.y = 0f;
+            if (toLocalPlayer.sqrMagnitude <= radiusSqr)
+                localPlayer.TakeDamage(damage);
+        }
+
+        foreach (KeyValuePair<string, Transform> entry in serverPlayerTargets)
+        {
+            if (entry.Value == null)
+                continue;
+
+            if (knownStates.TryGetValue(entry.Key, out LanPlayerState state) && state != null && state.isDead)
+                continue;
+
+            Vector3 toRemotePlayer = entry.Value.position - origin;
+            toRemotePlayer.y = 0f;
+            if (toRemotePlayer.sqrMagnitude <= radiusSqr)
+                ApplyEnemyDamage(entry.Key, damage);
+        }
+    }
+
+    public bool IsEntityDestroyed(string entityId)
+    {
+        return !string.IsNullOrWhiteSpace(entityId) && destroyedEntities.ContainsKey(entityId);
     }
 
     public void NotifyEnemyDestroyed(Component enemy)
