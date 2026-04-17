@@ -91,6 +91,28 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
         PlayClip(deathClip);
     }
 
+    public void SetClipConfiguration(
+        Animation animationOverride,
+        string idle,
+        string run,
+        string attack,
+        string damage,
+        string death)
+    {
+        animationComponent = animationOverride;
+        idleClip = idle;
+        runClip = run;
+        attackClip = attack;
+        damageClip = damage;
+        deathClip = death;
+        isDead = false;
+        currentClip = null;
+        actionLockUntil = 0f;
+        lastPosition = transform.position;
+        hasLastPosition = true;
+        ConfigureWrapModes();
+    }
+
     void ResolveAnimation()
     {
         if (animationComponent == null)
@@ -115,10 +137,11 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
 
     void SetWrapMode(string clipName, WrapMode wrapMode)
     {
-        if (string.IsNullOrWhiteSpace(clipName))
+        string resolvedClipName = ResolveClipName(clipName);
+        if (string.IsNullOrWhiteSpace(resolvedClipName))
             return;
 
-        AnimationState state = animationComponent[clipName];
+        AnimationState state = animationComponent[resolvedClipName];
         if (state != null)
             state.wrapMode = wrapMode;
     }
@@ -126,38 +149,73 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
     void PlayLockedClip(string clipName, float fallbackDuration)
     {
         ResolveAnimation();
-        if (animationComponent == null || string.IsNullOrWhiteSpace(clipName))
+        string resolvedClipName = ResolveClipName(clipName);
+        if (animationComponent == null || string.IsNullOrWhiteSpace(resolvedClipName))
             return;
 
-        actionLockUntil = Time.time + GetClipDuration(clipName, fallbackDuration);
-        PlayClip(clipName);
+        actionLockUntil = Time.time + GetClipDuration(resolvedClipName, fallbackDuration);
+        PlayClip(resolvedClipName);
     }
 
     void PlayClip(string clipName)
     {
-        if (animationComponent == null || string.IsNullOrWhiteSpace(clipName))
+        string resolvedClipName = ResolveClipName(clipName);
+        if (animationComponent == null || string.IsNullOrWhiteSpace(resolvedClipName))
             return;
 
-        if (animationComponent[clipName] == null)
+        if (animationComponent[resolvedClipName] == null)
             return;
 
-        if (currentClip == clipName && animationComponent.IsPlaying(clipName))
+        if (currentClip == resolvedClipName && animationComponent.IsPlaying(resolvedClipName))
             return;
 
-        currentClip = clipName;
-        animationComponent.CrossFade(clipName, crossFadeDuration);
+        currentClip = resolvedClipName;
+        animationComponent.CrossFade(resolvedClipName, crossFadeDuration);
     }
 
     float GetClipDuration(string clipName, float fallbackDuration)
     {
         ResolveAnimation();
-        if (animationComponent == null || string.IsNullOrWhiteSpace(clipName))
+        string resolvedClipName = ResolveClipName(clipName);
+        if (animationComponent == null || string.IsNullOrWhiteSpace(resolvedClipName))
             return fallbackDuration;
 
-        AnimationState state = animationComponent[clipName];
+        AnimationState state = animationComponent[resolvedClipName];
         if (state == null || state.length <= 0f)
             return fallbackDuration;
 
         return state.length;
+    }
+
+    string ResolveClipName(string configuredClipName)
+    {
+        ResolveAnimation();
+        if (animationComponent == null || string.IsNullOrWhiteSpace(configuredClipName))
+            return configuredClipName;
+
+        if (animationComponent[configuredClipName] != null)
+            return configuredClipName;
+
+        int separatorIndex = configuredClipName.LastIndexOf('|');
+        string shortName = separatorIndex >= 0 && separatorIndex < configuredClipName.Length - 1
+            ? configuredClipName.Substring(separatorIndex + 1)
+            : configuredClipName;
+
+        if (animationComponent[shortName] != null)
+            return shortName;
+
+        foreach (AnimationState state in animationComponent)
+        {
+            if (state == null || string.IsNullOrWhiteSpace(state.name))
+                continue;
+
+            if (state.name == configuredClipName || state.name == shortName)
+                return state.name;
+
+            if (state.name.EndsWith($"|{shortName}", System.StringComparison.OrdinalIgnoreCase))
+                return state.name;
+        }
+
+        return configuredClipName;
     }
 }

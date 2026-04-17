@@ -5,6 +5,8 @@ using UnityEngine.UI;
 
 public class MiniKrug : MonoBehaviour
 {
+    const string DefaultNightZombieVisualPath = "Enemies/MiniKrugZombieVisual";
+
     [Header("Progressao")]
     public int enemyLevel = 1;
     public int healthBonusPerLevel = 2;
@@ -76,7 +78,9 @@ public class MiniKrug : MonoBehaviour
     Image healthFillImage;
     TextMeshProUGUI healthText;
     MiniKrugLegacyAnimationDriver animationDriver;
+    MiniKrugZombieAnimatorDriver zombieAnimationDriver;
     Coroutine destroyRoutine;
+    GameObject visualOverrideInstance;
     bool isPendingDestroy;
 
     void Awake()
@@ -88,14 +92,14 @@ public class MiniKrug : MonoBehaviour
     void Start()
     {
         currentHealth = isPendingDestroy ? 0 : Mathf.Clamp(currentHealth <= 0 ? maxHealth : currentHealth, 0, maxHealth);
+        ApplyVisualOverrideIfNeeded();
         EnsureMainCollider();
         EnsureStablePhysics();
         SnapToGround();
         EnsureCombatUI();
         UpdateHealthUI(false);
         RefreshTarget();
-        ResolveAnimationDriver();
-        animationDriver?.PlayIdle();
+        PlayIdleAnimation();
     }
 
     void Update()
@@ -170,8 +174,7 @@ public class MiniKrug : MonoBehaviour
         int finalDamage = Mathf.Max(1, damage);
         currentHealth -= finalDamage;
         lastAttacker = attacker;
-        ResolveAnimationDriver();
-        animationDriver?.PlayDamage();
+        PlayDamageAnimation();
         ShowDamagePopup(finalDamage);
         ShowHealthUITemporarily();
         UpdateHealthUI(true);
@@ -196,8 +199,7 @@ public class MiniKrug : MonoBehaviour
 
         int finalDamage = Mathf.Max(1, damage);
         currentHealth -= finalDamage;
-        ResolveAnimationDriver();
-        animationDriver?.PlayDamage();
+        PlayDamageAnimation();
         ShowDamagePopup(finalDamage);
         ShowHealthUITemporarily();
         UpdateHealthUI(true);
@@ -272,8 +274,7 @@ public class MiniKrug : MonoBehaviour
         if (toPlayer.magnitude > attackRange + Mathf.Max(0f, attackHitPadding))
             return;
 
-        ResolveAnimationDriver();
-        animationDriver?.PlayAttack();
+        PlayAttackAnimation();
 
         if (LanMultiplayerManager.Instance != null &&
             LanMultiplayerManager.Instance.IsMultiplayerActive &&
@@ -651,10 +652,104 @@ public class MiniKrug : MonoBehaviour
                LanMultiplayerManager.Instance.Mode == LanMultiplayerManager.SessionMode.Client;
     }
 
-    void ResolveAnimationDriver()
+    void ResolveAnimationDrivers()
     {
         if (animationDriver == null)
             animationDriver = GetComponent<MiniKrugLegacyAnimationDriver>() ?? GetComponentInChildren<MiniKrugLegacyAnimationDriver>(true);
+
+        if (zombieAnimationDriver == null)
+            zombieAnimationDriver = GetComponent<MiniKrugZombieAnimatorDriver>() ?? GetComponentInChildren<MiniKrugZombieAnimatorDriver>(true);
+    }
+
+    void ApplyVisualOverrideIfNeeded()
+    {
+        if (visualOverrideInstance != null)
+            return;
+
+        if (!ShouldUseZombieVisualOverride())
+            return;
+
+        GameObject visualPrefab = Resources.Load<GameObject>(DefaultNightZombieVisualPath);
+        if (visualPrefab == null)
+            return;
+
+        DisableExistingChildVisuals();
+
+        visualOverrideInstance = Instantiate(visualPrefab, transform);
+        visualOverrideInstance.name = "MiniKrugZombieVisual";
+        visualOverrideInstance.transform.localPosition = Vector3.zero;
+        visualOverrideInstance.transform.localRotation = Quaternion.identity;
+        visualOverrideInstance.transform.localScale = Vector3.one * 0.72f;
+
+        ResolveAnimationDrivers();
+        PlayIdleAnimation();
+    }
+
+    bool ShouldUseZombieVisualOverride()
+    {
+        return string.Equals(rewardDisplayName, "MiniKrug", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    void DisableExistingChildVisuals()
+    {
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || renderer.transform == transform)
+                continue;
+
+            renderer.enabled = false;
+        }
+
+        Collider[] colliders = GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            Collider collider = colliders[i];
+            if (collider == null || collider.transform == transform)
+                continue;
+
+            collider.enabled = false;
+        }
+    }
+
+    void PlayIdleAnimation()
+    {
+        ResolveAnimationDrivers();
+
+        if (zombieAnimationDriver != null)
+        {
+            zombieAnimationDriver.PlayIdle();
+            return;
+        }
+
+        animationDriver?.PlayIdle();
+    }
+
+    void PlayAttackAnimation()
+    {
+        ResolveAnimationDrivers();
+
+        if (zombieAnimationDriver != null)
+        {
+            zombieAnimationDriver.PlayAttack();
+            return;
+        }
+
+        animationDriver?.PlayAttack();
+    }
+
+    void PlayDamageAnimation()
+    {
+        ResolveAnimationDrivers();
+
+        if (zombieAnimationDriver != null)
+        {
+            zombieAnimationDriver.PlayDamage();
+            return;
+        }
+
+        animationDriver?.PlayDamage();
     }
 
     void NotifySpawnOwners()
@@ -692,10 +787,15 @@ public class MiniKrug : MonoBehaviour
         }
 
         UpdateHealthUI(false);
-        ResolveAnimationDriver();
+        ResolveAnimationDrivers();
 
         float destroyDelay = 0.05f;
-        if (animationDriver != null)
+        if (zombieAnimationDriver != null)
+        {
+            zombieAnimationDriver.PlayDeath();
+            destroyDelay = Mathf.Max(destroyDelay, zombieAnimationDriver.DeathDuration);
+        }
+        else if (animationDriver != null)
         {
             animationDriver.PlayDeath();
             destroyDelay = Mathf.Max(destroyDelay, animationDriver.DeathDuration);
