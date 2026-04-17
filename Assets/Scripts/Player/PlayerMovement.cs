@@ -494,6 +494,19 @@ public class PlayerMovement : MonoBehaviour
         PlaySfx(deathSound, deathSoundVolume);
     }
 
+    public void PlayUiSound(AudioClip clip, float volume = 1f)
+    {
+        if (clip == null)
+            return;
+
+        EnsureSfxSource();
+
+        if (sfxSource == null)
+            return;
+
+        sfxSource.PlayOneShot(clip, Mathf.Clamp01(volume));
+    }
+
     public void RegisterBossOrMiniBossCombat(float duration = -1f)
     {
         float holdDuration = duration > 0f ? duration : combatMusicHoldDuration;
