@@ -3,6 +3,13 @@ using UnityEngine.InputSystem;
 
 public class PlayerInteraction : MonoBehaviour
 {
+    const string PickupSoundClipPath = "Audio/SFX/Coletando_algo_no_game";
+    const float PickupSoundVolume = 0.12f;
+    const string TreeHitSoundClipPath = "Audio/SFX/Batendo_na_arvore";
+    const float TreeHitSoundVolume = 0.12f;
+    const string RockHitSoundClipPath = "Audio/SFX/Batendo_em_pedra";
+    const float RockHitSoundVolume = 0.12f;
+
     public float interactDistance = 4f;
     public float interactRadius = 0.45f;
     public Transform cameraHolder;
@@ -36,6 +43,12 @@ public class PlayerInteraction : MonoBehaviour
     float consumeTimer;
     bool wasDeadLastFrame;
     bool starterItemsInitialized;
+    AudioClip pickupSound;
+    AudioSource pickupAudioSource;
+    AudioClip treeHitSound;
+    AudioSource treeHitAudioSource;
+    AudioClip rockHitSound;
+    AudioSource rockHitAudioSource;
 
     [Header("Start Item")]
     public bool startWithAxe = true;
@@ -53,6 +66,16 @@ public class PlayerInteraction : MonoBehaviour
             new InputAction("Hotbar4", binding: "<Keyboard>/4"),
             new InputAction("Hotbar5", binding: "<Keyboard>/5")
         };
+
+        EnsurePickupAudioSource();
+        LoadPickupSoundIfNeeded();
+        PreloadPickupSound();
+        EnsureTreeHitAudioSource();
+        LoadTreeHitSoundIfNeeded();
+        PreloadTreeHitSound();
+        EnsureRockHitAudioSource();
+        LoadRockHitSoundIfNeeded();
+        PreloadRockHitSound();
     }
 
     void OnEnable()
@@ -365,11 +388,15 @@ public class PlayerInteraction : MonoBehaviour
 
         if (deathLoot != null)
         {
+            bool hadItems = deathLoot.HasItems;
             deathLoot.Collect(inventory, hotbar);
 
             InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
             if (inventoryUi != null)
                 inventoryUi.Refresh();
+
+            if (hadItems)
+                PlayPickupSound();
 
             if (MessageSystem.Instance != null)
                 MessageSystem.Instance.ShowMessage("Recuperou seu loot");
@@ -389,6 +416,7 @@ public class PlayerInteraction : MonoBehaviour
             if (inventoryUi != null)
                 inventoryUi.Refresh();
 
+            PlayPickupSound();
             ReequipSelectedSlot();
             return;
         }
@@ -410,6 +438,7 @@ public class PlayerInteraction : MonoBehaviour
         if (item.itemType == ItemType.Tool || item.itemType == ItemType.Consumable)
             hotbar.AddItem(item.itemName, item.icon, item);
 
+        PlayPickupSound();
         Destroy(item.gameObject);
     }
 
@@ -495,11 +524,26 @@ public class PlayerInteraction : MonoBehaviour
 
         if (resource != null)
         {
+            bool shouldPlayTreeHitSound = ShouldPlayTreeHitSound(resource);
+            bool shouldPlayRockHitSound = ShouldPlayRockHitSound(resource);
+
             if (LanMultiplayerManager.Instance != null &&
                 LanMultiplayerManager.Instance.TryHandleGameplayHit(resource, playerMovement, currentTool, toolDamage))
+            {
+                if (shouldPlayTreeHitSound)
+                    PlayTreeHitSound();
+                if (shouldPlayRockHitSound)
+                    PlayRockHitSound();
+
                 return;
+            }
 
             resource.Hit(inventory, hotbar, currentTool, toolDamage);
+
+            if (shouldPlayTreeHitSound)
+                PlayTreeHitSound();
+            if (shouldPlayRockHitSound)
+                PlayRockHitSound();
         }
     }
 
@@ -858,5 +902,129 @@ public class PlayerInteraction : MonoBehaviour
     Animator GetPlayerAnimator()
     {
         return GetComponentInChildren<Animator>(true);
+    }
+
+    void EnsurePickupAudioSource()
+    {
+        if (pickupAudioSource != null)
+            return;
+
+        pickupAudioSource = gameObject.AddComponent<AudioSource>();
+        pickupAudioSource.playOnAwake = false;
+        pickupAudioSource.loop = false;
+        pickupAudioSource.spatialBlend = 0f;
+    }
+
+    void LoadPickupSoundIfNeeded()
+    {
+        if (pickupSound == null)
+            pickupSound = Resources.Load<AudioClip>(PickupSoundClipPath);
+    }
+
+    void PreloadPickupSound()
+    {
+        if (pickupSound != null)
+            pickupSound.LoadAudioData();
+    }
+
+    void PlayPickupSound()
+    {
+        LoadPickupSoundIfNeeded();
+        EnsurePickupAudioSource();
+
+        if (pickupSound == null || pickupAudioSource == null)
+            return;
+
+        pickupAudioSource.PlayOneShot(pickupSound, PickupSoundVolume);
+    }
+
+    bool ShouldPlayTreeHitSound(ResourceNode resource)
+    {
+        if (resource == null)
+            return false;
+
+        if (!resource.CanBeHitBy(currentTool))
+            return false;
+
+        return resource.requiredTool == ToolType.Axe;
+    }
+
+    bool ShouldPlayRockHitSound(ResourceNode resource)
+    {
+        if (resource == null)
+            return false;
+
+        if (!resource.CanBeHitBy(currentTool))
+            return false;
+
+        return resource.requiredTool == ToolType.Pickaxe;
+    }
+
+    void EnsureTreeHitAudioSource()
+    {
+        if (treeHitAudioSource != null)
+            return;
+
+        treeHitAudioSource = gameObject.AddComponent<AudioSource>();
+        treeHitAudioSource.playOnAwake = false;
+        treeHitAudioSource.loop = false;
+        treeHitAudioSource.spatialBlend = 0f;
+    }
+
+    void LoadTreeHitSoundIfNeeded()
+    {
+        if (treeHitSound == null)
+            treeHitSound = Resources.Load<AudioClip>(TreeHitSoundClipPath);
+    }
+
+    void PreloadTreeHitSound()
+    {
+        if (treeHitSound != null)
+            treeHitSound.LoadAudioData();
+    }
+
+    void PlayTreeHitSound()
+    {
+        LoadTreeHitSoundIfNeeded();
+        EnsureTreeHitAudioSource();
+
+        if (treeHitSound == null || treeHitAudioSource == null)
+            return;
+
+        treeHitAudioSource.PlayOneShot(treeHitSound, TreeHitSoundVolume);
+    }
+
+    void EnsureRockHitAudioSource()
+    {
+        if (rockHitAudioSource != null)
+            return;
+
+        rockHitAudioSource = gameObject.AddComponent<AudioSource>();
+        rockHitAudioSource.playOnAwake = false;
+        rockHitAudioSource.loop = false;
+        rockHitAudioSource.spatialBlend = 0f;
+    }
+
+    void LoadRockHitSoundIfNeeded()
+    {
+        if (rockHitSound == null)
+            rockHitSound = Resources.Load<AudioClip>(RockHitSoundClipPath);
+    }
+
+    void PreloadRockHitSound()
+    {
+        if (rockHitSound != null)
+            rockHitSound.LoadAudioData();
+    }
+
+    void PlayRockHitSound()
+    {
+        LoadRockHitSoundIfNeeded();
+        EnsureRockHitAudioSource();
+
+        if (rockHitSound == null || rockHitAudioSource == null)
+            return;
+
+        rockHitAudioSource.PlayOneShot(rockHitSound, RockHitSoundVolume);
     }
 }
