@@ -7,8 +7,10 @@ public class PlayerInteraction : MonoBehaviour
     const float PickupSoundVolume = 0.12f;
     const string TreeHitSoundClipPath = "Audio/SFX/Batendo_na_arvore";
     const float TreeHitSoundVolume = 0.12f;
+    const float DefaultTreeHitSoundStartOffset = 0.95f;
     const string RockHitSoundClipPath = "Audio/SFX/Batendo_em_pedra";
-    const float RockHitSoundVolume = 0.12f;
+    const float RockHitSoundVolume = 0.20f;
+    const float DefaultRockHitSoundStartOffset = 0.95f;
 
     public float interactDistance = 4f;
     public float interactRadius = 0.45f;
@@ -47,8 +49,15 @@ public class PlayerInteraction : MonoBehaviour
     AudioSource pickupAudioSource;
     AudioClip treeHitSound;
     AudioSource treeHitAudioSource;
+    AudioClip preparedTreeHitSound;
+    float preparedTreeHitSoundOffset = -1f;
     AudioClip rockHitSound;
     AudioSource rockHitAudioSource;
+    AudioClip preparedRockHitSound;
+    float preparedRockHitSoundOffset = -1f;
+    [Header("Audio")]
+    [Min(0f)] public float treeHitSoundStartOffset = DefaultTreeHitSoundStartOffset;
+    [Min(0f)] public float rockHitSoundStartOffset = DefaultRockHitSoundStartOffset;
 
     [Header("Start Item")]
     public bool startWithAxe = true;
@@ -469,8 +478,6 @@ public class PlayerInteraction : MonoBehaviour
             anim.SetTrigger("Chop");
         }
 
-        playerMovement?.PlayAttackSound();
-
         MiniKrug miniKrug = hit.collider.GetComponent<MiniKrug>() ??
                             hit.collider.GetComponentInParent<MiniKrug>();
 
@@ -531,7 +538,7 @@ public class PlayerInteraction : MonoBehaviour
                 LanMultiplayerManager.Instance.TryHandleGameplayHit(resource, playerMovement, currentTool, toolDamage))
             {
                 if (shouldPlayTreeHitSound)
-                    PlayTreeHitSound();
+                    PlayTreeImpactSound();
                 if (shouldPlayRockHitSound)
                     PlayRockHitSound();
 
@@ -541,7 +548,7 @@ public class PlayerInteraction : MonoBehaviour
             resource.Hit(inventory, hotbar, currentTool, toolDamage);
 
             if (shouldPlayTreeHitSound)
-                PlayTreeHitSound();
+                PlayTreeImpactSound();
             if (shouldPlayRockHitSound)
                 PlayRockHitSound();
         }
@@ -946,7 +953,10 @@ public class PlayerInteraction : MonoBehaviour
         if (!resource.CanBeHitBy(currentTool))
             return false;
 
-        return resource.requiredTool == ToolType.Axe;
+        if (resource.requiredTool == ToolType.Axe)
+            return true;
+
+        return MatchesResourceKeyword(resource, "madeira", "arvore", "tree");
     }
 
     bool ShouldPlayRockHitSound(ResourceNode resource)
@@ -957,7 +967,34 @@ public class PlayerInteraction : MonoBehaviour
         if (!resource.CanBeHitBy(currentTool))
             return false;
 
-        return resource.requiredTool == ToolType.Pickaxe;
+        if (resource.requiredTool == ToolType.Pickaxe)
+            return true;
+
+        return MatchesResourceKeyword(resource, "pedra", "rock", "stone");
+    }
+
+    bool MatchesResourceKeyword(ResourceNode resource, params string[] keywords)
+    {
+        if (resource == null || keywords == null || keywords.Length == 0)
+            return false;
+
+        string itemName = resource.itemName ?? string.Empty;
+        string objectName = resource.gameObject.name ?? string.Empty;
+
+        for (int i = 0; i < keywords.Length; i++)
+        {
+            string keyword = keywords[i];
+            if (string.IsNullOrWhiteSpace(keyword))
+                continue;
+
+            if (itemName.IndexOf(keyword, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            if (objectName.IndexOf(keyword, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+        }
+
+        return false;
     }
 
     void EnsureTreeHitAudioSource()
@@ -991,7 +1028,29 @@ public class PlayerInteraction : MonoBehaviour
         if (treeHitSound == null || treeHitAudioSource == null)
             return;
 
-        treeHitAudioSource.PlayOneShot(treeHitSound, TreeHitSoundVolume);
+        AudioClip clipToPlay = GetPreparedClip(
+            treeHitSound,
+            treeHitSoundStartOffset,
+            ref preparedTreeHitSound,
+            ref preparedTreeHitSoundOffset,
+            "TreeHit");
+
+        treeHitAudioSource.Stop();
+        treeHitAudioSource.clip = clipToPlay;
+        treeHitAudioSource.volume = TreeHitSoundVolume;
+        treeHitAudioSource.time = 0f;
+        treeHitAudioSource.Play();
+    }
+
+    void PlayTreeImpactSound()
+    {
+        if (playerMovement != null && playerMovement.attackSound != null)
+        {
+            playerMovement.PlayAttackSound();
+            return;
+        }
+
+        PlayTreeHitSound();
     }
 
     void EnsureRockHitAudioSource()
@@ -1020,11 +1079,64 @@ public class PlayerInteraction : MonoBehaviour
     void PlayRockHitSound()
     {
         LoadRockHitSoundIfNeeded();
-        EnsureRockHitAudioSource();
-
-        if (rockHitSound == null || rockHitAudioSource == null)
+        if (rockHitSound == null)
             return;
 
-        rockHitAudioSource.PlayOneShot(rockHitSound, RockHitSoundVolume);
+        if (playerMovement != null)
+        {
+            playerMovement.PlayUiSound(rockHitSound, RockHitSoundVolume);
+            return;
+        }
+
+        EnsureRockHitAudioSource();
+        if (rockHitAudioSource == null)
+            return;
+
+        rockHitAudioSource.Stop();
+        rockHitAudioSource.clip = rockHitSound;
+        rockHitAudioSource.volume = RockHitSoundVolume;
+        rockHitAudioSource.time = 0f;
+        rockHitAudioSource.Play();
+    }
+
+    AudioClip GetPreparedClip(
+        AudioClip sourceClip,
+        float startOffsetSeconds,
+        ref AudioClip cachedClip,
+        ref float cachedOffsetSeconds,
+        string cacheLabel)
+    {
+        if (sourceClip == null)
+            return null;
+
+        float safeOffsetSeconds = Mathf.Max(0f, startOffsetSeconds);
+        if (safeOffsetSeconds <= 0.001f)
+            return sourceClip;
+
+        if (cachedClip != null && Mathf.Approximately(cachedOffsetSeconds, safeOffsetSeconds))
+            return cachedClip;
+
+        int startSample = Mathf.Clamp(
+            Mathf.RoundToInt(safeOffsetSeconds * sourceClip.frequency),
+            0,
+            Mathf.Max(0, sourceClip.samples - 1));
+
+        int trimmedSamples = sourceClip.samples - startSample;
+        if (trimmedSamples <= 0)
+            return sourceClip;
+
+        float[] sampleData = new float[trimmedSamples * sourceClip.channels];
+        if (!sourceClip.GetData(sampleData, startSample))
+            return sourceClip;
+
+        cachedClip = AudioClip.Create(
+            $"{sourceClip.name}_{cacheLabel}_Trimmed",
+            trimmedSamples,
+            sourceClip.channels,
+            sourceClip.frequency,
+            false);
+        cachedClip.SetData(sampleData, 0);
+        cachedOffsetSeconds = safeOffsetSeconds;
+        return cachedClip;
     }
 }
