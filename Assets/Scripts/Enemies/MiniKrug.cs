@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public class MiniKrug : MonoBehaviour
 {
     const string DefaultNightZombieVisualPath = "Enemies/MiniKrugZombieVisual";
+    const float DungeonKeyDropChance = 0.28f;
 
     [Header("Progressao")]
     public int enemyLevel = 1;
@@ -440,6 +441,7 @@ public class MiniKrug : MonoBehaviour
 
         AwardExperienceIfKilledByPlayer();
         DropGoldIfKilledByPlayer();
+        TryDropDungeonKey();
         NotifySpawnOwners();
         BeginDeathSequence();
     }
@@ -467,6 +469,36 @@ public class MiniKrug : MonoBehaviour
             killerInventory.AddItem("Gold", amount, GoldItemRegistry.GetOrCreate());
 
         MessageSystem.Instance?.ShowMessage($"+{amount} gold");
+    }
+
+    void TryDropDungeonKey()
+    {
+        if (lastAttacker == null || !ShouldDropDungeonKey())
+            return;
+
+        if (Random.value > DungeonKeyDropChance)
+            return;
+
+        Inventory inventory = lastAttacker.GetComponent<Inventory>();
+        Hotbar hotbar = lastAttacker.GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
+        Item keyItem = MushroomTyrantDungeonKeyRegistry.GetOrCreate();
+
+        if (inventory == null || keyItem == null)
+            return;
+
+        inventory.AddItem(MushroomTyrantDungeonKeyRegistry.ItemName, 1, keyItem);
+
+        if (hotbar != null && keyItem.icon != null)
+            hotbar.TryAddInventoryItem(new InventoryItem(MushroomTyrantDungeonKeyRegistry.ItemName, 1, keyItem));
+
+        MessageSystem.Instance?.ShowMessage("A chave da Camara do Cogumelo Tirano caiu.");
+    }
+
+    bool ShouldDropDungeonKey()
+    {
+        return string.Equals(rewardDisplayName, "Mushroom Mon", System.StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(rewardDisplayName, "Mushroom", System.StringComparison.OrdinalIgnoreCase) ||
+               gameObject.name.IndexOf("mushroom", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     void EnsureCombatUI()

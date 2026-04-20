@@ -364,6 +364,13 @@ public class PlayerInteraction : MonoBehaviour
         if (!TryFindInteractionHit(out RaycastHit hit))
             return;
 
+        IPlayerInteractable interactable = hit.collider.GetComponent<IPlayerInteractable>() ??
+                                           hit.collider.GetComponentInParent<IPlayerInteractable>() ??
+                                           hit.collider.GetComponentInChildren<IPlayerInteractable>();
+
+        if (interactable != null && interactable.Interact(this))
+            return;
+
         Door door = hit.collider.GetComponent<Door>() ??
                     hit.collider.GetComponentInParent<Door>();
 
@@ -869,41 +876,100 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        currentEquippedObject = Instantiate(prefab, hand);
+        currentEquippedObject = CreateEquippedVisual(prefab, stripGameplayComponents);
+        if (currentEquippedObject == null)
+        {
+            Debug.LogError($"Nao foi possivel criar visual equipado para {prefab.name}.");
+            return;
+        }
+
+        currentEquippedObject.transform.SetParent(hand, false);
         currentEquippedObject.transform.localPosition = localPosition;
         currentEquippedObject.transform.localRotation = Quaternion.Euler(localEulerAngles);
         currentEquippedObject.transform.localScale = localScale;
+    }
 
-        // Equipped visuals should never block raycasts or behave like world pickups/resources.
-        foreach (Collider col in currentEquippedObject.GetComponentsInChildren<Collider>(true))
-            Destroy(col);
+    GameObject CreateEquippedVisual(GameObject source, bool stripGameplayComponents)
+    {
+        if (source == null)
+            return null;
 
-        foreach (Rigidbody rb in currentEquippedObject.GetComponentsInChildren<Rigidbody>(true))
-            Destroy(rb);
+        GameObject visualRoot = new GameObject($"{source.name}_EquippedVisual");
+        CopyVisualHierarchy(source.transform, visualRoot.transform, stripGameplayComponents);
+        return visualRoot;
+    }
 
-        foreach (Item item in currentEquippedObject.GetComponentsInChildren<Item>(true))
-            Destroy(item);
+    void CopyVisualHierarchy(Transform source, Transform destinationParent, bool stripGameplayComponents)
+    {
+        GameObject destination = new GameObject(source.gameObject.name);
+        destination.transform.SetParent(destinationParent, false);
+        destination.transform.localPosition = source.localPosition;
+        destination.transform.localRotation = source.localRotation;
+        destination.transform.localScale = source.localScale;
+        destination.layer = source.gameObject.layer;
+        destination.tag = source.gameObject.tag;
 
-        foreach (ResourceNode node in currentEquippedObject.GetComponentsInChildren<ResourceNode>(true))
-            Destroy(node);
-
-        foreach (ConsumableItem consumable in currentEquippedObject.GetComponentsInChildren<ConsumableItem>(true))
+        MeshFilter sourceMeshFilter = source.GetComponent<MeshFilter>();
+        if (sourceMeshFilter != null)
         {
-            if (stripGameplayComponents)
-                Destroy(consumable);
+            MeshFilter meshFilter = destination.AddComponent<MeshFilter>();
+            meshFilter.sharedMesh = sourceMeshFilter.sharedMesh;
         }
 
-        foreach (BottleItem bottle in currentEquippedObject.GetComponentsInChildren<BottleItem>(true))
+        MeshRenderer sourceMeshRenderer = source.GetComponent<MeshRenderer>();
+        if (sourceMeshRenderer != null)
         {
-            if (stripGameplayComponents)
-                Destroy(bottle);
+            MeshRenderer meshRenderer = destination.AddComponent<MeshRenderer>();
+            meshRenderer.sharedMaterials = sourceMeshRenderer.sharedMaterials;
+            meshRenderer.shadowCastingMode = sourceMeshRenderer.shadowCastingMode;
+            meshRenderer.receiveShadows = sourceMeshRenderer.receiveShadows;
+            meshRenderer.lightProbeUsage = sourceMeshRenderer.lightProbeUsage;
+            meshRenderer.reflectionProbeUsage = sourceMeshRenderer.reflectionProbeUsage;
         }
 
-        foreach (MagicSpellConsumable magic in currentEquippedObject.GetComponentsInChildren<MagicSpellConsumable>(true))
+        SkinnedMeshRenderer sourceSkinnedMeshRenderer = source.GetComponent<SkinnedMeshRenderer>();
+        if (sourceSkinnedMeshRenderer != null)
         {
-            if (stripGameplayComponents)
-                Destroy(magic);
+            SkinnedMeshRenderer skinnedMeshRenderer = destination.AddComponent<SkinnedMeshRenderer>();
+            skinnedMeshRenderer.sharedMesh = sourceSkinnedMeshRenderer.sharedMesh;
+            skinnedMeshRenderer.sharedMaterials = sourceSkinnedMeshRenderer.sharedMaterials;
+            skinnedMeshRenderer.shadowCastingMode = sourceSkinnedMeshRenderer.shadowCastingMode;
+            skinnedMeshRenderer.receiveShadows = sourceSkinnedMeshRenderer.receiveShadows;
+            skinnedMeshRenderer.lightProbeUsage = sourceSkinnedMeshRenderer.lightProbeUsage;
+            skinnedMeshRenderer.reflectionProbeUsage = sourceSkinnedMeshRenderer.reflectionProbeUsage;
+            skinnedMeshRenderer.updateWhenOffscreen = sourceSkinnedMeshRenderer.updateWhenOffscreen;
         }
+
+        SpriteRenderer sourceSpriteRenderer = source.GetComponent<SpriteRenderer>();
+        if (sourceSpriteRenderer != null)
+        {
+            SpriteRenderer spriteRenderer = destination.AddComponent<SpriteRenderer>();
+            spriteRenderer.sprite = sourceSpriteRenderer.sprite;
+            spriteRenderer.color = sourceSpriteRenderer.color;
+            spriteRenderer.flipX = sourceSpriteRenderer.flipX;
+            spriteRenderer.flipY = sourceSpriteRenderer.flipY;
+            spriteRenderer.sortingLayerID = sourceSpriteRenderer.sortingLayerID;
+            spriteRenderer.sortingOrder = sourceSpriteRenderer.sortingOrder;
+            spriteRenderer.sharedMaterial = sourceSpriteRenderer.sharedMaterial;
+        }
+
+        if (!stripGameplayComponents)
+        {
+            TrailRenderer sourceTrailRenderer = source.GetComponent<TrailRenderer>();
+            if (sourceTrailRenderer != null)
+            {
+                TrailRenderer trailRenderer = destination.AddComponent<TrailRenderer>();
+                trailRenderer.sharedMaterial = sourceTrailRenderer.sharedMaterial;
+                trailRenderer.time = sourceTrailRenderer.time;
+                trailRenderer.startWidth = sourceTrailRenderer.startWidth;
+                trailRenderer.endWidth = sourceTrailRenderer.endWidth;
+                trailRenderer.widthMultiplier = sourceTrailRenderer.widthMultiplier;
+                trailRenderer.colorGradient = sourceTrailRenderer.colorGradient;
+            }
+        }
+
+        for (int i = 0; i < source.childCount; i++)
+            CopyVisualHierarchy(source.GetChild(i), destination.transform, stripGameplayComponents);
     }
 
     Animator GetPlayerAnimator()
