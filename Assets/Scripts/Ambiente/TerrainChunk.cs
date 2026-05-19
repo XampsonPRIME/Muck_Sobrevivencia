@@ -66,6 +66,11 @@ public class TerrainChunk : MonoBehaviour
     public Vector2 enchantedForestMushroomScaleRange = new Vector2(0.8f, 1.25f);
     public float enchantedForestMushroomYOffset = 0.08f;
     public float enchantedForestMushroomMinDistance = 3.6f;
+    public GameObject gravetoPrefab;
+    [Range(0f, 1f)] public float gravetoDensity = 0.004f;
+    public int maxGravetosPerChunk = 4;
+    public float minGravetoDistance = 5f;
+    public float gravetoYOffset = 0.08f;
 
     public float treeDensity = 0.12f;
     public int maxTreesPerChunk = 22;
@@ -895,6 +900,7 @@ public class TerrainChunk : MonoBehaviour
         List<Vector3> grassPositions = new List<Vector3>();
         List<Matrix4x4> grassMatrices = new List<Matrix4x4>(Mathf.Max(maxForestGrassPerChunk, 1024));
         int treeCount = 0;
+        int gravetoCount = 0;
         int iterationsSinceYield = 0;
 
 
@@ -1013,6 +1019,30 @@ public class TerrainChunk : MonoBehaviour
             }
 
             // 🍄
+            // Gravetos
+            if (gravetoPrefab != null &&
+                gravetoCount < maxGravetosPerChunk &&
+                biome == BiomeType.Forest &&
+                rng.Value() < gravetoDensity)
+            {
+                Vector3 groundPoint = GetGroundPoint(worldPos);
+
+                if (!IsTooClose(groundPoint, minGravetoDistance))
+                {
+                    GameObject graveto = Instantiate(
+                        gravetoPrefab,
+                        groundPoint + Vector3.up * gravetoYOffset,
+                        Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
+                        transform
+                    );
+
+                    float scale = rng.Range(0.85f, 1.15f);
+                    graveto.transform.localScale *= scale;
+                    usedPositions.Add(groundPoint);
+                    gravetoCount++;
+                }
+            }
+
             if (!IsEnchantedForestScene())
                 continue;
 

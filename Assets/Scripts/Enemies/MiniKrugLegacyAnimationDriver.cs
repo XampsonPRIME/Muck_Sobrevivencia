@@ -15,9 +15,14 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
     public float damageLockDuration = 0.3f;
     public float deathHoldDuration = 1.15f;
     public bool autoConfigureWrapModes = true;
+    public float maxActiveDistance = 18f;
+    public float cullingCheckInterval = 0.2f;
 
     float actionLockUntil;
+    float locomotionLockUntil;
+    float nextCullingCheckTime;
     bool hasLastPosition;
+    bool canAnimate = true;
     bool isDead;
     string currentClip;
     Vector3 lastPosition;
@@ -41,6 +46,10 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
         if (animationComponent == null)
             return;
 
+        UpdateAnimationCulling();
+        if (!canAnimate)
+            return;
+
         if (!hasLastPosition)
         {
             lastPosition = transform.position;
@@ -53,7 +62,8 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
         if (Time.time < actionLockUntil)
             return;
 
-        PlayClip(movedDistanceSqr > locomotionThreshold * locomotionThreshold ? runClip : idleClip);
+        bool shouldMove = movedDistanceSqr > locomotionThreshold * locomotionThreshold || Time.time < locomotionLockUntil;
+        PlayClip(shouldMove ? runClip : idleClip);
     }
 
     public void PlayIdle()
@@ -71,6 +81,15 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
             return;
 
         PlayLockedClip(attackClip, attackLockDuration);
+    }
+
+    public void PlayMoveFor(float duration)
+    {
+        if (isDead)
+            return;
+
+        locomotionLockUntil = Mathf.Max(locomotionLockUntil, Time.time + Mathf.Max(0f, duration));
+        PlayClip(runClip);
     }
 
     public void PlayDamage()
@@ -116,7 +135,42 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
     void ResolveAnimation()
     {
         if (animationComponent == null)
+        {
             animationComponent = GetComponent<Animation>() ?? GetComponentInChildren<Animation>(true);
+
+            if (animationComponent != null)
+                animationComponent.cullingType = AnimationCullingType.BasedOnRenderers;
+        }
+    }
+
+    void UpdateAnimationCulling()
+    {
+        if (Time.time < nextCullingCheckTime)
+            return;
+
+        nextCullingCheckTime = Time.time + Mathf.Max(0.05f, cullingCheckInterval);
+        bool shouldAnimate = ShouldAnimate();
+        if (canAnimate == shouldAnimate)
+            return;
+
+        canAnimate = shouldAnimate;
+        animationComponent.enabled = shouldAnimate;
+
+        if (shouldAnimate)
+        {
+            currentClip = null;
+            hasLastPosition = false;
+        }
+    }
+
+    bool ShouldAnimate()
+    {
+        Camera activeCamera = Camera.main;
+        if (activeCamera == null)
+            return true;
+
+        float maxDistance = Mathf.Max(1f, maxActiveDistance);
+        return (transform.position - activeCamera.transform.position).sqrMagnitude <= maxDistance * maxDistance;
     }
 
     void ConfigureWrapModes()
@@ -161,6 +215,10 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
     {
         string resolvedClipName = ResolveClipName(clipName);
         if (animationComponent == null || string.IsNullOrWhiteSpace(resolvedClipName))
+            return;
+
+        UpdateAnimationCulling();
+        if (!canAnimate)
             return;
 
         if (animationComponent[resolvedClipName] == null)

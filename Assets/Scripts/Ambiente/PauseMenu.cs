@@ -84,7 +84,7 @@ public class PauseMenu : MonoBehaviour
             return;
         }
 
-        if (GameState.IsVendorOpen)
+        if (GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.LastUiCloseFrame == Time.frameCount)
             return;
 
         if (pauseAction.WasPressedThisFrame())

@@ -202,7 +202,7 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        if (GameState.IsVendorOpen)
+        if (GameState.IsVendorOpen || GameState.IsCraftingOpen)
         {
             moveInput = Vector2.zero;
             lookInput = Vector2.zero;
@@ -442,7 +442,7 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleHealthRegeneration()
     {
-        if (GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInLobby || GameState.IsVendorOpen)
+        if (GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInLobby || GameState.IsVendorOpen || GameState.IsCraftingOpen)
             return;
 
         if (currentHealth >= maxHealth || healthRegenPerSecond <= 0f)
@@ -519,6 +519,7 @@ public class PlayerMovement : MonoBehaviour
         GameState.IsPlayerDead = true;
         GameState.IsInventoryOpen = false;
         GameState.IsVendorOpen = false;
+        GameState.IsCraftingOpen = false;
         moveInput = Vector2.zero;
         lookInput = Vector2.zero;
         isRunning = false;
@@ -725,6 +726,7 @@ public class PlayerMovement : MonoBehaviour
         GameState.IsPlayerDead = false;
         GameState.IsInventoryOpen = false;
         GameState.IsVendorOpen = false;
+        GameState.IsCraftingOpen = false;
 
         currentHealth = maxHealth;
         currentHunger = maxHunger;
