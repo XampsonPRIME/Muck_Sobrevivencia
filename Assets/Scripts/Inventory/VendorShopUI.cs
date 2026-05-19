@@ -125,6 +125,7 @@ public class VendorShopUI : MonoBehaviour
     public void Close()
     {
         GameState.IsVendorOpen = false;
+        GameState.LastUiCloseFrame = Time.frameCount;
         SetVisible(false);
 
         if (currentPlayerMovement != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby)

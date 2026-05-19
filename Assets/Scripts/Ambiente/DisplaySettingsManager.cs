@@ -290,6 +290,9 @@ public class DisplaySettingsManager : MonoBehaviour
         if (scaler == null)
             return false;
 
+        if (scaler.GetComponent<CraftingBenchUI>() != null)
+            return false;
+
         var scene = scaler.gameObject.scene;
 
         return scene.IsValid() && scene.isLoaded;

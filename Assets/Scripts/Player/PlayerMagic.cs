@@ -68,7 +68,7 @@ public class PlayerMagic : MonoBehaviour
         if (!hasUnlockedAreaMagic)
             return;
 
-        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInventoryOpen || GameState.IsVendorOpen)
+        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInventoryOpen || GameState.IsVendorOpen || GameState.IsCraftingOpen)
             return;
 
         if (!castMagicAction.WasPressedThisFrame())

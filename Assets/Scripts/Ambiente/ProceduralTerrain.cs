@@ -355,6 +355,16 @@ public class ProceduralTerrain : MonoBehaviour
                         transform
                     );
                 }
+
+                if (gravetoPrefab != null && Random.value < gravetoDensity && isForest)
+                {
+                    Instantiate(
+                        gravetoPrefab,
+                        pos + Vector3.up * 0.08f,
+                        Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+                        transform
+                    );
+                }
             }
         }
     }

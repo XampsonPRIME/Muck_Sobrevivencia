@@ -152,6 +152,17 @@ MonoBehaviour:
     yOffset: 0
     biome: 1
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
+  enchantedForestMushroomSinglePrefab: {fileID: 0}
+  enchantedForestMushroomClusterPrefab: {fileID: 0}
+  enchantedForestClusterChance: 0.35
+  enchantedForestMushroomScaleRange: {x: 0.8, y: 1.25}
+  enchantedForestMushroomYOffset: 0.08
+  enchantedForestMushroomMinDistance: 3.6
+  gravetoPrefab: {fileID: 5972306984636934937, guid: 540c6c32b899547499773e634b96388a, type: 3}
+  gravetoDensity: 0.004
+  maxGravetosPerChunk: 4
+  minGravetoDistance: 5
+  gravetoYOffset: 0.08
   treeDensity: 0.12
   maxTreesPerChunk: 22
   forestTreeHeightMultiplier: 1.45

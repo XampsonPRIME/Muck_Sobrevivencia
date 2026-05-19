@@ -222,6 +222,7 @@ public class MiniKrug : MonoBehaviour
 
     public void ApplyNetworkState(Vector3 networkPosition, Quaternion networkRotation, int networkLevel, int networkHealth, bool destroyed)
     {
+        Vector3 previousPosition = transform.position;
         ApplyLevelScaling(networkLevel);
         transform.SetPositionAndRotation(networkPosition, networkRotation);
         currentHealth = Mathf.Max(0, networkHealth);
@@ -229,6 +230,8 @@ public class MiniKrug : MonoBehaviour
 
         if (destroyed)
             BeginDeathSequence();
+        else if ((networkPosition - previousPosition).sqrMagnitude > 0.0025f)
+            PlayMoveAnimationFor(0.22f);
     }
 
     public void PlayLocalHitFeedback(int damage)
@@ -761,6 +764,19 @@ public class MiniKrug : MonoBehaviour
         }
 
         animationDriver?.PlayIdle();
+    }
+
+    void PlayMoveAnimationFor(float duration)
+    {
+        ResolveAnimationDrivers();
+
+        if (zombieAnimationDriver != null)
+        {
+            zombieAnimationDriver.PlayMoveFor(duration);
+            return;
+        }
+
+        animationDriver?.PlayMoveFor(duration);
     }
 
     void PlayAttackAnimation()

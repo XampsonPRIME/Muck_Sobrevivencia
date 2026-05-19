@@ -126,7 +126,7 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        if (GameState.IsVendorOpen)
+        if (GameState.IsVendorOpen || GameState.IsCraftingOpen)
         {
             consumeTimer = 0f;
             return;
@@ -460,7 +460,7 @@ public class PlayerInteraction : MonoBehaviour
 
     void Attack()
     {
-        if (Time.time < nextHitTime || GameState.IsInventoryOpen || GameState.IsPaused || GameState.IsVendorOpen)
+        if (Time.time < nextHitTime || GameState.IsInventoryOpen || GameState.IsPaused || GameState.IsVendorOpen || GameState.IsCraftingOpen)
             return;
 
         if (!TryFindInteractionHit(out RaycastHit hit))
