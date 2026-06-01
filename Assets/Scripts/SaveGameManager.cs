@@ -302,7 +302,7 @@ public class SaveGameManager : MonoBehaviour
 
         foreach (InventoryItem item in inventory.items)
         {
-            if (item == null || item.itemData == null || item.quantity <= 0)
+            if (item == null || string.IsNullOrWhiteSpace(item.itemName) || item.quantity <= 0)
                 continue;
 
             data.inventory.Add(new SaveInventoryItemData
@@ -390,7 +390,7 @@ public class SaveGameManager : MonoBehaviour
 
         foreach (InventoryItem item in inventory.items)
         {
-            if (item == null || item.itemData == null || item.quantity <= 0)
+            if (item == null || string.IsNullOrWhiteSpace(item.itemName) || item.quantity <= 0)
                 continue;
 
             data.inventory.Add(new SaveInventoryItemData
@@ -476,7 +476,7 @@ public class SaveGameManager : MonoBehaviour
 
         foreach (InventoryItem item in inventory.items)
         {
-            if (item == null || item.itemData == null || item.quantity <= 0)
+            if (item == null || string.IsNullOrWhiteSpace(item.itemName) || item.quantity <= 0)
                 continue;
 
             data.inventory.Add(new SaveInventoryItemData
@@ -689,6 +689,28 @@ public class SaveGameManager : MonoBehaviour
         if (string.Equals(itemName, "Magia Ancestral", StringComparison.OrdinalIgnoreCase))
             return MagicSpellItemRegistry.GetOrCreate();
 
+        if (string.Equals(itemName, RustyMetalItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return RustyMetalItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, IronItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(itemName, "Ferro", StringComparison.OrdinalIgnoreCase))
+            return IronItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, RefinedIronItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return RefinedIronItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, RustySwordItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return RustySwordItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, FurnaceItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return FurnaceItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, "Machado", StringComparison.OrdinalIgnoreCase))
+            return LoadResourceItem("VendorItems/Axe");
+
+        if (string.Equals(itemName, "Picareta", StringComparison.OrdinalIgnoreCase))
+            return LoadResourceItem("VendorItems/Axepick");
+
         GameObject[] prefabs = Resources.FindObjectsOfTypeAll<GameObject>();
 
         if (!string.IsNullOrWhiteSpace(prefabName))
@@ -717,6 +739,12 @@ public class SaveGameManager : MonoBehaviour
         }
 
         return null;
+    }
+
+    Item LoadResourceItem(string path)
+    {
+        GameObject prefab = Resources.Load<GameObject>(path);
+        return prefab != null ? prefab.GetComponent<Item>() : null;
     }
 
     void ResolveReferences()
