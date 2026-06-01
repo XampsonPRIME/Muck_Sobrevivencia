@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 public class CraftingBenchUI : MonoBehaviour
 {
-    const int LayoutVersion = 26;
+    const int LayoutVersion = 28;
 
     public static CraftingBenchUI Instance { get; private set; }
 
@@ -36,6 +36,7 @@ public class CraftingBenchUI : MonoBehaviour
     PlayerMovement currentPlayerMovement;
 
     int craftAmount = 1;
+    CraftingBench.Recipe selectedRecipe = CraftingBench.Recipe.Sticks;
     int builtLayoutVersion;
 
     readonly Color overlayColor = new Color(0f, 0f, 0f, 0.56f);
@@ -128,6 +129,7 @@ public class CraftingBenchUI : MonoBehaviour
         currentPlayerInteraction = playerInteraction;
         currentPlayerMovement = playerInteraction != null ? playerInteraction.GetComponent<PlayerMovement>() : null;
         craftAmount = 1;
+        selectedRecipe = CraftingBench.Recipe.Sticks;
 
         GameState.IsInventoryOpen = false;
         GameState.IsCraftingOpen = true;
@@ -168,7 +170,7 @@ public class CraftingBenchUI : MonoBehaviour
         if (currentBench == null || currentInventory == null)
             return;
 
-        int availableCrafts = currentBench.GetAvailableCraftCount(currentInventory);
+        int availableCrafts = currentBench.GetAvailableCraftCount(selectedRecipe, currentInventory);
         craftAmount = Mathf.Clamp(craftAmount, 1, Mathf.Max(1, availableCrafts));
 
         RefreshRecipes(availableCrafts);
@@ -180,10 +182,14 @@ public class CraftingBenchUI : MonoBehaviour
     {
         ClearChildren(recipeListRoot);
 
-        CreateRecipeRow(availableCrafts);
+        CreateRecipeRow(CraftingBench.Recipe.Sticks, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Sticks, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.RustySword, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.RustySword, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.Axe, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Axe, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.Pickaxe, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Pickaxe, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.Furnace, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Furnace, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.Shield, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Shield, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.Rope, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Rope, currentInventory));
 
-        for (int i = 0; i < 3; i++)
-            CreateRecipePlaceholder(recipeListRoot);
     }
 
     void RefreshArtisan(int availableCrafts)
@@ -191,16 +197,16 @@ public class CraftingBenchUI : MonoBehaviour
         ClearChildren(artisanSlotRoot);
         ClearChildren(selectedOutputRoot);
 
-        CreateCraftSlot(artisanSlotRoot, currentBench.GetInputIcon(currentInventory), currentBench.GetInputAmount().ToString(), availableCrafts <= 0);
-        int emptySlots = 9;
+        int usedSlots = CreateIngredientSlots(availableCrafts <= 0);
+        int emptySlots = Mathf.Max(0, 10 - usedSlots);
         for (int i = 0; i < emptySlots; i++)
             CreateCraftSlot(artisanSlotRoot, null, string.Empty, false);
 
-        CreateSlotContent(selectedOutputRoot, currentBench.GetOutputIcon(), string.Empty, false);
+        CreateSlotContent(selectedOutputRoot, currentBench.GetRecipeOutputIcon(selectedRecipe), string.Empty, false);
 
-        string outputName = currentBench.GetOutputName();
+        string outputName = currentBench.GetRecipeOutputName(selectedRecipe);
         selectedNameText.text = outputName;
-        selectedRequirementText.text = string.Empty;
+        selectedRequirementText.text = GetSelectedRequirementText();
         quantityText.text = craftAmount.ToString();
 
         bool canCraft = availableCrafts > 0;
@@ -211,7 +217,7 @@ public class CraftingBenchUI : MonoBehaviour
 
         statusText.text = canCraft
             ? $"Voce pode preparar ate {availableCrafts} vez(es)."
-            : "Receita indisponivel: falta madeira no inventario.";
+            : "Receita indisponivel: faltam ingredientes.";
         statusText.color = canCraft ? textColor : new Color(1f, 0.62f, 0.62f, 1f);
     }
 
@@ -247,7 +253,7 @@ public class CraftingBenchUI : MonoBehaviour
         if (currentBench == null)
             return;
 
-        if (currentBench.TryCraftSticks(currentInventory, currentHotbar, craftAmount, out string message))
+        if (currentBench.TryCraftRecipe(selectedRecipe, currentInventory, currentHotbar, craftAmount, out string message))
             MessageSystem.Instance?.ShowMessage(message);
         else
             MessageSystem.Instance?.ShowMessage(message);
@@ -257,14 +263,14 @@ public class CraftingBenchUI : MonoBehaviour
 
     void ChangeCraftAmount(int delta)
     {
-        int availableCrafts = currentBench != null ? currentBench.GetAvailableCraftCount(currentInventory) : 0;
+        int availableCrafts = currentBench != null ? currentBench.GetAvailableCraftCount(selectedRecipe, currentInventory) : 0;
         craftAmount = Mathf.Clamp(craftAmount + delta, 1, Mathf.Max(1, availableCrafts));
         RefreshArtisan(availableCrafts);
     }
 
     void SetMaxCraftAmount()
     {
-        int availableCrafts = currentBench != null ? currentBench.GetAvailableCraftCount(currentInventory) : 0;
+        int availableCrafts = currentBench != null ? currentBench.GetAvailableCraftCount(selectedRecipe, currentInventory) : 0;
         craftAmount = Mathf.Max(1, availableCrafts);
         RefreshArtisan(availableCrafts);
     }
@@ -287,6 +293,19 @@ public class CraftingBenchUI : MonoBehaviour
         }
 
         return total;
+    }
+
+    int CountExactItem(string itemName)
+    {
+        InventoryItem item = currentBench != null ? currentBench.FindItem(currentInventory, itemName) : null;
+        return item != null ? Mathf.Max(0, item.quantity) : 0;
+    }
+
+    Sprite GetInventoryOrFallbackIcon(string itemName, Sprite fallback)
+    {
+        InventoryItem item = currentBench != null ? currentBench.FindItem(currentInventory, itemName) : null;
+        Sprite icon = item != null ? item.GetDisplayIcon() : null;
+        return icon != null ? icon : fallback;
     }
 
     void BuildUi(bool forceRebuild)
@@ -371,9 +390,29 @@ public class CraftingBenchUI : MonoBehaviour
         CreateSmallFilter(section.transform, "Todas as categorias", "Nivel mais elevado");
         CreateSmallFilter(section.transform, "Faltam todos os ingredientes", string.Empty);
 
-        GameObject list = new GameObject("RecipeList", typeof(RectTransform), typeof(VerticalLayoutGroup));
-        list.transform.SetParent(section.transform, false);
-        list.AddComponent<LayoutElement>().flexibleHeight = 1f;
+        GameObject scrollView = CreatePanel("RecipeScrollView", section.transform, new Color(0f, 0f, 0f, 0.08f));
+        scrollView.AddComponent<LayoutElement>().flexibleHeight = 1f;
+        Mask mask = scrollView.AddComponent<Mask>();
+        mask.showMaskGraphic = false;
+        ScrollRect scrollRect = scrollView.AddComponent<ScrollRect>();
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        scrollRect.scrollSensitivity = 38f;
+
+        GameObject list = new GameObject("RecipeList", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        list.transform.SetParent(scrollView.transform, false);
+        RectTransform listRect = list.GetComponent<RectTransform>();
+        listRect.anchorMin = new Vector2(0f, 1f);
+        listRect.anchorMax = new Vector2(1f, 1f);
+        listRect.pivot = new Vector2(0.5f, 1f);
+        listRect.offsetMin = Vector2.zero;
+        listRect.offsetMax = Vector2.zero;
+        ContentSizeFitter fitter = list.GetComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        scrollRect.viewport = scrollView.GetComponent<RectTransform>();
+        scrollRect.content = listRect;
+
         VerticalLayoutGroup layout = list.GetComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(8, 8, 6, 8);
         layout.spacing = 8f;
@@ -435,7 +474,7 @@ public class CraftingBenchUI : MonoBehaviour
         quantityLayout.childControlHeight = true;
         quantityLayout.childAlignment = TextAnchor.MiddleCenter;
 
-        Button minButton = CreateButton(quantityLine.transform, "MIN", () => { craftAmount = 1; RefreshArtisan(currentBench.GetAvailableCraftCount(currentInventory)); }, disabledColor, 46f, 26f, 11f);
+        Button minButton = CreateButton(quantityLine.transform, "MIN", () => { craftAmount = 1; RefreshArtisan(currentBench.GetAvailableCraftCount(selectedRecipe, currentInventory)); }, disabledColor, 46f, 26f, 11f);
         minusButton = CreateButton(quantityLine.transform, "-", () => ChangeCraftAmount(-1), disabledColor, 34f, 26f, 15f);
         quantityText = CreateBoxText(quantityLine.transform, "1", 70f, 26f, 14f);
         plusButton = CreateButton(quantityLine.transform, "+", () => ChangeCraftAmount(1), disabledColor, 34f, 26f, 15f);
@@ -537,34 +576,86 @@ public class CraftingBenchUI : MonoBehaviour
             CreateBoxText(row.transform, rightText, 170f, 20f, 12f, TextAlignmentOptions.Left);
     }
 
-    void CreateRecipeRow(int availableCrafts)
+    int CreateIngredientSlots(bool missingRecipe)
+    {
+        if (UsesBasicToolRecipe(selectedRecipe))
+        {
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon("Graveto", null), "3", missingRecipe || CountExactItem("Graveto") < 3 * craftAmount);
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon("Pedras", null), "2", missingRecipe || CountExactItem("Pedras") < 2 * craftAmount);
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon(RustyMetalItemRegistry.ItemName, RustyMetalItemRegistry.GetSprite()), "1", missingRecipe || CountExactItem(RustyMetalItemRegistry.ItemName) < craftAmount);
+            return 3;
+        }
+
+        if (selectedRecipe == CraftingBench.Recipe.Furnace)
+        {
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon("Pedras", null), "10", missingRecipe || CountExactItem("Pedras") < 10 * craftAmount);
+            return 1;
+        }
+
+        if (selectedRecipe == CraftingBench.Recipe.Shield)
+        {
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon(RefinedIronItemRegistry.ItemName, RefinedIronItemRegistry.GetSprite()), "4", missingRecipe || CountExactItem(RefinedIronItemRegistry.ItemName) < 4 * craftAmount);
+            CreateCraftSlot(artisanSlotRoot, currentBench.GetInputIcon(currentInventory), "3", missingRecipe || CountItemsStartingWith("Madeira") < 3 * craftAmount);
+            return 2;
+        }
+
+        if (selectedRecipe == CraftingBench.Recipe.Rope)
+        {
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon(WheatItemRegistry.ItemName, WheatItemRegistry.GetSprite()), "4", missingRecipe || CountExactItem(WheatItemRegistry.ItemName) < 4 * craftAmount);
+            return 1;
+        }
+
+        CreateCraftSlot(artisanSlotRoot, currentBench.GetInputIcon(currentInventory), currentBench.GetInputAmount().ToString(), missingRecipe);
+        return 1;
+    }
+
+    string GetSelectedRequirementText()
+    {
+        if (UsesBasicToolRecipe(selectedRecipe))
+            return "Gravetos x3  |  Pedras x2  |  Metal enferrujado x1";
+
+        if (selectedRecipe == CraftingBench.Recipe.Furnace)
+            return "Pedras x10";
+
+        if (selectedRecipe == CraftingBench.Recipe.Shield)
+            return "Ferro refinado x4  |  Madeira x3";
+
+        if (selectedRecipe == CraftingBench.Recipe.Rope)
+            return "Trigo x4";
+
+        return currentBench.GetInputLabel();
+    }
+
+    void CreateRecipeRow(CraftingBench.Recipe recipe, int availableCrafts)
     {
         bool missingIngredients = availableCrafts <= 0;
-        Button rowButton = CreateRecipeButton(recipeListRoot, missingIngredients);
+        Button rowButton = CreateRecipeButton(recipeListRoot, recipe, missingIngredients);
         rowButton.onClick.AddListener(() =>
         {
+            selectedRecipe = recipe;
             craftAmount = 1;
-            RefreshArtisan(currentBench.GetAvailableCraftCount(currentInventory));
+            Refresh();
         });
     }
 
-    Button CreateRecipeButton(Transform parent, bool missingIngredients)
+    Button CreateRecipeButton(Transform parent, CraftingBench.Recipe recipe, bool missingIngredients)
     {
-        GameObject row = CreatePanel("Recipe_Gravetos", parent, selectedRowColor);
-        SetLayoutHeight(row, 25f);
+        Color backgroundColor = recipe == selectedRecipe ? selectedRowColor : rowColor;
+        GameObject row = CreatePanel($"Recipe_{recipe}", parent, backgroundColor);
+        SetLayoutHeight(row, 96f);
         Button button = row.AddComponent<Button>();
         ColorBlock colors = button.colors;
-        colors.normalColor = selectedRowColor;
-        colors.highlightedColor = Color.Lerp(selectedRowColor, Color.white, 0.12f);
-        colors.pressedColor = Color.Lerp(selectedRowColor, Color.black, 0.22f);
+        colors.normalColor = backgroundColor;
+        colors.highlightedColor = Color.Lerp(backgroundColor, Color.white, 0.12f);
+        colors.pressedColor = Color.Lerp(backgroundColor, Color.black, 0.22f);
         button.colors = colors;
 
         GameObject outputSlot = CreatePlainSlot(row.transform, 66f, 72f, false);
         SetTopLeftRect(outputSlot, 8f, 8f, 66f, 72f);
-        CreateSlotContent(outputSlot.transform, currentBench.GetOutputIcon(), string.Empty, false);
-        CreateCenteredSlotLabel(outputSlot.transform, $"x{currentBench.GetOutputAmount()}", 11f);
+        CreateSlotContent(outputSlot.transform, currentBench.GetRecipeOutputIcon(recipe), string.Empty, false);
+        CreateCenteredSlotLabel(outputSlot.transform, $"x{currentBench.GetRecipeOutputAmount(recipe)}", 11f);
 
-        TextMeshProUGUI nameText = CreateText("Name", row.transform, 15, FontStyles.Bold, TextAlignmentOptions.Left, "Gravetos");
+        TextMeshProUGUI nameText = CreateText("Name", row.transform, 15, FontStyles.Bold, TextAlignmentOptions.Left, currentBench.GetRecipeOutputName(recipe));
         SetTopLeftRect(nameText.gameObject, 84f, 10f, 166f, 19f);
 
         TextMeshProUGUI levelText = CreateText("Level", row.transform, 10, FontStyles.Normal, TextAlignmentOptions.Left, "Niv. 1");
@@ -574,7 +665,9 @@ public class CraftingBenchUI : MonoBehaviour
         SetTopLeftRect(xp.gameObject, 302f, 10f, 54f, 16f);
 
         GameObject ingredientsPanel = CreatePanel("RecipeIngredients", row.transform, new Color(0f, 0f, 0f, 0.14f));
-        SetTopLeftRect(ingredientsPanel, 84f, 54f, 50f, 30f);
+        bool shieldRecipe = recipe == CraftingBench.Recipe.Shield;
+        bool ropeRecipe = recipe == CraftingBench.Recipe.Rope;
+        SetTopLeftRect(ingredientsPanel, 84f, 54f, UsesBasicToolRecipe(recipe) ? 154f : shieldRecipe ? 100f : 50f, 30f);
         HorizontalLayoutGroup ingredientsLayout = ingredientsPanel.AddComponent<HorizontalLayoutGroup>();
         ingredientsLayout.padding = new RectOffset(4, 4, 3, 3);
         ingredientsLayout.spacing = 6f;
@@ -583,9 +676,44 @@ public class CraftingBenchUI : MonoBehaviour
         ingredientsLayout.childForceExpandWidth = false;
         ingredientsLayout.childForceExpandHeight = false;
 
-        GameObject ingredient = CreatePlainSlot(ingredientsPanel.transform, 42f, 24f, missingIngredients);
-        CreateSlotContent(ingredient.transform, currentBench.GetInputIcon(currentInventory), currentBench.GetInputAmount().ToString(), missingIngredients);
+        if (UsesBasicToolRecipe(recipe))
+        {
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon("Graveto", null), "3", missingIngredients || CountExactItem("Graveto") < 3);
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon("Pedras", null), "2", missingIngredients || CountExactItem("Pedras") < 2);
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon(RustyMetalItemRegistry.ItemName, RustyMetalItemRegistry.GetSprite()), "1", missingIngredients || CountExactItem(RustyMetalItemRegistry.ItemName) < 1);
+        }
+        else if (recipe == CraftingBench.Recipe.Furnace)
+        {
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon("Pedras", null), "10", missingIngredients || CountExactItem("Pedras") < 10);
+        }
+        else if (shieldRecipe)
+        {
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon(RefinedIronItemRegistry.ItemName, RefinedIronItemRegistry.GetSprite()), "4", missingIngredients || CountExactItem(RefinedIronItemRegistry.ItemName) < 4);
+            CreateRecipeIngredient(ingredientsPanel.transform, currentBench.GetInputIcon(currentInventory), "3", missingIngredients || CountItemsStartingWith("Madeira") < 3);
+        }
+        else if (ropeRecipe)
+        {
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon(WheatItemRegistry.ItemName, WheatItemRegistry.GetSprite()), "4", missingIngredients || CountExactItem(WheatItemRegistry.ItemName) < 4);
+        }
+        else
+        {
+            CreateRecipeIngredient(ingredientsPanel.transform, currentBench.GetInputIcon(currentInventory), currentBench.GetInputAmount().ToString(), missingIngredients);
+        }
+
         return button;
+    }
+
+    void CreateRecipeIngredient(Transform parent, Sprite icon, string amount, bool missing)
+    {
+        GameObject ingredient = CreatePlainSlot(parent, 42f, 24f, missing);
+        CreateSlotContent(ingredient.transform, icon, amount, missing);
+    }
+
+    bool UsesBasicToolRecipe(CraftingBench.Recipe recipe)
+    {
+        return recipe == CraftingBench.Recipe.RustySword ||
+               recipe == CraftingBench.Recipe.Axe ||
+               recipe == CraftingBench.Recipe.Pickaxe;
     }
 
     void CreateRecipePlaceholder(Transform parent)
@@ -759,7 +887,7 @@ public class CraftingBenchUI : MonoBehaviour
         textComponent.fontStyle = style;
         textComponent.alignment = alignment;
         textComponent.color = textColor;
-        textComponent.enableWordWrapping = true;
+        textComponent.textWrappingMode = TextWrappingModes.Normal;
         textComponent.overflowMode = TextOverflowModes.Ellipsis;
         textComponent.text = text;
         return textComponent;

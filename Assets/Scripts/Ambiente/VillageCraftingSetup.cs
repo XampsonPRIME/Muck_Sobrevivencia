@@ -6,6 +6,7 @@ public class VillageCraftingSetup : MonoBehaviour
     [SerializeField] Item gravetoItem;
     [SerializeField] Vector3 benchLocalPosition = new Vector3(19f, 1.45f, 72f);
     [SerializeField] Vector3 npcLocalPosition = new Vector3(16.8f, 1.65f, 72f);
+    [SerializeField] Vector3 chestLocalPosition = new Vector3(21.8f, 1.55f, 72f);
     [SerializeField] Vector3 facingEulerAngles = new Vector3(0f, 90f, 0f);
     [SerializeField] string npcProfessionName = "Profissão";
     [SerializeField] string npcProximityMessage = "Nessa bancada voce pode criar os itens que esse mundo tem a oferecer.";
@@ -14,6 +15,7 @@ public class VillageCraftingSetup : MonoBehaviour
     {
         EnsureCraftingBench();
         EnsureCraftingNpc();
+        EnsureStarterChest();
     }
 
     void EnsureCraftingBench()
@@ -67,5 +69,62 @@ public class VillageCraftingSetup : MonoBehaviour
 
         CraftingNpc craftingNpc = npc.AddComponent<CraftingNpc>();
         craftingNpc.Configure(npcProfessionName, npcProximityMessage);
+    }
+
+    void EnsureStarterChest()
+    {
+        Transform existing = transform.Find("StarterRustyMetalChest");
+        if (existing != null)
+        {
+            VillageChest existingChest = existing.GetComponent<VillageChest>();
+            if (existingChest != null)
+                existingChest.Configure(RustyMetalItemRegistry.GetOrCreate());
+
+            return;
+        }
+
+        GameObject chest = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        chest.name = "StarterRustyMetalChest";
+        chest.transform.SetParent(transform, false);
+        chest.transform.localPosition = chestLocalPosition;
+        chest.transform.localRotation = Quaternion.Euler(facingEulerAngles);
+        chest.transform.localScale = new Vector3(1.45f, 0.75f, 0.95f);
+
+        Renderer bodyRenderer = chest.GetComponent<Renderer>();
+        if (bodyRenderer != null)
+            bodyRenderer.material.color = new Color(0.42f, 0.22f, 0.08f, 1f);
+
+        VillageChest villageChest = chest.AddComponent<VillageChest>();
+        villageChest.Configure(RustyMetalItemRegistry.GetOrCreate());
+
+        CreateChestLid(chest.transform);
+        CreateChestBand(chest.transform, new Vector3(0f, 0.08f, -0.53f));
+        CreateChestBand(chest.transform, new Vector3(0f, 0.08f, 0.53f));
+    }
+
+    void CreateChestLid(Transform parent)
+    {
+        GameObject lid = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        lid.name = "Lid";
+        lid.transform.SetParent(parent, false);
+        lid.transform.localPosition = new Vector3(0f, 0.72f, 0f);
+        lid.transform.localScale = new Vector3(1.08f, 0.18f, 1.08f);
+
+        Renderer renderer = lid.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.material.color = new Color(0.5f, 0.28f, 0.1f, 1f);
+    }
+
+    void CreateChestBand(Transform parent, Vector3 localPosition)
+    {
+        GameObject band = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        band.name = "MetalBand";
+        band.transform.SetParent(parent, false);
+        band.transform.localPosition = localPosition;
+        band.transform.localScale = new Vector3(1.08f, 0.12f, 0.08f);
+
+        Renderer renderer = band.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.material.color = new Color(0.17f, 0.14f, 0.11f, 1f);
     }
 }

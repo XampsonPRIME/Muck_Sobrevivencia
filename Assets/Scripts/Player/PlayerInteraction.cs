@@ -126,7 +126,7 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        if (GameState.IsVendorOpen || GameState.IsCraftingOpen)
+        if (GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen)
         {
             consumeTimer = 0f;
             return;
@@ -447,20 +447,38 @@ public class PlayerInteraction : MonoBehaviour
 
     void TryPickup(Item item)
     {
-        Debug.Log("Pegou: " + item.itemName + " icon: " + item.icon);
+        PickupRespawner respawner = item.GetComponent<PickupRespawner>() ??
+                                    item.GetComponentInParent<PickupRespawner>();
 
-        inventory.AddItem(item.itemName, 1, item);
+        if (respawner != null && !respawner.IsAvailable)
+            return;
+
+        string pickedItemName = item.itemName;
+
+        Debug.Log("Pegou: " + pickedItemName + " icon: " + item.icon);
+
+        inventory.AddItem(pickedItemName, 1, item);
 
         if (item.itemType == ItemType.Tool || item.itemType == ItemType.Consumable)
-            hotbar.AddItem(item.itemName, item.icon, item);
+            hotbar.AddItem(pickedItemName, item.icon, item);
+
+        if (MessageSystem.Instance != null)
+            MessageSystem.Instance.ShowMessage($"+1 {pickedItemName}");
 
         PlayPickupSound();
-        Destroy(item.gameObject);
+
+        if (respawner != null)
+            respawner.Collect();
+        else
+            Destroy(item.gameObject);
     }
 
     void Attack()
     {
-        if (Time.time < nextHitTime || GameState.IsInventoryOpen || GameState.IsPaused || GameState.IsVendorOpen || GameState.IsCraftingOpen)
+        if (Time.time < nextHitTime || GameState.IsInventoryOpen || GameState.IsPaused || GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen)
+            return;
+
+        if (TryPlaceSelectedItem())
             return;
 
         if (!TryFindInteractionHit(out RaycastHit hit))
@@ -559,6 +577,181 @@ public class PlayerInteraction : MonoBehaviour
             if (shouldPlayRockHitSound)
                 PlayRockHitSound();
         }
+    }
+
+    bool TryPlaceSelectedItem()
+    {
+        if (selectedSlot == null || selectedSlot.IsEmpty())
+            return false;
+
+        Item selectedItem = selectedSlot.GetItemData();
+        PlaceableItem placeable = selectedItem != null ? selectedItem.GetComponent<PlaceableItem>() : null;
+        if (placeable == null)
+            return false;
+
+        if (!TryFindPlacementPoint(out Vector3 placePoint, out Vector3 placeNormal))
+        {
+            MessageSystem.Instance?.ShowMessage("Aponte para o chao para colocar.");
+            return true;
+        }
+
+        if (Vector3.Angle(placeNormal, Vector3.up) > 38f)
+        {
+            MessageSystem.Instance?.ShowMessage("Lugar muito inclinado.");
+            return true;
+        }
+
+        CreatePlacedFurnace(placePoint, placeable);
+
+        inventory?.RemoveItem(selectedSlot.ItemName, 1);
+        selectedSlot.RemoveOne();
+
+        InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
+        if (inventoryUi != null)
+            inventoryUi.Refresh();
+
+        if (selectedSlot.IsEmpty())
+            UnequipCurrentItem();
+        else
+            ReequipSelectedSlot();
+
+        MessageSystem.Instance?.ShowMessage("Fornalha colocada.");
+        nextHitTime = Time.time + hitRate;
+        return true;
+    }
+
+    bool TryFindPlacementPoint(out Vector3 placePoint, out Vector3 placeNormal)
+    {
+        placePoint = Vector3.zero;
+        placeNormal = Vector3.up;
+
+        if (!TryGetInteractionRay(out Ray ray))
+            return false;
+
+        RaycastHit[] hits = Physics.RaycastAll(ray, interactDistance + 2f, ~0, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null || hit.collider.transform.IsChildOf(transform))
+                continue;
+
+            if (hit.collider.GetComponentInParent<ResourceNode>() != null ||
+                hit.collider.GetComponentInParent<Cow>() != null ||
+                hit.collider.GetComponentInParent<MiniKrug>() != null ||
+                hit.collider.GetComponentInParent<BossEnemy>() != null)
+                continue;
+
+            placePoint = hit.point;
+            placeNormal = hit.normal;
+            return true;
+        }
+
+        return false;
+    }
+
+    void CreatePlacedFurnace(Vector3 placePoint, PlaceableItem placeable)
+    {
+        GameObject furnace = new GameObject(string.IsNullOrWhiteSpace(placeable.placedObjectName) ? "Fornalha" : placeable.placedObjectName);
+        furnace.transform.position = placePoint;
+
+        Vector3 forward = cameraHolder != null ? cameraHolder.forward : transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+            forward = transform.forward;
+
+        furnace.transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
+        furnace.transform.localScale = placeable.placedScale;
+
+        Material stoneMaterial = CreateRuntimeMaterial(new Color(0.28f, 0.26f, 0.22f, 1f));
+        Material darkStoneMaterial = CreateRuntimeMaterial(new Color(0.12f, 0.11f, 0.1f, 1f));
+        Material metalMaterial = CreateRuntimeMaterial(new Color(0.08f, 0.07f, 0.06f, 1f));
+        Material fireMaterial = CreateRuntimeMaterial(new Color(1f, 0.42f, 0.03f, 1f));
+        Material emberMaterial = CreateRuntimeMaterial(new Color(1f, 0.86f, 0.12f, 1f));
+
+        CreateFurnaceBlock(furnace.transform, "Base", new Vector3(0f, 0.2f, 0f), new Vector3(1.7f, 0.35f, 1.35f), stoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "BackWall", new Vector3(0f, 0.82f, 0.52f), new Vector3(1.55f, 1.1f, 0.22f), darkStoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "LeftWall", new Vector3(-0.72f, 0.82f, 0f), new Vector3(0.22f, 1.1f, 1.15f), stoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "RightWall", new Vector3(0.72f, 0.82f, 0f), new Vector3(0.22f, 1.1f, 1.15f), stoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "TopStone", new Vector3(0f, 1.4f, 0f), new Vector3(1.55f, 0.28f, 1.2f), stoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "FrontTopArch", new Vector3(0f, 1.12f, -0.58f), new Vector3(1.45f, 0.28f, 0.2f), stoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "FrontLeftArch", new Vector3(-0.5f, 0.65f, -0.58f), new Vector3(0.26f, 0.72f, 0.2f), stoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "FrontRightArch", new Vector3(0.5f, 0.65f, -0.58f), new Vector3(0.26f, 0.72f, 0.2f), stoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "FireboxBack", new Vector3(0f, 0.62f, -0.46f), new Vector3(0.8f, 0.65f, 0.08f), metalMaterial);
+        CreateFurnaceBlock(furnace.transform, "AshDrawer", new Vector3(0f, 0.26f, -0.7f), new Vector3(0.65f, 0.22f, 0.12f), metalMaterial);
+
+        CreateFurnaceCylinder(furnace.transform, "Chimney", new Vector3(0f, 1.78f, 0.05f), new Vector3(0.82f, 0.42f, 0.82f), stoneMaterial);
+        CreateFurnaceCylinder(furnace.transform, "ChimneyMouth", new Vector3(0f, 2.04f, 0.05f), new Vector3(0.98f, 0.18f, 0.98f), darkStoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "ToolRail", new Vector3(0.88f, 0.98f, -0.05f), new Vector3(0.08f, 0.08f, 0.82f), metalMaterial);
+        CreateFurnaceBlock(furnace.transform, "HangingToolA", new Vector3(0.94f, 0.58f, -0.22f), new Vector3(0.05f, 0.72f, 0.05f), metalMaterial);
+        CreateFurnaceBlock(furnace.transform, "HangingToolB", new Vector3(0.94f, 0.55f, 0.2f), new Vector3(0.05f, 0.62f, 0.05f), metalMaterial);
+
+        CreateFurnaceBlock(furnace.transform, "FireGlow", new Vector3(0f, 0.55f, -0.66f), new Vector3(0.44f, 0.34f, 0.08f), fireMaterial);
+        CreateFurnaceBlock(furnace.transform, "FireCore", new Vector3(0.04f, 0.58f, -0.72f), new Vector3(0.18f, 0.42f, 0.06f), emberMaterial);
+        CreateFurnaceBlock(furnace.transform, "Coal", new Vector3(-0.16f, 0.39f, -0.72f), new Vector3(0.18f, 0.08f, 0.08f), darkStoneMaterial);
+        CreateFurnaceBlock(furnace.transform, "CoalSmall", new Vector3(0.18f, 0.38f, -0.72f), new Vector3(0.14f, 0.08f, 0.08f), darkStoneMaterial);
+
+        Light fireLight = furnace.AddComponent<Light>();
+        fireLight.type = LightType.Point;
+        fireLight.color = new Color(1f, 0.45f, 0.12f, 1f);
+        fireLight.range = 3f;
+        fireLight.intensity = 1.25f;
+
+        BoxCollider collider = furnace.AddComponent<BoxCollider>();
+        collider.size = new Vector3(1.8f, 2.25f, 1.45f);
+        collider.center = new Vector3(0f, 1.1f, 0f);
+
+        furnace.AddComponent<PlacedFurnace>();
+    }
+
+    Material CreateRuntimeMaterial(Color color)
+    {
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        Material material = shader != null ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
+        material.color = color;
+        return material;
+    }
+
+    GameObject CreateFurnaceBlock(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material)
+    {
+        GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        block.name = name;
+        block.transform.SetParent(parent, false);
+        block.transform.localPosition = localPosition;
+        block.transform.localScale = localScale;
+        block.transform.localRotation = Quaternion.Euler(0f, Random.Range(-4f, 4f), Random.Range(-2f, 2f));
+
+        Renderer renderer = block.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.material = material;
+
+        Collider collider = block.GetComponent<Collider>();
+        if (collider != null)
+            Destroy(collider);
+
+        return block;
+    }
+
+    GameObject CreateFurnaceCylinder(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material)
+    {
+        GameObject cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        cylinder.name = name;
+        cylinder.transform.SetParent(parent, false);
+        cylinder.transform.localPosition = localPosition;
+        cylinder.transform.localScale = localScale;
+
+        Renderer renderer = cylinder.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.material = material;
+
+        Collider collider = cylinder.GetComponent<Collider>();
+        if (collider != null)
+            Destroy(collider);
+
+        return cylinder;
     }
 
     bool TryGetInteractionRay(out Ray ray)
@@ -758,6 +951,12 @@ public class PlayerInteraction : MonoBehaviour
             handScale = pickaxeHandScale;
         }
 
+        if (type == ToolType.Sword)
+        {
+            EquipRuntimeSwordVisual();
+            return;
+        }
+
         if (prefab == null)
         {
             UnequipCurrentItem();
@@ -765,6 +964,32 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         EquipObjectInHand(prefab, Vector3.zero, Vector3.zero, handScale, false);
+    }
+
+    void EquipRuntimeSwordVisual()
+    {
+        if (currentEquippedObject != null)
+            Destroy(currentEquippedObject);
+
+        Animator anim = GetPlayerAnimator();
+        if (anim == null)
+            return;
+
+        Transform hand = anim.GetBoneTransform(HumanBodyBones.RightHand);
+        if (hand == null)
+            return;
+
+        GameObject sword = new GameObject("EspadaEnferrujada_EquippedVisual");
+        SpriteRenderer renderer = sword.AddComponent<SpriteRenderer>();
+        renderer.sprite = RustySwordItemRegistry.GetSprite();
+        renderer.sortingOrder = 4;
+
+        sword.transform.SetParent(hand, false);
+        sword.transform.localPosition = new Vector3(0.03f, 0.04f, 0.02f);
+        sword.transform.localRotation = Quaternion.Euler(15f, 0f, -45f);
+        sword.transform.localScale = new Vector3(0.24f, 0.24f, 0.24f);
+
+        currentEquippedObject = sword;
     }
 
     void EquipConsumable(HotbarSlot slot)
