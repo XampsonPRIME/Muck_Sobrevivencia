@@ -532,7 +532,7 @@ public class LanMultiplayerManager : MonoBehaviour
             {
                 entityId = entity.EntityId,
                 entityKind = nameof(ResourceNode),
-                health = resourceNodes[i].IsDepleted ? resourceNodes[i].maxHealth : resourceNodes[i].CurrentHealth,
+                health = resourceNodes[i].CurrentHealth,
                 destroyed = false
             });
         }
@@ -895,7 +895,7 @@ public class LanMultiplayerManager : MonoBehaviour
             case ToolType.Axe:
                 return "Use um machado para madeira.";
             case ToolType.Pickaxe:
-                return "Use uma picareta para minerar.";
+                return "Use uma picareta para pedra.";
             default:
                 return "Ferramenta inadequada.";
         }
@@ -1839,7 +1839,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityId = entity.EntityId,
                 entityKind = nameof(ResourceNode),
                 health = resourceNodes[i].CurrentHealth,
-                destroyed = resourceNodes[i].IsDepleted
+                destroyed = false
             }));
         }
 
@@ -2288,29 +2288,6 @@ public class LanMultiplayerManager : MonoBehaviour
         pendingEntityUpdates.Remove(entityId);
     }
 
-    public void NotifyResourceRespawned(ResourceNode resource, int health)
-    {
-        if (resource == null)
-            return;
-
-        LanNetworkEntity entity = ResolveNetworkEntity(resource);
-        if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
-            return;
-
-        ClearDestroyedEntity(entity.EntityId);
-
-        if (!IsServerAuthority || !IsMultiplayerActive)
-            return;
-
-        BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
-        {
-            entityId = entity.EntityId,
-            entityKind = nameof(ResourceNode),
-            health = Mathf.Max(1, health),
-            destroyed = false
-        }));
-    }
-
     public void NotifyEnemyDestroyed(Component enemy)
     {
         if (enemy == null || !IsServerAuthority)
@@ -2571,28 +2548,6 @@ public class LanMultiplayerManager : MonoBehaviour
         if (string.Equals(itemName, "Magia Ancestral", StringComparison.OrdinalIgnoreCase))
             return MagicSpellItemRegistry.GetOrCreate();
 
-        if (string.Equals(itemName, RustyMetalItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return RustyMetalItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, IronItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(itemName, "Ferro", StringComparison.OrdinalIgnoreCase))
-            return IronItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, RefinedIronItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return RefinedIronItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, RustySwordItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return RustySwordItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, FurnaceItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return FurnaceItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, "Machado", StringComparison.OrdinalIgnoreCase))
-            return LoadResourceItem("VendorItems/Axe");
-
-        if (string.Equals(itemName, "Picareta", StringComparison.OrdinalIgnoreCase))
-            return LoadResourceItem("VendorItems/Axepick");
-
         GameObject[] prefabs = Resources.FindObjectsOfTypeAll<GameObject>();
 
         if (!string.IsNullOrWhiteSpace(prefabName))
@@ -2621,12 +2576,6 @@ public class LanMultiplayerManager : MonoBehaviour
         }
 
         return null;
-    }
-
-    Item LoadResourceItem(string path)
-    {
-        GameObject prefab = Resources.Load<GameObject>(path);
-        return prefab != null ? prefab.GetComponent<Item>() : null;
     }
 
     string CreatePlayerId()

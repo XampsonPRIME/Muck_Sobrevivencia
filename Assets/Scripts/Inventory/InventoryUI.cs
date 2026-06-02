@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.UI;
 
 public class InventoryUI : MonoBehaviour
 {
@@ -57,7 +56,7 @@ public class InventoryUI : MonoBehaviour
     {
         ResolveReferences();
 
-        if (GameState.IsPaused || GameState.IsInLobby || GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen)
+        if (GameState.IsPaused || GameState.IsInLobby || GameState.IsVendorOpen || GameState.IsCraftingOpen)
             return;
 
         if (toggleInventoryAction.WasPressedThisFrame())
@@ -133,8 +132,6 @@ public class InventoryUI : MonoBehaviour
             return;
         }
 
-        ConfigureInventoryGrid();
-
         for (int i = content.childCount - 1; i >= 0; i--)
             Destroy(content.GetChild(i).gameObject);
 
@@ -148,16 +145,6 @@ public class InventoryUI : MonoBehaviour
             else
                 Debug.LogError("Slot sem InventorySlotUI!");
         }
-    }
-
-    void ConfigureInventoryGrid()
-    {
-        GridLayoutGroup grid = content != null ? content.GetComponent<GridLayoutGroup>() : null;
-        if (grid == null)
-            return;
-
-        grid.cellSize = new Vector2(86f, 86f);
-        grid.spacing = new Vector2(10f, 10f);
     }
 
     void ResolveReferences()

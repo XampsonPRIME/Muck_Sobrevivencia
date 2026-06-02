@@ -15,35 +15,20 @@ public class ResourceNode : MonoBehaviour
     public Item itemData;
 
     public ToolType requiredTool = ToolType.None;
-    public bool allowEmptyHand = true;
     public int emptyHandDamage = 1;
     public int emptyHandMinDrop = 1;
     public int emptyHandMaxDrop = 1;
-    [Header("Respawn")]
-    public bool respawnAfterDepleted = true;
-    public Vector2 respawnDelayRange = new Vector2(180f, 300f);
-
     public int CurrentHealth => currentHealth;
-    public bool IsDepleted => depleted;
-
-    bool depleted;
-    Coroutine respawnRoutine;
-    Renderer[] cachedRenderers;
-    Collider[] cachedColliders;
 
     void Start()
     {
         LanNetworkEntity.Ensure(this);
         currentHealth = maxHealth;
-        CacheVisibilityComponents();
     }
 
     public void Hit(Inventory inventory, Hotbar hotbar, ToolType currentTool, int toolDamage)
     {
-        if (depleted)
-            return;
-
-        bool usingEmptyHand = allowEmptyHand && currentTool == ToolType.None;
+        bool usingEmptyHand = currentTool == ToolType.None;
         bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
 
         // Ferramenta errada continua bloqueada. Mao vazia agora funciona com rendimento baixo.
@@ -73,7 +58,7 @@ public class ResourceNode : MonoBehaviour
         if (currentHealth <= 0)
         {
             DropResource(inventory, hotbar, usingCorrectTool);
-            Deplete();
+            Destroy(gameObject);
         }
     }
 
@@ -84,13 +69,7 @@ public class ResourceNode : MonoBehaviour
         rewardAmount = 0;
         destroyed = false;
 
-        if (depleted)
-        {
-            remainingHealth = 0;
-            return false;
-        }
-
-        bool usingEmptyHand = allowEmptyHand && currentTool == ToolType.None;
+        bool usingEmptyHand = currentTool == ToolType.None;
         bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
         if (!usingCorrectTool && !usingEmptyHand)
         {
@@ -112,17 +91,14 @@ public class ResourceNode : MonoBehaviour
         remainingHealth = Mathf.Max(0, currentHealth);
 
         if (destroyed)
-            Deplete();
+            Destroy(gameObject);
 
         return true;
     }
 
     public bool CanBeHitBy(ToolType currentTool)
     {
-        if (depleted)
-            return false;
-
-        bool usingEmptyHand = allowEmptyHand && currentTool == ToolType.None;
+        bool usingEmptyHand = currentTool == ToolType.None;
         bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
         return usingCorrectTool || usingEmptyHand;
     }
@@ -132,13 +108,7 @@ public class ResourceNode : MonoBehaviour
         currentHealth = Mathf.Max(0, networkHealth);
 
         if (destroyed)
-        {
-            HideNode();
-            return;
-        }
-
-        depleted = false;
-        ShowNode();
+            Destroy(gameObject);
     }
 
     public void PlayHitFeedback()
@@ -155,7 +125,7 @@ public class ResourceNode : MonoBehaviour
                 return "Use um machado para madeira.";
 
             case ToolType.Pickaxe:
-                return "Use uma picareta para minerar.";
+                return "Use uma picareta para pedra.";
 
             default:
                 return "Ferramenta inadequada.";
@@ -174,83 +144,5 @@ public class ResourceNode : MonoBehaviour
         {
             MessageSystem.Instance.ShowMessage($"+{amount} {itemName}");
         }
-    }
-
-    void Deplete()
-    {
-        currentHealth = 0;
-        HideNode();
-
-        if (!respawnAfterDepleted)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
-        if (ShouldControlRespawn())
-        {
-            if (respawnRoutine != null)
-                StopCoroutine(respawnRoutine);
-
-            respawnRoutine = StartCoroutine(RespawnAfterDelay());
-        }
-    }
-
-    bool ShouldControlRespawn()
-    {
-        LanMultiplayerManager lan = LanMultiplayerManager.Instance;
-        return lan == null || !lan.IsMultiplayerActive || lan.IsServerAuthority;
-    }
-
-    System.Collections.IEnumerator RespawnAfterDelay()
-    {
-        float minDelay = Mathf.Max(1f, respawnDelayRange.x);
-        float maxDelay = Mathf.Max(minDelay, respawnDelayRange.y);
-        yield return new WaitForSeconds(Random.Range(minDelay, maxDelay));
-
-        currentHealth = maxHealth;
-        depleted = false;
-        ShowNode();
-
-        LanMultiplayerManager lan = LanMultiplayerManager.Instance;
-        if (lan != null)
-            lan.NotifyResourceRespawned(this, currentHealth);
-    }
-
-    void HideNode()
-    {
-        depleted = true;
-        SetNodeVisible(false);
-    }
-
-    void ShowNode()
-    {
-        SetNodeVisible(true);
-    }
-
-    void SetNodeVisible(bool visible)
-    {
-        CacheVisibilityComponents();
-
-        for (int i = 0; i < cachedRenderers.Length; i++)
-        {
-            if (cachedRenderers[i] != null)
-                cachedRenderers[i].enabled = visible;
-        }
-
-        for (int i = 0; i < cachedColliders.Length; i++)
-        {
-            if (cachedColliders[i] != null)
-                cachedColliders[i].enabled = visible;
-        }
-    }
-
-    void CacheVisibilityComponents()
-    {
-        if (cachedRenderers == null || cachedRenderers.Length == 0)
-            cachedRenderers = GetComponentsInChildren<Renderer>(true);
-
-        if (cachedColliders == null || cachedColliders.Length == 0)
-            cachedColliders = GetComponentsInChildren<Collider>(true);
     }
 }

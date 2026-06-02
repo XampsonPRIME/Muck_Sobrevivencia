@@ -176,8 +176,6 @@ MonoBehaviour:
   gravetoPrefab: {fileID: 5972306984636934937, guid: 540c6c32b899547499773e634b96388a, type: 3}
   gravetoDensity: 0.04
   gravetoRespawnTime: 20
-  pedraPrefab: {fileID: 4616667006717134316, guid: 27d9fb52f1ac842fd8f9bdbcb3c48648, type: 3}
-  pedraDensity: 0.025
   treeDensity: 0.4
   mushroomDensity: 0.2
   treeStep: 10

@@ -13,7 +13,7 @@ public class DayNightCycle : MonoBehaviour
     public Material skyboxMaterial;
     public Light sun;
     public Light moon;
-    public float dayDuration = 600f;
+    public float dayDuration = 120f;
     [Range(0f, 23.99f)] public float startHour = 8f;
     public TextMeshProUGUI dayText;
     public TextMeshProUGUI hourText;

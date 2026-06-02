@@ -5038,7 +5038,7 @@ MonoBehaviour:
   skyboxMaterial: {fileID: 2100000, guid: 89d7954ec389fd744ab0e17392fd0f56, type: 2}
   sun: {fileID: 8315060423930566734}
   moon: {fileID: 8304928372706951847}
-  dayDuration: 600
+  dayDuration: 120
   startHour: 8
   dayText: {fileID: 0}
   hourText: {fileID: 0}

@@ -42,13 +42,7 @@ public class Inventory : MonoBehaviour
             existing.quantity += amount;
 
             if (itemData != null)
-            {
                 existing.itemData = itemData;
-                existing.icon = itemData.icon;
-
-                if (string.IsNullOrWhiteSpace(existing.prefabName))
-                    existing.prefabName = itemData.gameObject.name;
-            }
         }
         else
         {
@@ -91,7 +85,7 @@ public class Inventory : MonoBehaviour
 
     public void AddInventoryItem(InventoryItem item)
     {
-        if (item == null || item.quantity <= 0 || string.IsNullOrWhiteSpace(item.itemName))
+        if (item == null || item.itemData == null || item.quantity <= 0)
             return;
 
         InventoryItem existing = items.Find(i => i.CanStackWith(item));

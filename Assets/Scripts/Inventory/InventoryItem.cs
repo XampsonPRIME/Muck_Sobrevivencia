@@ -11,7 +11,6 @@ public class InventoryItem
     public ToolType toolType;
 
     public Item itemData;
-    public Sprite icon;
     public bool isConsumable;
     public float healthRestore;
     public float hungerRestore;
@@ -29,7 +28,6 @@ public class InventoryItem
         itemName = name;
         quantity = qty;
         itemData = data;
-        icon = data != null ? data.icon : null;
         handLocalScale = Vector3.one;
         prefabName = data != null ? data.gameObject.name : "";
 
@@ -80,57 +78,14 @@ public class InventoryItem
 
     public Sprite GetDisplayIcon()
     {
-        ResolveMissingDisplayData();
-
         if (itemData == null)
-            return icon;
+            return null;
 
         if (!isBottle)
-            return itemData.icon != null ? itemData.icon : icon;
+            return itemData.icon;
 
         BottleItem bottle = itemData.GetComponent<BottleItem>();
-        Sprite bottleIcon = bottle != null ? bottle.GetIcon(bottleIsFilled) : itemData.icon;
-        return bottleIcon != null ? bottleIcon : icon;
-    }
-
-    void ResolveMissingDisplayData()
-    {
-        if (icon != null)
-            return;
-
-        if (itemData != null && itemData.icon != null)
-        {
-            icon = itemData.icon;
-            return;
-        }
-
-        Item[] candidates = Resources.FindObjectsOfTypeAll<Item>();
-        Item fallback = null;
-
-        for (int i = 0; i < candidates.Length; i++)
-        {
-            Item candidate = candidates[i];
-            if (candidate == null || candidate.icon == null)
-                continue;
-
-            if (!string.IsNullOrWhiteSpace(prefabName) && candidate.gameObject.name == prefabName)
-            {
-                fallback = candidate;
-                break;
-            }
-
-            if (fallback == null && candidate.itemName == itemName)
-                fallback = candidate;
-        }
-
-        if (fallback == null)
-            return;
-
-        itemData = fallback;
-        icon = fallback.icon;
-        prefabName = fallback.gameObject.name;
-        itemType = fallback.itemType;
-        toolType = fallback.toolType;
+        return bottle != null ? bottle.GetIcon(bottleIsFilled) : itemData.icon;
     }
 
     public InventoryItem Clone()
@@ -139,7 +94,6 @@ public class InventoryItem
         {
             itemType = itemType,
             toolType = toolType,
-            icon = icon,
             isConsumable = isConsumable,
             healthRestore = healthRestore,
             hungerRestore = hungerRestore,

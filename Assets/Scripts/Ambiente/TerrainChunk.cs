@@ -71,17 +71,6 @@ public class TerrainChunk : MonoBehaviour
     public int maxGravetosPerChunk = 4;
     public float minGravetoDistance = 5f;
     public float gravetoYOffset = 0.08f;
-    public GameObject pedraPrefab;
-    [Range(0f, 1f)] public float pedraDensity = 0.0025f;
-    public int maxPedrasPerChunk = 3;
-    public float minPedraDistance = 5f;
-    public float pedraYOffset = 0.08f;
-    [Range(0f, 1f)] public float wheatGroupChance = 0.004f;
-    public int maxWheatGroupsPerChunk = 1;
-    public int wheatPerGroup = 4;
-    public float minWheatGroupDistance = 18f;
-    public float wheatGroupRadius = 1.35f;
-    public float wheatYOffset = 0.05f;
 
     public float treeDensity = 0.12f;
     public int maxTreesPerChunk = 22;
@@ -130,19 +119,10 @@ public class TerrainChunk : MonoBehaviour
     public float minDistanceBetweenObjects = 12f;
     public float minTreeDistance = 6.2f;
 
-    [Header("Respawn de Recursos")]
-    public Vector2 groundPickupRespawnDelayRange = new Vector2(120f, 240f);
-    public Vector2 woodRespawnDelayRange = new Vector2(180f, 300f);
-    public Vector2 stoneResourceRespawnDelayRange = new Vector2(180f, 300f);
-    public Vector2 ironOreRespawnDelayRange = new Vector2(240f, 420f);
-
     [Header("Rochas")]
     public GameObject rockSmallPrefab;
     public GameObject rockMediumPrefab;
     public GameObject rockLargePrefab;
-    [Range(0f, 1f)] public float ironOreChance = 0.55f;
-    public int maxIronOrePerChunk = 1;
-    public float minIronOreDistance = 20f;
 
     [Header("Animais")]
     public GameObject cowPrefab;
@@ -206,9 +186,6 @@ public class TerrainChunk : MonoBehaviour
     static Mesh forestGrassMesh;
     static GameObject cachedEnchantedForestSingleMushroom;
     static GameObject cachedEnchantedForestClusterMushroom;
-    static Material wheatStemMaterial;
-    static Material wheatHeadMaterial;
-    static Material wheatBandMaterial;
     WorldHeightmapData sceneHeightmapData;
     RoadMaskData sceneRoadMaskData;
     TreeExclusionMaskData sceneTreeExclusionMaskData;
@@ -374,8 +351,6 @@ public class TerrainChunk : MonoBehaviour
         yield return SpawnVegetationAsync(offset);
         yield return null;
         yield return SpawnRockClustersAsync(offset);
-        yield return null;
-        yield return SpawnIronOreNodesAsync(offset);
         yield return null;
         yield return SpawnCowGroupsAsync(offset);
         yield return null;
@@ -926,8 +901,6 @@ public class TerrainChunk : MonoBehaviour
         List<Matrix4x4> grassMatrices = new List<Matrix4x4>(Mathf.Max(maxForestGrassPerChunk, 1024));
         int treeCount = 0;
         int gravetoCount = 0;
-        int pedraCount = 0;
-        int wheatGroupCount = 0;
         int iterationsSinceYield = 0;
 
 
@@ -1039,7 +1012,6 @@ public class TerrainChunk : MonoBehaviour
                     }
 
                     AlignObjectBaseToGround(tree, groundPoint, selected.yOffset);
-                    ConfigureResourceRespawn(tree, woodRespawnDelayRange);
 
                     usedPositions.Add(groundPoint);
                     treeCount++;
@@ -1066,46 +1038,8 @@ public class TerrainChunk : MonoBehaviour
 
                     float scale = rng.Range(0.85f, 1.15f);
                     graveto.transform.localScale *= scale;
-                    ConfigurePickupRespawn(graveto);
                     usedPositions.Add(groundPoint);
                     gravetoCount++;
-                }
-            }
-
-            if (wheatGroupCount < maxWheatGroupsPerChunk &&
-                biome == BiomeType.Forest &&
-                rng.Value() < wheatGroupChance)
-            {
-                Vector3 groundPoint = GetGroundPoint(worldPos);
-
-                if (!IsTooClose(groundPoint, minWheatGroupDistance))
-                {
-                    SpawnWheatGroup(rng, groundPoint);
-                    usedPositions.Add(groundPoint);
-                    wheatGroupCount++;
-                }
-            }
-
-            if (pedraPrefab != null &&
-                pedraCount < maxPedrasPerChunk &&
-                rng.Value() < pedraDensity)
-            {
-                Vector3 groundPoint = GetGroundPoint(worldPos);
-
-                if (!IsTooClose(groundPoint, minPedraDistance))
-                {
-                    GameObject pedra = Instantiate(
-                        pedraPrefab,
-                        groundPoint + Vector3.up * pedraYOffset,
-                        Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
-                        transform
-                    );
-
-                    float scale = rng.Range(0.85f, 1.15f);
-                    pedra.transform.localScale *= scale;
-                    ConfigurePickupRespawn(pedra);
-                    usedPositions.Add(groundPoint);
-                    pedraCount++;
                 }
             }
 
@@ -1507,7 +1441,7 @@ public class TerrainChunk : MonoBehaviour
         }
 
         int rockCount = 0;
-        int maxRocksPerChunk = 4;
+        int maxRocksPerChunk = 2; // 🔥 limite baixo
 
         for (int c = 0; c < rockClusterCount; c++)
         {
@@ -1594,56 +1528,9 @@ public class TerrainChunk : MonoBehaviour
                 );
 
                 AlignObjectBaseToGround(rock, spawnPos);
-                ConfigureResourceRespawn(rock, stoneResourceRespawnDelayRange);
 
                 rockCount++;
             }
-
-        }
-    }
-
-    IEnumerator SpawnIronOreNodesAsync(Vector2 offset)
-    {
-        if (maxIronOrePerChunk <= 0 || ironOreChance <= 0f)
-            yield break;
-
-        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 808));
-        if (rng.Value() > ironOreChance)
-            yield break;
-
-        int spawned = 0;
-        int maxAttempts = Mathf.Max(8, maxIronOrePerChunk * 8);
-
-        for (int attempt = 0; attempt < maxAttempts && spawned < maxIronOrePerChunk; attempt++)
-        {
-            if (attempt > 0 && attempt % 6 == 0)
-                yield return null;
-
-            float x = rng.Range(0f, size);
-            float z = rng.Range(0f, size);
-            int index = (int)z * (size + 1) + (int)x;
-
-            if (index < 0 || index >= vertices.Length)
-                continue;
-
-            if (mesh.normals[index].y < 0.82f)
-                continue;
-
-            Vector3 spawnPos = GetGroundPoint(vertices[index] + transform.position);
-            Vector2 point = new Vector2(spawnPos.x, spawnPos.z);
-
-            if (IsRiverZone(point, 2f) || IsRoadZone(point))
-                continue;
-
-            if (player != null && Vector3.Distance(spawnPos, player.position) < 12f)
-                continue;
-
-            if (IsTooClose(spawnPos, minIronOreDistance))
-                continue;
-
-            GameObject ore = CreateIronOreNode(spawnPos, rng);
-            usedPositions.Add(spawnPos);
-            spawned++;
         }
     }
 
@@ -1950,249 +1837,5 @@ public class TerrainChunk : MonoBehaviour
         if (r < 0.2f) return rockLargePrefab;
         if (r < 0.5f) return rockMediumPrefab;
         return rockSmallPrefab;
-    }
-
-    GameObject CreateIronOreNode(Vector3 worldPos, ChunkRandom rng)
-    {
-        GameObject oreRoot = new GameObject("IronOreNode");
-        oreRoot.transform.SetParent(transform, true);
-        oreRoot.transform.position = worldPos;
-        oreRoot.transform.rotation = Quaternion.Euler(0f, rng.Range(0f, 360f), 0f);
-
-        CreateIronOrePiece(oreRoot.transform, new Vector3(-0.28f, 0.13f, 0.05f), new Vector3(0.85f, 0.34f, 0.72f), new Color(0.24f, 0.24f, 0.22f, 1f));
-        CreateIronOrePiece(oreRoot.transform, new Vector3(0.22f, 0.1f, -0.18f), new Vector3(0.62f, 0.3f, 0.54f), new Color(0.18f, 0.18f, 0.17f, 1f));
-        CreateIronOrePiece(oreRoot.transform, new Vector3(0.08f, 0.25f, 0.18f), new Vector3(0.34f, 0.12f, 0.42f), new Color(0.62f, 0.38f, 0.16f, 1f));
-        CreateIronOrePiece(oreRoot.transform, new Vector3(-0.18f, 0.23f, -0.14f), new Vector3(0.28f, 0.1f, 0.38f), new Color(0.76f, 0.52f, 0.24f, 1f));
-
-        SphereCollider collider = oreRoot.AddComponent<SphereCollider>();
-        collider.radius = 0.7f;
-        collider.center = new Vector3(0f, 0.24f, 0f);
-
-        ResourceNode resource = oreRoot.AddComponent<ResourceNode>();
-        resource.itemName = IronItemRegistry.ItemName;
-        resource.icon = IronItemRegistry.GetSprite();
-        resource.itemData = IronItemRegistry.GetOrCreate();
-        resource.requiredTool = ToolType.Pickaxe;
-        resource.allowEmptyHand = false;
-        resource.maxHealth = 5;
-        resource.minDrop = 2;
-        resource.maxDrop = 4;
-        resource.emptyHandDamage = 0;
-        resource.emptyHandMinDrop = 0;
-        resource.emptyHandMaxDrop = 0;
-        resource.respawnDelayRange = ironOreRespawnDelayRange;
-
-        return oreRoot;
-    }
-
-    void SpawnWheatGroup(ChunkRandom rng, Vector3 centerGroundPoint)
-    {
-        int count = Mathf.Max(1, wheatPerGroup);
-        for (int i = 0; i < count; i++)
-        {
-            float angle = (360f / count) * i + rng.Range(-22f, 22f);
-            float distance = rng.Range(0.25f, wheatGroupRadius);
-            Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * distance;
-            Vector3 groundPoint = GetGroundPoint(centerGroundPoint + offset);
-            GameObject wheat = CreateWheatPickup(groundPoint + Vector3.up * wheatYOffset, rng, i);
-            ConfigurePickupRespawn(wheat);
-        }
-    }
-
-    GameObject CreateWheatPickup(Vector3 worldPosition, ChunkRandom rng, int index)
-    {
-        GameObject wheat = new GameObject($"Trigo_{index + 1}");
-        wheat.transform.SetParent(transform, false);
-        wheat.transform.position = worldPosition;
-        wheat.transform.rotation = Quaternion.Euler(0f, rng.Range(0f, 360f), 0f);
-
-        Item item = wheat.AddComponent<Item>();
-        item.itemName = WheatItemRegistry.ItemName;
-        item.itemType = ItemType.Resource;
-        item.toolType = ToolType.None;
-        item.toolDamage = 0;
-        item.icon = WheatItemRegistry.GetSprite();
-
-        CapsuleCollider collider = wheat.AddComponent<CapsuleCollider>();
-        collider.center = new Vector3(0f, 0.72f, 0f);
-        collider.radius = 0.28f;
-        collider.height = 1.45f;
-
-        int stemCount = 5;
-        for (int i = 0; i < stemCount; i++)
-        {
-            float spread = Mathf.Lerp(-0.34f, 0.34f, stemCount <= 1 ? 0f : i / (float)(stemCount - 1));
-            float lean = spread * 22f + rng.Range(-5f, 5f);
-            Transform stem = CreateWheatPart(
-                "Stem",
-                PrimitiveType.Cylinder,
-                wheat.transform,
-                new Vector3(spread * 0.12f, 0.43f, 0f),
-                Quaternion.Euler(0f, 0f, -lean),
-                new Vector3(0.025f, 0.43f, 0.025f),
-                GetWheatStemMaterial()
-            );
-
-            Transform head = CreateWheatPart(
-                "Head",
-                PrimitiveType.Cylinder,
-                wheat.transform,
-                new Vector3(spread * 0.24f, 0.93f, 0f),
-                Quaternion.Euler(78f, 0f, -lean),
-                new Vector3(0.075f, 0.22f, 0.075f),
-                GetWheatHeadMaterial()
-            );
-
-            CreateWheatKernels(head, rng);
-
-            CreateWheatPart(
-                "Awn",
-                PrimitiveType.Cube,
-                wheat.transform,
-                new Vector3(spread * 0.33f, 1.18f, 0f),
-                Quaternion.Euler(0f, 0f, -lean),
-                new Vector3(0.012f, 0.36f, 0.012f),
-                GetWheatHeadMaterial()
-            );
-
-            _ = stem;
-        }
-
-        Transform band = CreateWheatPart(
-            "Band",
-            PrimitiveType.Cylinder,
-            wheat.transform,
-            new Vector3(0f, 0.24f, 0f),
-            Quaternion.Euler(88f, 0f, 0f),
-            new Vector3(0.16f, 0.055f, 0.16f),
-            GetWheatBandMaterial()
-        );
-        _ = band;
-
-        float scale = rng.Range(0.9f, 1.12f);
-        wheat.transform.localScale = Vector3.one * scale;
-        return wheat;
-    }
-
-    void CreateWheatKernels(Transform head, ChunkRandom rng)
-    {
-        if (head == null)
-            return;
-
-        for (int i = 0; i < 5; i++)
-        {
-            float y = Mathf.Lerp(-0.16f, 0.16f, i / 4f);
-            float side = i % 2 == 0 ? -1f : 1f;
-            CreateWheatPart(
-                "Kernel",
-                PrimitiveType.Sphere,
-                head,
-                new Vector3(side * 0.055f, y, 0f),
-                Quaternion.Euler(0f, 0f, side * 18f + rng.Range(-5f, 5f)),
-                new Vector3(0.09f, 0.055f, 0.055f),
-                GetWheatHeadMaterial()
-            );
-        }
-    }
-
-    Transform CreateWheatPart(string partName, PrimitiveType primitive, Transform parent, Vector3 localPosition, Quaternion localRotation, Vector3 localScale, Material material)
-    {
-        GameObject part = GameObject.CreatePrimitive(primitive);
-        part.name = partName;
-        part.transform.SetParent(parent, false);
-        part.transform.localPosition = localPosition;
-        part.transform.localRotation = localRotation;
-        part.transform.localScale = localScale;
-
-        Collider collider = part.GetComponent<Collider>();
-        if (collider != null)
-            DestroyImmediate(collider);
-
-        Renderer renderer = part.GetComponent<Renderer>();
-        if (renderer != null)
-            renderer.sharedMaterial = material;
-
-        return part.transform;
-    }
-
-    Material GetWheatStemMaterial()
-    {
-        if (wheatStemMaterial == null)
-        {
-            wheatStemMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
-            wheatStemMaterial.name = "WheatStemRuntime";
-            wheatStemMaterial.color = new Color(0.78f, 0.48f, 0.12f, 1f);
-        }
-
-        return wheatStemMaterial;
-    }
-
-    Material GetWheatHeadMaterial()
-    {
-        if (wheatHeadMaterial == null)
-        {
-            wheatHeadMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
-            wheatHeadMaterial.name = "WheatHeadRuntime";
-            wheatHeadMaterial.color = new Color(0.98f, 0.68f, 0.16f, 1f);
-        }
-
-        return wheatHeadMaterial;
-    }
-
-    Material GetWheatBandMaterial()
-    {
-        if (wheatBandMaterial == null)
-        {
-            wheatBandMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
-            wheatBandMaterial.name = "WheatBandRuntime";
-            wheatBandMaterial.color = new Color(0.55f, 0.29f, 0.08f, 1f);
-        }
-
-        return wheatBandMaterial;
-    }
-
-    void ConfigureResourceRespawn(GameObject resourceObject, Vector2 delayRange)
-    {
-        if (resourceObject == null)
-            return;
-
-        ResourceNode resource = resourceObject.GetComponent<ResourceNode>() ??
-                                resourceObject.GetComponentInChildren<ResourceNode>();
-
-        if (resource == null)
-            return;
-
-        resource.respawnAfterDepleted = true;
-        resource.respawnDelayRange = delayRange;
-    }
-
-    void ConfigurePickupRespawn(GameObject pickup)
-    {
-        if (pickup == null)
-            return;
-
-        PickupRespawner respawner = pickup.GetComponent<PickupRespawner>();
-        if (respawner == null)
-            respawner = pickup.AddComponent<PickupRespawner>();
-
-        respawner.respawnDelayRange = groundPickupRespawnDelayRange;
-    }
-
-    void CreateIronOrePiece(Transform parent, Vector3 localPosition, Vector3 localScale, Color color)
-    {
-        GameObject piece = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        piece.name = "OrePiece";
-        piece.transform.SetParent(parent, false);
-        piece.transform.localPosition = localPosition;
-        piece.transform.localRotation = Quaternion.Euler(12f, 28f, -9f);
-        piece.transform.localScale = localScale;
-
-        Collider collider = piece.GetComponent<Collider>();
-        if (collider != null)
-            DestroyImmediate(collider);
-
-        Renderer renderer = piece.GetComponent<Renderer>();
-        if (renderer != null)
-            renderer.material.color = color;
     }
 }

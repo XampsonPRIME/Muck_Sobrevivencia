@@ -163,11 +163,6 @@ MonoBehaviour:
   maxGravetosPerChunk: 4
   minGravetoDistance: 5
   gravetoYOffset: 0.08
-  pedraPrefab: {fileID: 4616667006717134316, guid: 27d9fb52f1ac842fd8f9bdbcb3c48648, type: 3}
-  pedraDensity: 0.0025
-  maxPedrasPerChunk: 3
-  minPedraDistance: 5
-  pedraYOffset: 0.08
   treeDensity: 0.12
   maxTreesPerChunk: 22
   forestTreeHeightMultiplier: 1.45
@@ -208,16 +203,9 @@ MonoBehaviour:
   riverMaxSegmentGap: 4.5
   minDistanceBetweenObjects: 7
   minTreeDistance: 6.2
-  groundPickupRespawnDelayRange: {x: 120, y: 240}
-  woodRespawnDelayRange: {x: 180, y: 300}
-  stoneResourceRespawnDelayRange: {x: 180, y: 300}
-  ironOreRespawnDelayRange: {x: 240, y: 420}
   rockSmallPrefab: {fileID: 4611803431950446891, guid: d1e087c0d2b404e379ca3a5b0b8c91c9, type: 3}
   rockMediumPrefab: {fileID: 687441992539456540, guid: 79412605d3b7c40f4a9b20e5da838760, type: 3}
   rockLargePrefab: {fileID: 3923582216426070236, guid: 47f48952e3e114c95a12366e66c84319, type: 3}
-  ironOreChance: 0.55
-  maxIronOrePerChunk: 1
-  minIronOreDistance: 20
   cowPrefab: {fileID: 4473973017088153482, guid: 17c490e9a89ec31409947054bcb0c4a9, type: 3}
   cowMeatItem: {fileID: 675325374166930406, guid: 99a57057cca3fea4e953c0c6ac0e7fcb, type: 3}
   cowMeatDropPrefab: {fileID: 6861233700314253629, guid: 99a57057cca3fea4e953c0c6ac0e7fcb, type: 3}

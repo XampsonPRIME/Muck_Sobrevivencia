@@ -2,18 +2,13 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 
-public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
 {
     public Image icon;
     public TextMeshProUGUI amountText;
 
     InventoryItem currentItem;
-    GameObject tooltipObject;
-    RectTransform rectTransform;
-    Canvas parentCanvas;
-    bool mouseInsideSlot;
 
     float lastClickTime;
    
@@ -27,66 +22,9 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
     public InventoryItem CurrentItem => currentItem;
 
-    void OnDisable()
-    {
-        HideTooltip();
-    }
-
-    void OnDestroy()
-    {
-        HideTooltip();
-    }
-
-    void Awake()
-    {
-        rectTransform = GetComponent<RectTransform>();
-        parentCanvas = GetComponentInParent<Canvas>();
-    }
-
-    void Update()
-    {
-        if (!GameState.IsInventoryOpen || currentItem == null || string.IsNullOrWhiteSpace(currentItem.itemName))
-        {
-            if (mouseInsideSlot)
-            {
-                mouseInsideSlot = false;
-                HideTooltip();
-            }
-
-            return;
-        }
-
-        if (Mouse.current == null || rectTransform == null)
-            return;
-
-        if (parentCanvas == null)
-            parentCanvas = GetComponentInParent<Canvas>();
-
-        Camera uiCamera = parentCanvas != null && parentCanvas.renderMode != RenderMode.ScreenSpaceOverlay
-            ? parentCanvas.worldCamera
-            : null;
-
-        bool containsMouse = RectTransformUtility.RectangleContainsScreenPoint(
-            rectTransform,
-            Mouse.current.position.ReadValue(),
-            uiCamera);
-
-        if (containsMouse == mouseInsideSlot)
-            return;
-
-        mouseInsideSlot = containsMouse;
-
-        if (mouseInsideSlot)
-            ShowTooltip();
-        else
-            HideTooltip();
-    }
-
     public void Setup(InventoryItem item)
     {
         currentItem = item;
-        itemName = item != null ? item.itemName : string.Empty;
-        itemData = item != null ? item.itemData : null;
 
         Sprite displayIcon = item != null ? item.GetDisplayIcon() : null;
 
@@ -94,9 +32,6 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         {
             icon.sprite = displayIcon;
             icon.enabled = true;
-            icon.preserveAspect = true;
-            icon.raycastTarget = false;
-            ConfigureIconRect();
         }
         else if (icon != null)
         {
@@ -105,21 +40,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         }
 
         if (amountText != null)
-        {
-            amountText.text = item != null && item.quantity > 1 ? item.quantity.ToString() : "";
-            amountText.raycastTarget = false;
-            amountText.fontSize = 17f;
-        }
-    }
-
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        ShowTooltip();
-    }
-
-    public void OnPointerExit(PointerEventData eventData)
-    {
-        HideTooltip();
+            amountText.text = item.quantity > 1 ? item.quantity.ToString() : "";
     }
 
     public void OnPointerClick(PointerEventData eventData)
@@ -132,8 +53,6 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        HideTooltip();
-
         if (currentItem == null || currentItem.itemData == null) return;
 
         DragDropController.BeginDrag(
@@ -251,84 +170,5 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         hotbarSlot.SetItem(invName, invItem != null ? invItem.icon : null, invItem, invAmount);
 
         Setup(currentItem);
-    }
-
-    void ShowTooltip()
-    {
-        if (currentItem == null || string.IsNullOrWhiteSpace(currentItem.itemName))
-            return;
-
-        HideTooltip();
-
-        Canvas canvas = parentCanvas != null ? parentCanvas : GetComponentInParent<Canvas>();
-        Transform tooltipParent = canvas != null ? canvas.transform : transform;
-
-        tooltipObject = new GameObject("ItemNameTooltip", typeof(RectTransform), typeof(Image));
-        tooltipObject.transform.SetParent(tooltipParent, false);
-        tooltipObject.transform.SetAsLastSibling();
-
-        RectTransform tooltipRect = tooltipObject.GetComponent<RectTransform>();
-        tooltipRect.anchorMin = new Vector2(0.5f, 0.5f);
-        tooltipRect.anchorMax = new Vector2(0.5f, 0.5f);
-        tooltipRect.pivot = new Vector2(0.5f, 0f);
-        tooltipRect.sizeDelta = new Vector2(220f, 38f);
-
-        Vector3[] corners = new Vector3[4];
-        rectTransform.GetWorldCorners(corners);
-        Vector3 topCenter = (corners[1] + corners[2]) * 0.5f;
-        tooltipRect.position = topCenter + Vector3.up * 12f;
-
-        Canvas tooltipCanvas = tooltipObject.AddComponent<Canvas>();
-        tooltipCanvas.overrideSorting = true;
-        tooltipCanvas.sortingOrder = canvas != null ? canvas.sortingOrder + 50 : 20000;
-
-        Image background = tooltipObject.GetComponent<Image>();
-        background.color = new Color(0.05f, 0.045f, 0.035f, 0.96f);
-        background.raycastTarget = false;
-
-        Outline outline = tooltipObject.AddComponent<Outline>();
-        outline.effectColor = new Color(1f, 0.82f, 0.22f, 0.9f);
-        outline.effectDistance = new Vector2(1f, -1f);
-
-        GameObject labelObject = new GameObject("Label", typeof(RectTransform));
-        labelObject.transform.SetParent(tooltipObject.transform, false);
-        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = new Vector2(6f, 3f);
-        labelRect.offsetMax = new Vector2(-6f, -3f);
-
-        TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
-        label.text = currentItem.itemName;
-        label.fontSize = 20f;
-        label.fontStyle = FontStyles.Bold;
-        label.alignment = TextAlignmentOptions.Center;
-        label.color = new Color(1f, 0.96f, 0.84f, 1f);
-        label.textWrappingMode = TextWrappingModes.NoWrap;
-        label.overflowMode = TextOverflowModes.Ellipsis;
-        label.raycastTarget = false;
-    }
-
-    void HideTooltip()
-    {
-        if (tooltipObject == null)
-            return;
-
-        Destroy(tooltipObject);
-        tooltipObject = null;
-    }
-
-    void ConfigureIconRect()
-    {
-        RectTransform iconRect = icon != null ? icon.GetComponent<RectTransform>() : null;
-        if (iconRect == null)
-            return;
-
-        iconRect.anchorMin = new Vector2(0.08f, 0.16f);
-        iconRect.anchorMax = new Vector2(0.92f, 0.92f);
-        iconRect.offsetMin = Vector2.zero;
-        iconRect.offsetMax = Vector2.zero;
-        iconRect.anchoredPosition = Vector2.zero;
-        iconRect.localScale = Vector3.one;
     }
 }
