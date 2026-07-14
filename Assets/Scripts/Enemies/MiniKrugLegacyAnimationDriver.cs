@@ -15,7 +15,7 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
     public float damageLockDuration = 0.3f;
     public float deathHoldDuration = 1.15f;
     public bool autoConfigureWrapModes = true;
-    public float maxActiveDistance = 18f;
+    public float maxActiveDistance = 55f;
     public float cullingCheckInterval = 0.2f;
 
     float actionLockUntil;
@@ -165,7 +165,7 @@ public class MiniKrugLegacyAnimationDriver : MonoBehaviour
 
     bool ShouldAnimate()
     {
-        Camera activeCamera = Camera.main;
+        Camera activeCamera = RuntimeCameraCache.Main;
         if (activeCamera == null)
             return true;
 

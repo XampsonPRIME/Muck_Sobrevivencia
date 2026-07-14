@@ -3,12 +3,10 @@ using UnityEngine;
 public class ProceduralDungeonWorldSpawner : MonoBehaviour
 {
     const int CandidateSalt = 47291;
-    const string EntranceResourcesPath = "Dungeons/MushroomTyrantDungeonEntrance";
 
     public float spawnCheckInterval = 2f;
-    public float minDistanceFromPlayer = 95f;
+    public float minDistanceFromPlayer = DemoWorldProgression.SecondaryBossMinDistanceFromPlayer;
 
-    GameObject entrancePrefab;
     MushroomTyrantDungeon spawnedDungeon;
     float nextSpawnCheckTime;
 
@@ -31,9 +29,6 @@ public class ProceduralDungeonWorldSpawner : MonoBehaviour
             return;
 
         nextSpawnCheckTime = Time.time + Mathf.Max(0.5f, spawnCheckInterval);
-
-        if (entrancePrefab == null)
-            entrancePrefab = Resources.Load<GameObject>(EntranceResourcesPath);
 
         if (!TryFindDungeonPosition(out Vector3 spawnPosition, out float bestScore))
             return;
@@ -75,7 +70,7 @@ public class ProceduralDungeonWorldSpawner : MonoBehaviour
         root.transform.rotation = Quaternion.Euler(0f, Mathf.Repeat(score * 3600f, 360f), 0f);
 
         MushroomTyrantDungeon dungeon = root.AddComponent<MushroomTyrantDungeon>();
-        dungeon.Initialize(entrancePrefab);
+        dungeon.Initialize(null);
         return dungeon;
     }
 

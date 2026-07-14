@@ -4,7 +4,7 @@ using UnityEngine.SceneManagement;
 public class ForestMushroomBossWorldSpawner : MonoBehaviour
 {
     public float spawnCheckInterval = 2f;
-    public float minDistanceFromPlayer = 70f;
+    public float minDistanceFromPlayer = DemoWorldProgression.SecondaryBossMinDistanceFromPlayer;
     public int candidateSalt = 911;
     public bool respawnEveryDay = true;
 

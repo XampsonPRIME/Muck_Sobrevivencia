@@ -25,9 +25,21 @@ public class SaveHotbarSlotData
 }
 
 [Serializable]
+public class SaveEquipmentSlotData
+{
+    public EquipmentSlotType slot;
+    public string itemName;
+    public string prefabName;
+    public int quantity;
+    public bool isBottle;
+    public bool bottleIsFilled;
+}
+
+[Serializable]
 public class SaveGameData
 {
     public string sceneName;
+    public int worldSeed;
     public float playerPosX;
     public float playerPosY;
     public float playerPosZ;
@@ -40,11 +52,21 @@ public class SaveGameData
     public bool hasUnlockedAreaMagic;
     public bool hasSilverLoadoutGranted;
     public int currentXp;
+    public int starterQuestIndex;
+    public bool starterQuestBestiaryOpened;
+    public bool starterQuestCompleted;
+    public bool starterQuestHudPinned = true;
+    public bool starterQuestHudPinPreferenceSaved;
     public int currentDay;
     public float normalizedTimeOfDay;
     public int selectedHotbarIndex;
     public List<SaveInventoryItemData> inventory = new List<SaveInventoryItemData>();
     public List<SaveHotbarSlotData> hotbar = new List<SaveHotbarSlotData>();
+    public List<SaveEquipmentSlotData> equipment = new List<SaveEquipmentSlotData>();
+    public List<SaveBestiaryEntryData> bestiary = new List<SaveBestiaryEntryData>();
+    public List<string> activeAncestralPowers = new List<string>();
+    public string bearerPowerId;
+    public bool bearerPowerSelectionCompleted;
 }
 
 [Serializable]
@@ -67,16 +89,37 @@ public class MultiplayerSessionSaveData
     public bool hasUnlockedAreaMagic;
     public bool hasSilverLoadoutGranted;
     public int currentXp;
+    public int starterQuestIndex;
+    public bool starterQuestBestiaryOpened;
+    public bool starterQuestCompleted;
+    public bool starterQuestHudPinned = true;
+    public bool starterQuestHudPinPreferenceSaved;
     public int currentDay;
     public float normalizedTimeOfDay;
     public int selectedHotbarIndex;
     public List<SaveInventoryItemData> inventory = new List<SaveInventoryItemData>();
     public List<SaveHotbarSlotData> hotbar = new List<SaveHotbarSlotData>();
+    public List<SaveEquipmentSlotData> equipment = new List<SaveEquipmentSlotData>();
+    public List<SaveBestiaryEntryData> bestiary = new List<SaveBestiaryEntryData>();
+    public List<string> activeAncestralPowers = new List<string>();
+    public string bearerPowerId;
+    public bool bearerPowerSelectionCompleted;
+    public List<string> bearerPowerOwnerPowerIds = new List<string>();
+    public List<string> bearerPowerOwnerPlayerIds = new List<string>();
     public List<LanSavedEntityState> worldEntities = new List<LanSavedEntityState>();
 }
 
 public class SaveGameManager : MonoBehaviour
 {
+    const string LegacyProductDirectoryName = "Muck_Survivo";
+    const float EarlyStartPortalRepairRadius = 80f;
+    const float EarlyStartVillageRepairRadius = 340f;
+    const float EarlyStartBossRepairRadius = 280f;
+    const float EarlyStartLegacyPlayerRepairRadius = 240f;
+    const int EarlyStartMaxRepairXp = 75;
+    const int EarlyStartMaxRepairQuestIndex = 1;
+    static readonly Vector3 PowerCaveReturnFallbackPosition = new Vector3(-181.58424f, 0f, 113.626854f);
+
     public static SaveGameManager Instance { get; private set; }
 
     public float autoSaveInterval = 20f;
@@ -85,9 +128,13 @@ public class SaveGameManager : MonoBehaviour
     PlayerInteraction playerInteraction;
     Inventory inventory;
     Hotbar hotbar;
+    PlayerEquipment playerEquipment;
     DayNightCycle dayNightCycle;
     PlayerProgression progression;
     PlayerMagic playerMagic;
+    StarterQuestTracker starterQuest;
+    AncestralPowerService ancestralPowers;
+    BearerPowerService bearerPower;
     InventoryUI inventoryUI;
 
     float autoSaveTimer;
@@ -98,6 +145,44 @@ public class SaveGameManager : MonoBehaviour
 
     static string SavePath => Path.Combine(Application.persistentDataPath, "savegame.json");
     static string MultiplayerSessionSavePath => Path.Combine(Application.persistentDataPath, "multiplayer_session.json");
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    static void MigrateLegacySaves()
+    {
+        try
+        {
+            string currentDirectory = Application.persistentDataPath;
+            DirectoryInfo companyDirectory = Directory.GetParent(currentDirectory);
+            if (companyDirectory == null)
+                return;
+
+            string legacyDirectory = Path.Combine(companyDirectory.FullName, LegacyProductDirectoryName);
+            if (!Directory.Exists(legacyDirectory) ||
+                string.Equals(legacyDirectory, currentDirectory, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            Directory.CreateDirectory(currentDirectory);
+
+            int migratedFileCount = 0;
+            string[] legacySaveFiles = Directory.GetFiles(legacyDirectory, "*.json", SearchOption.TopDirectoryOnly);
+            for (int i = 0; i < legacySaveFiles.Length; i++)
+            {
+                string targetPath = Path.Combine(currentDirectory, Path.GetFileName(legacySaveFiles[i]));
+                if (File.Exists(targetPath))
+                    continue;
+
+                File.Copy(legacySaveFiles[i], targetPath, false);
+                migratedFileCount++;
+            }
+
+            if (migratedFileCount > 0)
+                Debug.Log($"Migrados {migratedFileCount} save(s) de {LegacyProductDirectoryName} para Elarion.");
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Nao foi possivel migrar os saves antigos para Elarion: {exception.Message}");
+        }
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -213,11 +298,62 @@ public class SaveGameManager : MonoBehaviour
 
     public void StartNewGame()
     {
+        ResolveReferences();
         DeleteSave();
         GameState.IsPlayerDead = false;
         GameState.IsInventoryOpen = false;
+        GameState.IsVendorOpen = false;
+        GameState.IsCraftingOpen = false;
+        GameState.IsDebugChatOpen = false;
+        GameState.IsBestiaryOpen = false;
+        GameState.IsQuestJournalOpen = false;
+        GameState.IsMapOpen = false;
+        GameState.IsPowerSelectionOpen = false;
+        GameState.IsDemoGuideOpen = false;
         GameState.IsPaused = false;
+        ResetPlayerForNewGame();
         ExitLobby();
+    }
+
+    void ResetPlayerForNewGame()
+    {
+        if (playerMovement == null)
+            return;
+
+        progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
+        playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+        starterQuest ??= playerMovement.GetComponent<StarterQuestTracker>() ?? playerMovement.gameObject.AddComponent<StarterQuestTracker>();
+        ancestralPowers ??= playerMovement.GetComponent<AncestralPowerService>() ?? playerMovement.gameObject.AddComponent<AncestralPowerService>();
+        bearerPower ??= playerMovement.GetComponent<BearerPowerService>() ?? playerMovement.gameObject.AddComponent<BearerPowerService>();
+
+        inventory?.ClearAll();
+        hotbar?.ClearAll();
+        playerEquipment?.ClearAll();
+        progression.LoadProgress(0, false);
+        playerMagic.LoadState(false);
+        starterQuest.ResetProgress();
+        BestiaryService.Instance?.ResetProgress();
+        ancestralPowers.ClearPowers(false);
+        BearerShadowClone.DestroyAllForOwner(playerMovement);
+        bearerPower.ResetForNewAdventure();
+        DemoWorldProgression.ApplyLandmarkLayout(gameObject.scene);
+        playerMovement.PrepareFreshStartForWorldGeneration();
+        playerInteraction?.ResetStarterLoadout();
+
+        int selectedIndex = hotbar != null && hotbar.slots != null && hotbar.slots.Length > 0 ? 0 : -1;
+        if (selectedIndex >= 0)
+        {
+            hotbar.SetSelectedIndex(selectedIndex);
+            playerInteraction?.SelectSlotIndex(selectedIndex);
+        }
+
+        if (dayNightCycle != null)
+            dayNightCycle.LoadState(1, Mathf.Repeat(dayNightCycle.startHour / 24f, 1f));
+
+        inventoryUI?.Refresh();
+        SceneObjectCache.Find<GoldHUD>(gameObject.scene, true)?.Refresh();
+        SceneObjectCache.Find<LevelHUD>(gameObject.scene, true)?.Refresh();
+        autoSaveTimer = 0f;
     }
 
     public bool ContinueFromSave()
@@ -258,6 +394,8 @@ public class SaveGameManager : MonoBehaviour
         pendingMultiplayerSessionLoad = data;
         GameState.IsPlayerDead = false;
         GameState.IsInventoryOpen = false;
+        GameState.IsBestiaryOpen = false;
+        GameState.IsQuestJournalOpen = false;
         GameState.IsPaused = false;
         ExitLobby();
 
@@ -274,7 +412,7 @@ public class SaveGameManager : MonoBehaviour
         if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
             return false;
 
-        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused)
+        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || GameState.IsPowerSelectionOpen)
             return false;
 
         if (playerMovement == null || inventory == null || hotbar == null || progression == null)
@@ -283,6 +421,9 @@ public class SaveGameManager : MonoBehaviour
         SaveGameData data = new SaveGameData
         {
             sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name,
+            worldSeed = LanMultiplayerManager.Instance != null
+                ? LanMultiplayerManager.Instance.WorldSeed
+                : DemoWorldProgression.ResolveWorldSeed(),
             playerPosX = playerMovement.transform.position.x,
             playerPosY = playerMovement.transform.position.y,
             playerPosZ = playerMovement.transform.position.z,
@@ -295,9 +436,19 @@ public class SaveGameManager : MonoBehaviour
             hasUnlockedAreaMagic = playerMagic != null && playerMagic.hasUnlockedAreaMagic,
             hasSilverLoadoutGranted = progression.HasSilverLoadoutGranted,
             currentXp = progression.currentXp,
+            starterQuestIndex = starterQuest != null ? starterQuest.CurrentObjectiveIndex : 0,
+            starterQuestBestiaryOpened = starterQuest != null && starterQuest.HasOpenedBestiary,
+            starterQuestCompleted = starterQuest != null && starterQuest.IsCompleted,
+            starterQuestHudPinned = starterQuest == null || starterQuest.IsHudPinned,
+            starterQuestHudPinPreferenceSaved = true,
             currentDay = dayNightCycle != null ? dayNightCycle.CurrentDay : 1,
             normalizedTimeOfDay = dayNightCycle != null ? dayNightCycle.CurrentNormalizedTime : 0f,
-            selectedHotbarIndex = hotbar.SelectedIndex
+            selectedHotbarIndex = hotbar.SelectedIndex,
+            equipment = playerEquipment != null ? playerEquipment.CaptureEquipment() : new List<SaveEquipmentSlotData>(),
+            bestiary = BestiaryService.Instance != null ? BestiaryService.Instance.CaptureProgress() : new List<SaveBestiaryEntryData>(),
+            activeAncestralPowers = ancestralPowers != null ? ancestralPowers.CapturePowerIds() : new List<string>(),
+            bearerPowerId = bearerPower != null ? bearerPower.CurrentPowerId : string.Empty,
+            bearerPowerSelectionCompleted = bearerPower != null && bearerPower.HasCompletedSelection
         };
 
         foreach (InventoryItem item in inventory.items)
@@ -353,7 +504,7 @@ public class SaveGameManager : MonoBehaviour
         if (manager == null || manager.Mode != LanMultiplayerManager.SessionMode.Host || !manager.IsSessionReady)
             return false;
 
-        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused)
+        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || GameState.IsPowerSelectionOpen)
             return false;
 
         if (playerMovement == null || inventory == null || hotbar == null || progression == null)
@@ -379,11 +530,23 @@ public class SaveGameManager : MonoBehaviour
             hasUnlockedAreaMagic = playerMagic != null && playerMagic.hasUnlockedAreaMagic,
             hasSilverLoadoutGranted = progression.HasSilverLoadoutGranted,
             currentXp = progression.currentXp,
+            starterQuestIndex = starterQuest != null ? starterQuest.CurrentObjectiveIndex : 0,
+            starterQuestBestiaryOpened = starterQuest != null && starterQuest.HasOpenedBestiary,
+            starterQuestCompleted = starterQuest != null && starterQuest.IsCompleted,
+            starterQuestHudPinned = starterQuest == null || starterQuest.IsHudPinned,
+            starterQuestHudPinPreferenceSaved = true,
             currentDay = dayNightCycle != null ? dayNightCycle.CurrentDay : 1,
             normalizedTimeOfDay = dayNightCycle != null ? dayNightCycle.CurrentNormalizedTime : 0f,
             selectedHotbarIndex = hotbar.SelectedIndex,
+            equipment = playerEquipment != null ? playerEquipment.CaptureEquipment() : new List<SaveEquipmentSlotData>(),
+            bestiary = BestiaryService.Instance != null ? BestiaryService.Instance.CaptureProgress() : new List<SaveBestiaryEntryData>(),
+            activeAncestralPowers = ancestralPowers != null ? ancestralPowers.CapturePowerIds() : new List<string>(),
+            bearerPowerId = bearerPower != null ? bearerPower.CurrentPowerId : string.Empty,
+            bearerPowerSelectionCompleted = bearerPower != null && bearerPower.HasCompletedSelection,
             worldEntities = manager.CaptureSavedWorldEntities()
         };
+
+        manager.CaptureBearerPowerOwnership(data.bearerPowerOwnerPowerIds, data.bearerPowerOwnerPlayerIds);
 
         if (currentSceneSet?.sceneNames != null)
             data.sceneNames.AddRange(currentSceneSet.sceneNames);
@@ -440,7 +603,7 @@ public class SaveGameManager : MonoBehaviour
         if (manager == null || manager.Mode != LanMultiplayerManager.SessionMode.Client || !manager.IsSessionReady)
             return false;
 
-        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused)
+        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || GameState.IsPowerSelectionOpen)
             return false;
 
         if (playerMovement == null || inventory == null || hotbar == null || progression == null)
@@ -466,9 +629,19 @@ public class SaveGameManager : MonoBehaviour
             hasUnlockedAreaMagic = playerMagic != null && playerMagic.hasUnlockedAreaMagic,
             hasSilverLoadoutGranted = progression.HasSilverLoadoutGranted,
             currentXp = progression.currentXp,
+            starterQuestIndex = starterQuest != null ? starterQuest.CurrentObjectiveIndex : 0,
+            starterQuestBestiaryOpened = starterQuest != null && starterQuest.HasOpenedBestiary,
+            starterQuestCompleted = starterQuest != null && starterQuest.IsCompleted,
+            starterQuestHudPinned = starterQuest == null || starterQuest.IsHudPinned,
+            starterQuestHudPinPreferenceSaved = true,
             currentDay = dayNightCycle != null ? dayNightCycle.CurrentDay : 1,
             normalizedTimeOfDay = dayNightCycle != null ? dayNightCycle.CurrentNormalizedTime : 0f,
-            selectedHotbarIndex = hotbar.SelectedIndex
+            selectedHotbarIndex = hotbar.SelectedIndex,
+            equipment = playerEquipment != null ? playerEquipment.CaptureEquipment() : new List<SaveEquipmentSlotData>(),
+            bestiary = BestiaryService.Instance != null ? BestiaryService.Instance.CaptureProgress() : new List<SaveBestiaryEntryData>(),
+            activeAncestralPowers = ancestralPowers != null ? ancestralPowers.CapturePowerIds() : new List<string>(),
+            bearerPowerId = bearerPower != null ? bearerPower.CurrentPowerId : string.Empty,
+            bearerPowerSelectionCompleted = bearerPower != null && bearerPower.HasCompletedSelection
         };
 
         if (currentSceneSet?.sceneNames != null)
@@ -535,23 +708,37 @@ public class SaveGameManager : MonoBehaviour
 
         GameState.IsPlayerDead = false;
         GameState.IsInventoryOpen = false;
+        GameState.IsBestiaryOpen = false;
+        GameState.IsQuestJournalOpen = false;
         GameState.IsPaused = false;
         progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
         playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+        starterQuest ??= playerMovement.GetComponent<StarterQuestTracker>() ?? playerMovement.gameObject.AddComponent<StarterQuestTracker>();
+        ancestralPowers ??= playerMovement.GetComponent<AncestralPowerService>() ?? playerMovement.gameObject.AddComponent<AncestralPowerService>();
+        bearerPower ??= playerMovement.GetComponent<BearerPowerService>() ?? playerMovement.gameObject.AddComponent<BearerPowerService>();
+        if (data.worldSeed != 0 && LanMultiplayerManager.Instance != null)
+            LanMultiplayerManager.Instance.StartSolo(data.worldSeed);
+
+        DemoWorldProgression.ApplyLandmarkLayout(gameObject.scene);
         progression.LoadProgress(data.currentXp, data.hasSilverLoadoutGranted);
         playerMagic.LoadState(data.hasUnlockedAreaMagic);
+        starterQuest.LoadProgress(data.starterQuestIndex, data.starterQuestBestiaryOpened, data.starterQuestCompleted, ResolveStarterQuestHudPinned(data.starterQuestHudPinned, data.starterQuestHudPinPreferenceSaved));
+        BestiaryService.Instance?.LoadProgress(data.bestiary);
+        ancestralPowers.LoadPowers(data.activeAncestralPowers);
+        bearerPower.LoadState(data.bearerPowerId, data.bearerPowerSelectionCompleted);
 
         Quaternion rotation = Quaternion.Euler(0f, data.playerRotY, 0f);
         Vector3 savedPosition = new Vector3(data.playerPosX, data.playerPosY, data.playerPosZ);
         ResolveSavedStartTransform(data.sceneName, ref savedPosition, ref rotation);
+        bool repairedEarlyStart = TryRepairEarlySoloStart(data, ref savedPosition, ref rotation);
         playerMovement.ApplySavedState(
             savedPosition,
             rotation,
             data.thirdPerson,
-            data.health,
-            data.stamina,
-            data.hunger,
-            data.thirst
+            repairedEarlyStart ? playerMovement.maxHealth : data.health,
+            repairedEarlyStart ? playerMovement.maxStamina : data.stamina,
+            repairedEarlyStart ? playerMovement.maxHunger : data.hunger,
+            repairedEarlyStart ? playerMovement.maxThirst : data.thirst
         );
 
         if (dayNightCycle != null)
@@ -560,6 +747,7 @@ public class SaveGameManager : MonoBehaviour
         inventory.ClearAll();
         RestoreInventory(data.inventory);
         RestoreHotbar(data.hotbar);
+        playerEquipment?.LoadEquipment(data.equipment);
 
         int selectedIndex = hotbar.slots != null && hotbar.slots.Length > 0
             ? Mathf.Clamp(data.selectedHotbarIndex, 0, hotbar.slots.Length - 1)
@@ -597,11 +785,18 @@ public class SaveGameManager : MonoBehaviour
 
         progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
         playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+        starterQuest ??= playerMovement.GetComponent<StarterQuestTracker>() ?? playerMovement.gameObject.AddComponent<StarterQuestTracker>();
 
         inventory.ClearAll();
         hotbar.ClearAll();
+        playerEquipment?.ClearAll();
         progression.LoadProgress(0, false);
         playerMagic.LoadState(false);
+        starterQuest.ResetProgress();
+        BestiaryService.Instance?.ResetProgress();
+        ancestralPowers?.ClearPowers(false);
+        BearerShadowClone.DestroyAllForOwner(playerMovement);
+        bearerPower?.ResetForNewAdventure();
         playerMovement.ResetToFreshStart();
         playerInteraction?.ResetStarterLoadout();
 
@@ -683,6 +878,10 @@ public class SaveGameManager : MonoBehaviour
 
     Item ResolveItem(string itemName, string prefabName)
     {
+        Item resolvedInventoryItem = InventoryItemResolver.Resolve(itemName, prefabName);
+        if (resolvedInventoryItem != null)
+            return resolvedInventoryItem;
+
         if (string.Equals(itemName, "Gold", StringComparison.OrdinalIgnoreCase))
             return GoldItemRegistry.GetOrCreate();
 
@@ -704,6 +903,33 @@ public class SaveGameManager : MonoBehaviour
 
         if (string.Equals(itemName, FurnaceItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
             return FurnaceItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, SimpleBowItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return SimpleBowItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, FeatherItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return FeatherItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, RawChickenMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return RawChickenMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedChickenMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedChickenMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedBoarMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedBoarMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CowMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CowMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedCowMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedCowMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, ArrowItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return ArrowItemRegistry.GetOrCreate();
 
         if (string.Equals(itemName, "Machado", StringComparison.OrdinalIgnoreCase))
             return LoadResourceItem("VendorItems/Axe");
@@ -749,8 +975,34 @@ public class SaveGameManager : MonoBehaviour
 
     void ResolveReferences()
     {
+        PlayerMovement activePlayer = LanMultiplayerManager.FindGameplayPlayer();
+        if (activePlayer != null && activePlayer != playerMovement)
+        {
+            playerMovement = activePlayer;
+            playerInteraction = null;
+            inventory = null;
+            playerEquipment = null;
+            progression = null;
+            playerMagic = null;
+            starterQuest = null;
+            ancestralPowers = null;
+            bearerPower = null;
+        }
+
         if (playerMovement == null)
-            playerMovement = LanMultiplayerManager.FindGameplayPlayer();
+            playerMovement = activePlayer;
+
+        if (playerMovement != null)
+        {
+            playerInteraction = playerMovement.GetComponent<PlayerInteraction>() ?? playerInteraction;
+            inventory = playerMovement.GetComponent<Inventory>() ?? inventory;
+            playerEquipment = playerMovement.GetComponent<PlayerEquipment>() ?? playerMovement.gameObject.AddComponent<PlayerEquipment>();
+            progression = playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
+            playerMagic = playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+            starterQuest = playerMovement.GetComponent<StarterQuestTracker>() ?? playerMovement.gameObject.AddComponent<StarterQuestTracker>();
+            ancestralPowers = playerMovement.GetComponent<AncestralPowerService>() ?? playerMovement.gameObject.AddComponent<AncestralPowerService>();
+            bearerPower = playerMovement.GetComponent<BearerPowerService>() ?? playerMovement.gameObject.AddComponent<BearerPowerService>();
+        }
 
         if (playerInteraction == null)
             playerInteraction = playerMovement != null
@@ -768,14 +1020,13 @@ public class SaveGameManager : MonoBehaviour
         if (dayNightCycle == null)
             dayNightCycle = SceneObjectCache.Find<DayNightCycle>(gameObject.scene, true);
 
-        if (progression == null && playerMovement != null)
-            progression = playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
-
-        if (playerMagic == null && playerMovement != null)
-            playerMagic = playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
-
         if (inventoryUI == null)
             inventoryUI = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
+    }
+
+    bool ResolveStarterQuestHudPinned(bool savedValue, bool preferenceWasSaved)
+    {
+        return !preferenceWasSaved || savedValue;
     }
 
     void ExitLobby()
@@ -784,6 +1035,7 @@ public class SaveGameManager : MonoBehaviour
         Time.timeScale = 1f;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+        WorldLoadingScreen.BeginLoading();
     }
 
     void ResolveSavedStartTransform(string savedSceneName, ref Vector3 position, ref Quaternion rotation)
@@ -800,6 +1052,83 @@ public class SaveGameManager : MonoBehaviour
 
         position = Vector3.zero;
         rotation = Quaternion.identity;
+    }
+
+    bool TryRepairEarlySoloStart(SaveGameData data, ref Vector3 position, ref Quaternion rotation)
+    {
+        if (data == null)
+            return false;
+
+        if (!string.Equals(data.sceneName, "Main", StringComparison.Ordinal))
+            return false;
+
+        if (!LooksLikeEarlySoloStart(data))
+            return false;
+
+        string repairReason = ResolveEarlySoloStartRepairReason(position);
+        if (string.IsNullOrEmpty(repairReason))
+            return false;
+
+        Debug.LogWarning(
+            $"Save inicial estava {repairReason} ({position}). " +
+            "Reposicionando para o inicio seguro da ilha."
+        );
+
+        position = PlayerMovement.DefaultFreshStartPosition;
+        rotation = PlayerMovement.DefaultFreshStartRotation;
+        return true;
+    }
+
+    bool LooksLikeEarlySoloStart(SaveGameData data)
+    {
+        if (data.currentXp > EarlyStartMaxRepairXp ||
+            data.starterQuestIndex > EarlyStartMaxRepairQuestIndex ||
+            data.starterQuestBestiaryOpened ||
+            data.starterQuestCompleted)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    string ResolveEarlySoloStartRepairReason(Vector3 position)
+    {
+        Vector3 portalAnchor = ResolvePowerCaveReturnAnchor();
+        if (PlanarDistance(position, portalAnchor) <= EarlyStartPortalRepairRadius)
+            return "perto do retorno antigo da Caverna dos Portadores";
+
+        if (DemoWorldProgression.IsNearKnownLegacyStart(
+            position,
+            EarlyStartVillageRepairRadius,
+            EarlyStartBossRepairRadius,
+            EarlyStartLegacyPlayerRepairRadius))
+        {
+            return "perto da vila, boss ou spawn antigo";
+        }
+
+        if (DemoWorldProgression.IsNearCurrentProgressLandmarks(
+            position,
+            EarlyStartVillageRepairRadius,
+            Mathf.Max(EarlyStartBossRepairRadius, DemoWorldProgression.FinalBossLandmarkRevealDistance)))
+        {
+            return "perto da vila ou boss da seed atual";
+        }
+
+        return string.Empty;
+    }
+
+    Vector3 ResolvePowerCaveReturnAnchor()
+    {
+        BossSpawnPoint bossSpawnPoint = SceneObjectCache.Find<BossSpawnPoint>(gameObject.scene, true);
+        return bossSpawnPoint != null
+            ? bossSpawnPoint.transform.position
+            : PowerCaveReturnFallbackPosition;
+    }
+
+    static float PlanarDistance(Vector3 a, Vector3 b)
+    {
+        return Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
     }
 
     void QueueClientSessionLoadIfAvailable(LanMultiplayerManager manager)
@@ -841,8 +1170,18 @@ public class SaveGameManager : MonoBehaviour
 
         progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
         playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+        starterQuest ??= playerMovement.GetComponent<StarterQuestTracker>() ?? playerMovement.gameObject.AddComponent<StarterQuestTracker>();
+        ancestralPowers ??= playerMovement.GetComponent<AncestralPowerService>() ?? playerMovement.gameObject.AddComponent<AncestralPowerService>();
+        bearerPower ??= playerMovement.GetComponent<BearerPowerService>() ?? playerMovement.gameObject.AddComponent<BearerPowerService>();
         progression.LoadProgress(pendingMultiplayerSessionLoad.currentXp, pendingMultiplayerSessionLoad.hasSilverLoadoutGranted);
         playerMagic.LoadState(pendingMultiplayerSessionLoad.hasUnlockedAreaMagic);
+        starterQuest.LoadProgress(pendingMultiplayerSessionLoad.starterQuestIndex, pendingMultiplayerSessionLoad.starterQuestBestiaryOpened, pendingMultiplayerSessionLoad.starterQuestCompleted, ResolveStarterQuestHudPinned(pendingMultiplayerSessionLoad.starterQuestHudPinned, pendingMultiplayerSessionLoad.starterQuestHudPinPreferenceSaved));
+        BestiaryService.Instance?.LoadProgress(pendingMultiplayerSessionLoad.bestiary);
+        ancestralPowers.LoadPowers(pendingMultiplayerSessionLoad.activeAncestralPowers);
+        bearerPower.LoadState(pendingMultiplayerSessionLoad.bearerPowerId, pendingMultiplayerSessionLoad.bearerPowerSelectionCompleted);
+        manager.RestoreBearerPowerOwnership(
+            pendingMultiplayerSessionLoad.bearerPowerOwnerPowerIds,
+            pendingMultiplayerSessionLoad.bearerPowerOwnerPlayerIds);
 
         Quaternion rotation = Quaternion.Euler(0f, pendingMultiplayerSessionLoad.playerRotY, 0f);
         Vector3 savedPosition = new Vector3(
@@ -867,6 +1206,7 @@ public class SaveGameManager : MonoBehaviour
         inventory.ClearAll();
         RestoreInventory(pendingMultiplayerSessionLoad.inventory);
         RestoreHotbar(pendingMultiplayerSessionLoad.hotbar);
+        playerEquipment?.LoadEquipment(pendingMultiplayerSessionLoad.equipment);
 
         int selectedIndex = hotbar.slots != null && hotbar.slots.Length > 0
             ? Mathf.Clamp(pendingMultiplayerSessionLoad.selectedHotbarIndex, 0, hotbar.slots.Length - 1)
@@ -901,8 +1241,15 @@ public class SaveGameManager : MonoBehaviour
 
         progression ??= playerMovement.GetComponent<PlayerProgression>() ?? playerMovement.gameObject.AddComponent<PlayerProgression>();
         playerMagic ??= playerMovement.GetComponent<PlayerMagic>() ?? playerMovement.gameObject.AddComponent<PlayerMagic>();
+        starterQuest ??= playerMovement.GetComponent<StarterQuestTracker>() ?? playerMovement.gameObject.AddComponent<StarterQuestTracker>();
+        ancestralPowers ??= playerMovement.GetComponent<AncestralPowerService>() ?? playerMovement.gameObject.AddComponent<AncestralPowerService>();
+        bearerPower ??= playerMovement.GetComponent<BearerPowerService>() ?? playerMovement.gameObject.AddComponent<BearerPowerService>();
         progression.LoadProgress(pendingClientSessionLoad.currentXp, pendingClientSessionLoad.hasSilverLoadoutGranted);
         playerMagic.LoadState(pendingClientSessionLoad.hasUnlockedAreaMagic);
+        starterQuest.LoadProgress(pendingClientSessionLoad.starterQuestIndex, pendingClientSessionLoad.starterQuestBestiaryOpened, pendingClientSessionLoad.starterQuestCompleted, ResolveStarterQuestHudPinned(pendingClientSessionLoad.starterQuestHudPinned, pendingClientSessionLoad.starterQuestHudPinPreferenceSaved));
+        BestiaryService.Instance?.LoadProgress(pendingClientSessionLoad.bestiary);
+        ancestralPowers.LoadPowers(pendingClientSessionLoad.activeAncestralPowers);
+        bearerPower.LoadState(pendingClientSessionLoad.bearerPowerId, pendingClientSessionLoad.bearerPowerSelectionCompleted);
 
         Quaternion rotation = Quaternion.Euler(0f, pendingClientSessionLoad.playerRotY, 0f);
         Vector3 savedPosition = new Vector3(
@@ -924,6 +1271,7 @@ public class SaveGameManager : MonoBehaviour
         inventory.ClearAll();
         RestoreInventory(pendingClientSessionLoad.inventory);
         RestoreHotbar(pendingClientSessionLoad.hotbar);
+        playerEquipment?.LoadEquipment(pendingClientSessionLoad.equipment);
 
         int selectedIndex = hotbar.slots != null && hotbar.slots.Length > 0
             ? Mathf.Clamp(pendingClientSessionLoad.selectedHotbarIndex, 0, hotbar.slots.Length - 1)

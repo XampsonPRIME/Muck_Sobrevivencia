@@ -14,8 +14,8 @@ public class MiniKrugEnemyProfile : MonoBehaviour
     public int healthBonusPerLevel = 4;
 
     [Header("Combate")]
-    public float contactDamage = 9f;
-    public float contactDamageBonusPerLevel = 1.8f;
+    public float contactDamage = 16f;
+    public float contactDamageBonusPerLevel = 2.8f;
     public float attackRange = 1.35f;
     public float attackCooldown = 1.15f;
     public float moveSpeed = 3.2f;

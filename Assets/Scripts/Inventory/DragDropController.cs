@@ -27,9 +27,7 @@ public class DragDropController : MonoBehaviour
     public static void BeginDrag(Sprite icon, DragPayload payload)
     {
         currentPayload = payload;
-
-        if (rootCanvas == null)
-            rootCanvas = Object.FindFirstObjectByType<Canvas>();
+        rootCanvas = ResolveDragCanvas();
 
         if (rootCanvas == null || icon == null)
             return;
@@ -42,7 +40,9 @@ public class DragDropController : MonoBehaviour
         dragIcon.raycastTarget = false;
 
         RectTransform rt = dragIcon.rectTransform;
-        rt.sizeDelta = new Vector2(48f, 48f);
+        rt.sizeDelta = new Vector2(72f, 72f);
+        dragIcon.preserveAspect = true;
+        dragIcon.transform.SetAsLastSibling();
     }
 
     public static void UpdateDrag(Vector2 screenPosition)
@@ -62,5 +62,22 @@ public class DragDropController : MonoBehaviour
         }
 
         currentPayload = null;
+    }
+
+    static Canvas ResolveDragCanvas()
+    {
+        Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Canvas bestCanvas = null;
+
+        foreach (Canvas canvas in canvases)
+        {
+            if (canvas == null || !canvas.enabled || !canvas.gameObject.activeInHierarchy)
+                continue;
+
+            if (bestCanvas == null || canvas.sortingOrder > bestCanvas.sortingOrder)
+                bestCanvas = canvas;
+        }
+
+        return bestCanvas != null ? bestCanvas : Object.FindFirstObjectByType<Canvas>();
     }
 }

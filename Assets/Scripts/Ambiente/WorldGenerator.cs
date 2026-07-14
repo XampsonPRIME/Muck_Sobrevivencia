@@ -17,6 +17,7 @@ public class WorldGenerator : MonoBehaviour
     public int chunkSize = 50;
     public int viewDistance = 2;
     public int maxChunkCreationsPerFrame = 1;
+    public int loadingChunkCreationsPerFrame = 4;
 
     private readonly Dictionary<Vector2Int, GameObject> chunks = new Dictionary<Vector2Int, GameObject>();
     readonly Queue<Vector2Int> pendingChunkQueue = new Queue<Vector2Int>();
@@ -25,6 +26,14 @@ public class WorldGenerator : MonoBehaviour
     bool hasLastPlayerChunk;
     bool initialized;
     bool loggedMissingPlayerError;
+
+    public bool IsInitialized => initialized;
+    public int PendingChunkCount => pendingChunkQueue.Count;
+    public int ActiveChunkCount => chunks.Count;
+    public int InitialChunkTargetCount => Mathf.Max(1, (viewDistance * 2 + 1) * (viewDistance * 2 + 1));
+    public int InitialChunkReadyCount => CountInitialChunkCoverage();
+    public float LoadingProgress => !initialized ? 0f : Mathf.Clamp01(InitialChunkReadyCount / (float)InitialChunkTargetCount);
+    public bool IsInitialWorldReady => initialized && pendingChunkQueue.Count == 0 && HasInitialChunkCoverage();
 
     void Start()
     {
@@ -46,11 +55,19 @@ public class WorldGenerator : MonoBehaviour
             InitializeWorld();
         }
 
+        RefreshPlayerFocus();
+
         if (player == null)
             return;
 
         Vector2Int currentChunk = GetPlayerChunkCoord();
-        if (!hasLastPlayerChunk || currentChunk != lastPlayerChunk)
+        bool needsInitialLoadingRefresh =
+            GameState.IsWorldLoading &&
+            initialized &&
+            InitialChunkReadyCount < InitialChunkTargetCount &&
+            pendingChunkQueue.Count == 0;
+
+        if (!hasLastPlayerChunk || currentChunk != lastPlayerChunk || needsInitialLoadingRefresh)
         {
             UpdateChunkTargets(force: true);
             lastPlayerChunk = currentChunk;
@@ -58,6 +75,20 @@ public class WorldGenerator : MonoBehaviour
         }
 
         ProcessPendingChunkCreates();
+    }
+
+    void RefreshPlayerFocus()
+    {
+        Transform currentFocus = LanMultiplayerManager.FindWorldFocusTransform();
+        if (currentFocus == null || currentFocus == player)
+            return;
+
+        player = currentFocus;
+        hasLastPlayerChunk = false;
+        loggedMissingPlayerError = false;
+
+        if (initialized && riverSystem != null)
+            riverSystem.Initialize(player.position);
     }
 
     void InitializeWorld()
@@ -118,6 +149,9 @@ public class WorldGenerator : MonoBehaviour
 
         HashSet<Vector2Int> neededChunks = new HashSet<Vector2Int>();
 
+        if (!chunks.ContainsKey(playerChunk) && !queuedChunkCoords.Contains(playerChunk))
+            QueueChunk(playerChunk);
+
         for (int x = -viewDistance; x <= viewDistance; x++)
         {
             for (int z = -viewDistance; z <= viewDistance; z++)
@@ -156,7 +190,10 @@ public class WorldGenerator : MonoBehaviour
 
     void ProcessPendingChunkCreates()
     {
-        int chunkBudget = Mathf.Max(1, maxChunkCreationsPerFrame);
+        int requestedBudget = GameState.IsWorldLoading
+            ? Mathf.Max(maxChunkCreationsPerFrame, loadingChunkCreationsPerFrame)
+            : maxChunkCreationsPerFrame;
+        int chunkBudget = Mathf.Max(1, requestedBudget);
         int created = 0;
 
         while (created < chunkBudget && pendingChunkQueue.Count > 0)
@@ -180,6 +217,31 @@ public class WorldGenerator : MonoBehaviour
         Vector2Int playerChunk = GetPlayerChunkCoord();
         return Mathf.Abs(coord.x - playerChunk.x) <= viewDistance &&
                Mathf.Abs(coord.y - playerChunk.y) <= viewDistance;
+    }
+
+    int CountInitialChunkCoverage()
+    {
+        if (player == null)
+            return 0;
+
+        int readyCount = 0;
+        Vector2Int playerChunk = GetPlayerChunkCoord();
+        for (int x = -viewDistance; x <= viewDistance; x++)
+        {
+            for (int z = -viewDistance; z <= viewDistance; z++)
+            {
+                Vector2Int coord = new Vector2Int(playerChunk.x + x, playerChunk.y + z);
+                if (chunks.ContainsKey(coord))
+                    readyCount++;
+            }
+        }
+
+        return readyCount;
+    }
+
+    bool HasInitialChunkCoverage()
+    {
+        return CountInitialChunkCoverage() >= InitialChunkTargetCount;
     }
 
     void CreateChunk(Vector2Int coord)

@@ -108,7 +108,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         {
             amountText.text = item != null && item.quantity > 1 ? item.quantity.ToString() : "";
             amountText.raycastTarget = false;
-            amountText.fontSize = 17f;
+            amountText.fontSize = 21f;
         }
     }
 
@@ -124,6 +124,10 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
     public void OnPointerClick(PointerEventData eventData)
     {
+        InventoryUI ui = SceneObjectCache.Find<InventoryUI>(true);
+        if (ui != null)
+            ui.SelectItem(currentItem);
+
         if (eventData.clickCount == 2)
         {
             OnDoubleClick();
@@ -137,7 +141,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         if (currentItem == null || currentItem.itemData == null) return;
 
         DragDropController.BeginDrag(
-            currentItem.itemData.icon,
+            currentItem.GetDisplayIcon(),
             new DragPayload
             {
                 sourceType = DragSourceType.Inventory,
@@ -184,7 +188,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
         PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
         Inventory inventory = player != null ? player.GetComponent<Inventory>() : null;
-        Hotbar hotbar = player != null ? player.GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>() : FindFirstObjectByType<Hotbar>();
+        Hotbar hotbar = player != null ? player.GetComponent<Hotbar>() ?? SceneObjectCache.Find<Hotbar>(player.gameObject.scene, true) : SceneObjectCache.Find<Hotbar>(true);
         if (inventory == null || hotbar == null)
             return;
 
@@ -195,7 +199,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         if (!inventory.RemoveItem(itemToMove.itemName, itemToMove.quantity))
             return;
 
-        InventoryUI ui = FindFirstObjectByType<InventoryUI>();
+        InventoryUI ui = SceneObjectCache.Find<InventoryUI>(true);
         if (ui != null)
             ui.Refresh();
     }
@@ -207,23 +211,11 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         InventoryItem a = currentItem;
         InventoryItem b = other.currentItem;
 
-        string tmpName = a.itemName;
-        int tmpQty = a.quantity;
-        Item tmpData = a.itemData;
-        ItemType tmpItemType = a.itemType;
-        ToolType tmpToolType = a.toolType;
+        InventoryItem aClone = a.Clone();
+        InventoryItem bClone = b.Clone();
 
-        a.itemName = b.itemName;
-        a.quantity = b.quantity;
-        a.itemData = b.itemData;
-        a.itemType = b.itemType;
-        a.toolType = b.toolType;
-
-        b.itemName = tmpName;
-        b.quantity = tmpQty;
-        b.itemData = tmpData;
-        b.itemType = tmpItemType;
-        b.toolType = tmpToolType;
+        a.CopyFrom(bClone);
+        b.CopyFrom(aClone);
 
         Setup(a);
         other.Setup(b);
@@ -242,11 +234,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         int invAmount = currentItem.quantity;
         Item invItem = currentItem.itemData;
 
-        currentItem.itemName = hotbarItem.itemName;
-        currentItem.quantity = hotbarAmount;
-        currentItem.itemData = hotbarItem;
-        currentItem.itemType = hotbarItem.itemType;
-        currentItem.toolType = hotbarItem.toolType;
+        currentItem.CopyFrom(new InventoryItem(hotbarItem.itemName, hotbarAmount, hotbarItem));
 
         hotbarSlot.SetItem(invName, invItem != null ? invItem.icon : null, invItem, invAmount);
 
@@ -271,7 +259,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         tooltipRect.anchorMin = new Vector2(0.5f, 0.5f);
         tooltipRect.anchorMax = new Vector2(0.5f, 0.5f);
         tooltipRect.pivot = new Vector2(0.5f, 0f);
-        tooltipRect.sizeDelta = new Vector2(220f, 38f);
+        tooltipRect.sizeDelta = new Vector2(260f, 44f);
 
         Vector3[] corners = new Vector3[4];
         rectTransform.GetWorldCorners(corners);
@@ -300,7 +288,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
         TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
         label.text = currentItem.itemName;
-        label.fontSize = 20f;
+        label.fontSize = 22f;
         label.fontStyle = FontStyles.Bold;
         label.alignment = TextAlignmentOptions.Center;
         label.color = new Color(1f, 0.96f, 0.84f, 1f);
@@ -324,8 +312,8 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         if (iconRect == null)
             return;
 
-        iconRect.anchorMin = new Vector2(0.08f, 0.16f);
-        iconRect.anchorMax = new Vector2(0.92f, 0.92f);
+        iconRect.anchorMin = new Vector2(0.05f, 0.12f);
+        iconRect.anchorMax = new Vector2(0.95f, 0.96f);
         iconRect.offsetMin = Vector2.zero;
         iconRect.offsetMax = Vector2.zero;
         iconRect.anchoredPosition = Vector2.zero;

@@ -1,12 +1,16 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(TextMeshProUGUI))]
 public class FpsHUD : MonoBehaviour
 {
+    const string FpsVisibleKey = "demo.show_fps";
+
     public float refreshInterval = 0.25f;
 
     TextMeshProUGUI fpsText;
+    bool isVisible;
     float timer;
     int frameCount;
     float accumulatedUnscaledTime;
@@ -16,6 +20,10 @@ public class FpsHUD : MonoBehaviour
         fpsText = GetComponent<TextMeshProUGUI>();
         if (fpsText != null && string.IsNullOrWhiteSpace(fpsText.text))
             fpsText.text = "FPS: --";
+
+        bool defaultVisible = Application.isEditor || Debug.isDebugBuild;
+        isVisible = PlayerPrefs.GetInt(FpsVisibleKey, defaultVisible ? 1 : 0) == 1;
+        ApplyVisibility();
     }
 
     void OnEnable()
@@ -25,7 +33,12 @@ public class FpsHUD : MonoBehaviour
 
     void Update()
     {
+        HandleToggle();
+
         if (fpsText == null)
+            return;
+
+        if (!isVisible)
             return;
 
         timer += Time.unscaledDeltaTime;
@@ -43,6 +56,25 @@ public class FpsHUD : MonoBehaviour
         fpsText.color = GetFpsColor(fps);
 
         ResetCounter();
+    }
+
+    void HandleToggle()
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null || !keyboard.f2Key.wasPressedThisFrame)
+            return;
+
+        isVisible = !isVisible;
+        PlayerPrefs.SetInt(FpsVisibleKey, isVisible ? 1 : 0);
+        PlayerPrefs.Save();
+        ApplyVisibility();
+        ResetCounter();
+    }
+
+    void ApplyVisibility()
+    {
+        if (fpsText != null)
+            fpsText.enabled = isVisible;
     }
 
     Color GetFpsColor(float fps)

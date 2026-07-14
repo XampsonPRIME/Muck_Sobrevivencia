@@ -1,16 +1,17 @@
 using System.Collections;
-using TMPro;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class BossEnemy : MonoBehaviour
 {
+    static readonly List<BossEnemy> activeBosses = new List<BossEnemy>();
+
     [Header("Progressao")]
     public string bossDisplayName = "Boss";
     public int bossLevel = 5;
     public int minimumPlayerLevel = 5;
     public int healthBonusPerLevel = 35;
-    public float contactDamageBonusPerLevel = 4f;
+    public float contactDamageBonusPerLevel = 7f;
     public float moveSpeedBonusPerLevel = 0.06f;
     public int goldBonusPerLevel = 5;
     public int xpBonusPerLevel = 35;
@@ -19,7 +20,7 @@ public class BossEnemy : MonoBehaviour
     public int maxHealth = 150;
 
     [Header("Combate")]
-    public float contactDamage = 28f;
+    public float contactDamage = 46f;
     public float attackRange = 2.4f;
     public float attackCooldown = 1.3f;
     public float moveSpeed = 2.6f;
@@ -30,7 +31,7 @@ public class BossEnemy : MonoBehaviour
 
     [Header("Ataque em Area")]
     public bool enableAreaAttack;
-    public float areaAttackDamage = 34f;
+    public float areaAttackDamage = 68f;
     public float areaAttackRadius = 4.4f;
     public float areaAttackTriggerRange = 7f;
     public float areaAttackCooldown = 6f;
@@ -70,7 +71,6 @@ public class BossEnemy : MonoBehaviour
     float nextTargetRefreshTime;
     float nextPatrolRefreshTime;
     float nextAreaAttackTime;
-    float healthUiHideTime;
     int baseMaxHealth;
     float baseContactDamage;
     float baseMoveSpeed;
@@ -83,6 +83,7 @@ public class BossEnemy : MonoBehaviour
     public int MinimumPlayerLevel => Mathf.Max(1, minimumPlayerLevel <= 0 ? bossLevel : minimumPlayerLevel);
     public string DisplayName => string.IsNullOrWhiteSpace(bossDisplayName) ? gameObject.name : bossDisplayName;
     public bool IsPendingDestroy => isPendingDestroy;
+    public static IReadOnlyList<BossEnemy> ActiveBosses => activeBosses;
 
     Vector3 spawnPosition;
     Vector3 patrolTarget;
@@ -90,9 +91,7 @@ public class BossEnemy : MonoBehaviour
     Transform targetTransform;
     string targetPlayerId;
     PlayerMovement lastAttacker;
-    Canvas worldCanvas;
-    Image healthFillImage;
-    TextMeshProUGUI healthText;
+    MobHealthBar healthBar;
     BossLegacyAnimationDriver animationDriver;
     Coroutine areaAttackRoutine;
     Coroutine destroyRoutine;
@@ -100,6 +99,17 @@ public class BossEnemy : MonoBehaviour
     bool isPendingDestroy;
     static Material bodyMaterial;
     static Material accentMaterial;
+
+    void OnEnable()
+    {
+        if (!activeBosses.Contains(this))
+            activeBosses.Add(this);
+    }
+
+    void OnDisable()
+    {
+        activeBosses.Remove(this);
+    }
 
     void Awake()
     {
@@ -112,7 +122,9 @@ public class BossEnemy : MonoBehaviour
         currentHealth = maxHealth;
         spawnPosition = transform.position;
         patrolTarget = spawnPosition;
+        EnsureMaterials();
         EnsureVisibleModel();
+        ApplyBossPalette();
         EnsureMainCollider();
         EnsureStablePhysics();
         SnapToGround();
@@ -190,14 +202,35 @@ public class BossEnemy : MonoBehaviour
     {
         if (bodyMaterial == null)
         {
-            bodyMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            bodyMaterial.color = new Color(0.34f, 0.08f, 0.08f, 1f);
+            bodyMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            bodyMaterial.color = new Color(0.42f, 0.08f, 0.52f, 1f);
         }
 
         if (accentMaterial == null)
         {
-            accentMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            accentMaterial.color = new Color(0.8f, 0.68f, 0.2f, 1f);
+            accentMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            accentMaterial.color = new Color(1f, 0.54f, 0.12f, 1f);
+        }
+    }
+
+    void ApplyBossPalette()
+    {
+        EnsureMaterials();
+
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null || renderer.transform == transform)
+                continue;
+
+            string lowerName = renderer.gameObject.name.ToLowerInvariant();
+            bool accent = lowerName.Contains("horn") ||
+                          lowerName.Contains("arm") ||
+                          lowerName.Contains("eye") ||
+                          lowerName.Contains("rune") ||
+                          lowerName.Contains("mushroom");
+
+            renderer.sharedMaterial = accent ? accentMaterial : bodyMaterial;
         }
     }
 
@@ -221,20 +254,14 @@ public class BossEnemy : MonoBehaviour
 
     void Update()
     {
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
+        if (healthBar == null)
             EnsureCombatUI();
 
         if (isPendingDestroy)
-        {
-            UpdateUIFacing();
             return;
-        }
 
         if (ShouldUseNetworkAuthority())
-        {
-            UpdateUIFacing();
             return;
-        }
 
         if (Time.time >= nextTargetRefreshTime || targetTransform == null)
             RefreshTarget();
@@ -242,19 +269,14 @@ public class BossEnemy : MonoBehaviour
         if (isPerformingAreaAttack)
         {
             FaceTarget();
-            UpdateUIFacing();
             return;
         }
 
         if (TryStartAreaAttack())
-        {
-            UpdateUIFacing();
             return;
-        }
 
         UpdateMovement();
         TryAttackPlayer();
-        UpdateUIFacing();
     }
 
     public void Hit(int damage, PlayerMovement attacker)
@@ -340,7 +362,7 @@ public class BossEnemy : MonoBehaviour
 
     public void PlayLocalHitFeedback(int damage)
     {
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
+        if (healthBar == null)
             EnsureCombatUI();
 
         ResolveAnimationDriver();
@@ -680,6 +702,8 @@ public class BossEnemy : MonoBehaviour
         if (isPendingDestroy)
             return;
 
+        BestiaryService.Instance?.RecordDefeat(BestiaryDatabase.BossEnemyId);
+        PlayerAnimationBridge.Trigger(lastAttacker, PlayerAnimationBridge.VictoryTrigger);
         DropMagicPickup();
         AwardExperienceIfKilledByPlayer();
         DropGoldIfKilledByPlayer();
@@ -720,126 +744,33 @@ public class BossEnemy : MonoBehaviour
 
     void EnsureCombatUI()
     {
-        if (worldCanvas != null)
+        if (healthBar != null)
             return;
 
-        GameObject canvasObject = new GameObject("BossCombatUI");
-        canvasObject.transform.SetParent(transform, false);
-        canvasObject.transform.localPosition = uiWorldOffset;
+        if (healthBar == null)
+            healthBar = GetComponentInChildren<MobHealthBar>(true);
 
-        worldCanvas = canvasObject.AddComponent<Canvas>();
-        worldCanvas.renderMode = RenderMode.WorldSpace;
-        worldCanvas.worldCamera = Camera.main;
+        if (healthBar == null)
+            healthBar = gameObject.AddComponent<MobHealthBar>();
 
-        CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-        scaler.dynamicPixelsPerUnit = 30f;
-        canvasObject.AddComponent<GraphicRaycaster>();
-
-        RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
-        canvasRect.sizeDelta = new Vector2(2.4f, 0.85f);
-        canvasObject.transform.localScale = Vector3.one * 0.01f;
-
-        GameObject bgObject = CreateUiObject("HealthBg", canvasObject.transform);
-        Image bgImage = bgObject.AddComponent<Image>();
-        bgImage.color = new Color(0.08f, 0.08f, 0.08f, 0.92f);
-        RectTransform bgRect = bgObject.GetComponent<RectTransform>();
-        bgRect.anchorMin = new Vector2(0.12f, 0.52f);
-        bgRect.anchorMax = new Vector2(0.88f, 0.82f);
-        bgRect.offsetMin = Vector2.zero;
-        bgRect.offsetMax = Vector2.zero;
-
-        GameObject fillObject = CreateUiObject("HealthFill", bgObject.transform);
-        healthFillImage = fillObject.AddComponent<Image>();
-        healthFillImage.color = new Color(0.82f, 0.18f, 0.14f, 1f);
-        RectTransform fillRect = fillObject.GetComponent<RectTransform>();
-        fillRect.anchorMin = Vector2.zero;
-        fillRect.anchorMax = Vector2.one;
-        fillRect.offsetMin = Vector2.zero;
-        fillRect.offsetMax = Vector2.zero;
-        healthFillImage.type = Image.Type.Filled;
-        healthFillImage.fillMethod = Image.FillMethod.Horizontal;
-        healthFillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
-
-        GameObject textObject = CreateUiObject("HealthText", canvasObject.transform);
-        healthText = textObject.AddComponent<TextMeshProUGUI>();
-        healthText.alignment = TextAlignmentOptions.Center;
-        healthText.fontSize = 20f;
-        healthText.fontStyle = FontStyles.Bold;
-        healthText.color = Color.white;
-        RectTransform textRect = textObject.GetComponent<RectTransform>();
-        textRect.anchorMin = new Vector2(0f, 0f);
-        textRect.anchorMax = new Vector2(1f, 0.5f);
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-        textRect.anchoredPosition = new Vector2(0f, 4f);
-
-        canvasObject.SetActive(false);
+        healthBar.Configure(uiWorldOffset, healthUiVisibleDuration, damagePopupLifetime, damagePopupRiseSpeed, new Vector2(2.4f, 0.85f), 0.01f);
     }
 
     void UpdateHealthUI(bool visible)
     {
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
-            return;
-
-        float normalizedHealth = maxHealth > 0 ? Mathf.Clamp01((float)currentHealth / maxHealth) : 0f;
-        healthFillImage.fillAmount = normalizedHealth;
-        healthFillImage.color = Color.Lerp(new Color(0.75f, 0.08f, 0.08f), new Color(0.2f, 0.9f, 0.25f), normalizedHealth);
-        healthText.text = $"{Mathf.Max(0, currentHealth)}/{maxHealth}";
-        worldCanvas.gameObject.SetActive(visible);
+        EnsureCombatUI();
+        healthBar.SetHealth(currentHealth, maxHealth, visible);
     }
 
     void ShowHealthUITemporarily()
     {
-        healthUiHideTime = Time.time + healthUiVisibleDuration;
         UpdateHealthUI(true);
-    }
-
-    void UpdateUIFacing()
-    {
-        if (worldCanvas == null)
-            return;
-
-        Camera activeCamera = Camera.main;
-        if (activeCamera != null)
-        {
-            worldCanvas.worldCamera = activeCamera;
-            Vector3 direction = worldCanvas.transform.position - activeCamera.transform.position;
-            if (direction.sqrMagnitude > 0.001f)
-                worldCanvas.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-        }
-
-        if (worldCanvas.gameObject.activeSelf && Time.time > healthUiHideTime)
-            worldCanvas.gameObject.SetActive(false);
     }
 
     void ShowDamagePopup(int damage)
     {
-        if (worldCanvas == null)
-            return;
-
-        GameObject popupObject = CreateUiObject($"Damage_{damage}", worldCanvas.transform);
-        popupObject.transform.localPosition = new Vector3(Random.Range(-0.16f, 0.16f), 0.28f, 0f);
-
-        TextMeshProUGUI popupText = popupObject.AddComponent<TextMeshProUGUI>();
-        popupText.text = damage.ToString();
-        popupText.alignment = TextAlignmentOptions.Center;
-        popupText.fontSize = 28f;
-        popupText.fontStyle = FontStyles.Bold;
-        popupText.color = new Color(1f, 0.8f, 0.28f, 1f);
-
-        RectTransform rect = popupObject.GetComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(100f, 46f);
-
-        DamagePopup popup = popupObject.AddComponent<DamagePopup>();
-        popup.Initialize(damagePopupLifetime, damagePopupRiseSpeed);
-    }
-
-    GameObject CreateUiObject(string objectName, Transform parent)
-    {
-        GameObject uiObject = new GameObject(objectName);
-        uiObject.transform.SetParent(parent, false);
-        uiObject.AddComponent<RectTransform>();
-        return uiObject;
+        EnsureCombatUI();
+        healthBar.ShowDamage(currentHealth, maxHealth, damage);
     }
 
     void EnsureMainCollider()
@@ -948,7 +879,7 @@ public class BossEnemy : MonoBehaviour
         if (currentHealth > 0)
             currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
 
-        UpdateHealthUI(worldCanvas != null && worldCanvas.gameObject.activeSelf);
+        UpdateHealthUI(healthBar != null && healthBar.IsVisible);
     }
 
     void ResolveAnimationDriver()

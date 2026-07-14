@@ -8,7 +8,7 @@ public class BossEnemyProfile : MonoBehaviour
     public int bossLevel = 7;
     public int minimumPlayerLevel = 4;
     public int healthBonusPerLevel = 45;
-    public float contactDamageBonusPerLevel = 5f;
+    public float contactDamageBonusPerLevel = 8f;
     public float moveSpeedBonusPerLevel = 0.08f;
     public int goldBonusPerLevel = 7;
     public int xpBonusPerLevel = 45;
@@ -17,7 +17,7 @@ public class BossEnemyProfile : MonoBehaviour
     public int maxHealth = 280;
 
     [Header("Combate")]
-    public float contactDamage = 42f;
+    public float contactDamage = 58f;
     public float attackRange = 2.4f;
     public float attackCooldown = 1.2f;
     public float moveSpeed = 3.1f;
@@ -28,7 +28,7 @@ public class BossEnemyProfile : MonoBehaviour
 
     [Header("Ataque em Area")]
     public bool enableAreaAttack = true;
-    public float areaAttackDamage = 55f;
+    public float areaAttackDamage = 86f;
     public float areaAttackRadius = 5.2f;
     public float areaAttackTriggerRange = 8.5f;
     public float areaAttackCooldown = 6.25f;

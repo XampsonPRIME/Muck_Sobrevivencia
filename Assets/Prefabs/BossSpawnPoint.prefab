@@ -54,3 +54,5 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   playerSpawnOffset: {x: 0, y: 0, z: -12}
+  activateOnlyInFinalRegion: 1
+  activationDistance: 360

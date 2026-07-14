@@ -1,14 +1,12 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 public class CraftingBenchUI : MonoBehaviour
 {
-    const int LayoutVersion = 28;
+    const int LayoutVersion = 30;
 
     public static CraftingBenchUI Instance { get; private set; }
 
@@ -100,7 +98,7 @@ public class CraftingBenchUI : MonoBehaviour
             return;
         }
 
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
         BuildUi(false);
         SetVisible(GameState.IsCraftingOpen);
     }
@@ -119,7 +117,7 @@ public class CraftingBenchUI : MonoBehaviour
         if (bench == null || inventory == null)
             return;
 
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
 
         BuildUi(true);
 
@@ -152,13 +150,13 @@ public class CraftingBenchUI : MonoBehaviour
         GameState.LastUiCloseFrame = Time.frameCount;
         SetVisible(false);
 
-        if (currentPlayerMovement != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby)
+        if (currentPlayerMovement != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby && !GameState.IsWorldLoading)
             currentPlayerMovement.enabled = true;
 
-        if (currentPlayerInteraction != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby)
+        if (currentPlayerInteraction != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby && !GameState.IsWorldLoading)
             currentPlayerInteraction.enabled = true;
 
-        if (!GameState.IsPaused && !GameState.IsInventoryOpen && !GameState.IsInLobby)
+        if (!GameState.IsPaused && !GameState.IsInventoryOpen && !GameState.IsInLobby && !GameState.IsWorldLoading)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -189,6 +187,8 @@ public class CraftingBenchUI : MonoBehaviour
         CreateRecipeRow(CraftingBench.Recipe.Furnace, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Furnace, currentInventory));
         CreateRecipeRow(CraftingBench.Recipe.Shield, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Shield, currentInventory));
         CreateRecipeRow(CraftingBench.Recipe.Rope, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Rope, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.Bow, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Bow, currentInventory));
+        CreateRecipeRow(CraftingBench.Recipe.Arrows, currentBench.GetAvailableCraftCount(CraftingBench.Recipe.Arrows, currentInventory));
 
     }
 
@@ -428,11 +428,11 @@ public class CraftingBenchUI : MonoBehaviour
 
         GameObject slotGrid = new GameObject("ArtisanSlots", typeof(RectTransform), typeof(GridLayoutGroup));
         slotGrid.transform.SetParent(section.transform, false);
-        slotGrid.AddComponent<LayoutElement>().preferredHeight = 112f;
+        slotGrid.AddComponent<LayoutElement>().preferredHeight = 132f;
         GridLayoutGroup grid = slotGrid.GetComponent<GridLayoutGroup>();
         grid.padding = new RectOffset(12, 12, 9, 7);
-        grid.cellSize = new Vector2(52f, 34f);
-        grid.spacing = new Vector2(8f, 7f);
+        grid.cellSize = new Vector2(60f, 42f);
+        grid.spacing = new Vector2(8f, 8f);
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = 5;
         artisanSlotRoot = slotGrid.transform;
@@ -448,14 +448,14 @@ public class CraftingBenchUI : MonoBehaviour
 
         GameObject selectedLine = new GameObject("SelectedLine", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         selectedLine.transform.SetParent(details.transform, false);
-        selectedLine.AddComponent<LayoutElement>().preferredHeight = 48f;
+        selectedLine.AddComponent<LayoutElement>().preferredHeight = 60f;
         HorizontalLayoutGroup selectedLayout = selectedLine.GetComponent<HorizontalLayoutGroup>();
         selectedLayout.spacing = 9f;
         selectedLayout.childControlWidth = true;
         selectedLayout.childControlHeight = true;
         selectedLayout.childAlignment = TextAnchor.MiddleCenter;
 
-        selectedOutputRoot = CreatePlainSlot(selectedLine.transform, 48f, 40f, false).transform;
+        selectedOutputRoot = CreatePlainSlot(selectedLine.transform, 62f, 54f, false).transform;
 
         GameObject selectedTextBox = new GameObject("SelectedText", typeof(RectTransform), typeof(VerticalLayoutGroup));
         selectedTextBox.transform.SetParent(selectedLine.transform, false);
@@ -512,8 +512,8 @@ public class CraftingBenchUI : MonoBehaviour
         grid.AddComponent<LayoutElement>().flexibleHeight = 1f;
         GridLayoutGroup gridLayout = grid.GetComponent<GridLayoutGroup>();
         gridLayout.padding = new RectOffset(20, 16, 7, 7);
-        gridLayout.cellSize = new Vector2(44f, 38f);
-        gridLayout.spacing = new Vector2(42f, 7f);
+        gridLayout.cellSize = new Vector2(56f, 50f);
+        gridLayout.spacing = new Vector2(30f, 8f);
         gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         gridLayout.constraintCount = 3;
         inventoryGridRoot = grid.transform;
@@ -605,6 +605,21 @@ public class CraftingBenchUI : MonoBehaviour
             return 1;
         }
 
+        if (selectedRecipe == CraftingBench.Recipe.Bow)
+        {
+            CreateCraftSlot(artisanSlotRoot, currentBench.GetInputIcon(currentInventory), "5", missingRecipe || CountItemsStartingWith("Madeira") < 5 * craftAmount);
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon(RopeItemRegistry.ItemName, RopeItemRegistry.GetSprite()), "3", missingRecipe || CountExactItem(RopeItemRegistry.ItemName) < 3 * craftAmount);
+            return 2;
+        }
+
+        if (selectedRecipe == CraftingBench.Recipe.Arrows)
+        {
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon(FeatherItemRegistry.ItemName, FeatherItemRegistry.GetSprite()), "1", missingRecipe || CountExactItem(FeatherItemRegistry.ItemName) < craftAmount);
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon("Graveto", null), "1", missingRecipe || CountExactItem("Graveto") < craftAmount);
+            CreateCraftSlot(artisanSlotRoot, GetInventoryOrFallbackIcon("Pedras", null), "1", missingRecipe || CountExactItem("Pedras") < craftAmount);
+            return 3;
+        }
+
         CreateCraftSlot(artisanSlotRoot, currentBench.GetInputIcon(currentInventory), currentBench.GetInputAmount().ToString(), missingRecipe);
         return 1;
     }
@@ -622,6 +637,12 @@ public class CraftingBenchUI : MonoBehaviour
 
         if (selectedRecipe == CraftingBench.Recipe.Rope)
             return "Trigo x4";
+
+        if (selectedRecipe == CraftingBench.Recipe.Bow)
+            return "Madeira x5  |  Corda x3";
+
+        if (selectedRecipe == CraftingBench.Recipe.Arrows)
+            return "Pena x1  |  Graveto x1  |  Pedras x1";
 
         return currentBench.GetInputLabel();
     }
@@ -667,7 +688,9 @@ public class CraftingBenchUI : MonoBehaviour
         GameObject ingredientsPanel = CreatePanel("RecipeIngredients", row.transform, new Color(0f, 0f, 0f, 0.14f));
         bool shieldRecipe = recipe == CraftingBench.Recipe.Shield;
         bool ropeRecipe = recipe == CraftingBench.Recipe.Rope;
-        SetTopLeftRect(ingredientsPanel, 84f, 54f, UsesBasicToolRecipe(recipe) ? 154f : shieldRecipe ? 100f : 50f, 30f);
+        bool bowRecipe = recipe == CraftingBench.Recipe.Bow;
+        bool arrowRecipe = recipe == CraftingBench.Recipe.Arrows;
+        SetTopLeftRect(ingredientsPanel, 84f, 54f, UsesBasicToolRecipe(recipe) || arrowRecipe ? 154f : shieldRecipe || bowRecipe ? 100f : 50f, 30f);
         HorizontalLayoutGroup ingredientsLayout = ingredientsPanel.AddComponent<HorizontalLayoutGroup>();
         ingredientsLayout.padding = new RectOffset(4, 4, 3, 3);
         ingredientsLayout.spacing = 6f;
@@ -695,6 +718,17 @@ public class CraftingBenchUI : MonoBehaviour
         {
             CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon(WheatItemRegistry.ItemName, WheatItemRegistry.GetSprite()), "4", missingIngredients || CountExactItem(WheatItemRegistry.ItemName) < 4);
         }
+        else if (bowRecipe)
+        {
+            CreateRecipeIngredient(ingredientsPanel.transform, currentBench.GetInputIcon(currentInventory), "5", missingIngredients || CountItemsStartingWith("Madeira") < 5);
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon(RopeItemRegistry.ItemName, RopeItemRegistry.GetSprite()), "3", missingIngredients || CountExactItem(RopeItemRegistry.ItemName) < 3);
+        }
+        else if (arrowRecipe)
+        {
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon(FeatherItemRegistry.ItemName, FeatherItemRegistry.GetSprite()), "1", missingIngredients || CountExactItem(FeatherItemRegistry.ItemName) < 1);
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon("Graveto", null), "1", missingIngredients || CountExactItem("Graveto") < 1);
+            CreateRecipeIngredient(ingredientsPanel.transform, GetInventoryOrFallbackIcon("Pedras", null), "1", missingIngredients || CountExactItem("Pedras") < 1);
+        }
         else
         {
             CreateRecipeIngredient(ingredientsPanel.transform, currentBench.GetInputIcon(currentInventory), currentBench.GetInputAmount().ToString(), missingIngredients);
@@ -705,7 +739,7 @@ public class CraftingBenchUI : MonoBehaviour
 
     void CreateRecipeIngredient(Transform parent, Sprite icon, string amount, bool missing)
     {
-        GameObject ingredient = CreatePlainSlot(parent, 42f, 24f, missing);
+        GameObject ingredient = CreatePlainSlot(parent, 48f, 30f, missing);
         CreateSlotContent(ingredient.transform, icon, amount, missing);
     }
 
@@ -780,7 +814,7 @@ public class CraftingBenchUI : MonoBehaviour
 
     void CreateCraftSlot(Transform parent, Sprite icon, string label, bool missing)
     {
-        GameObject slot = CreatePlainSlot(parent, 52f, 34f, missing);
+        GameObject slot = CreatePlainSlot(parent, 60f, 42f, missing);
         Outline outline = slot.GetComponent<Outline>();
         outline.effectColor = slotBorderColor;
         CreateSlotContent(slot.transform, icon, label, missing);
@@ -788,7 +822,7 @@ public class CraftingBenchUI : MonoBehaviour
 
     void CreateInventorySlot(Transform parent, InventoryItem item)
     {
-        GameObject slot = CreatePlainSlot(parent, 44f, 38f, false);
+        GameObject slot = CreatePlainSlot(parent, 56f, 50f, false);
         if (item == null)
             return;
 
@@ -806,15 +840,15 @@ public class CraftingBenchUI : MonoBehaviour
             image.preserveAspect = true;
 
             RectTransform iconRect = iconObject.GetComponent<RectTransform>();
-            iconRect.anchorMin = new Vector2(0.15f, 0.18f);
-            iconRect.anchorMax = new Vector2(0.85f, 0.88f);
+            iconRect.anchorMin = new Vector2(0.08f, 0.12f);
+            iconRect.anchorMax = new Vector2(0.92f, 0.94f);
             iconRect.offsetMin = Vector2.zero;
             iconRect.offsetMax = Vector2.zero;
         }
 
         if (!string.IsNullOrWhiteSpace(label))
         {
-            TextMeshProUGUI labelText = CreateText("Amount", slot, 8, FontStyles.Bold, TextAlignmentOptions.Right, label);
+            TextMeshProUGUI labelText = CreateText("Amount", slot, 10, FontStyles.Bold, TextAlignmentOptions.Right, label);
             labelText.color = missing ? Color.white : textColor;
             RectTransform labelRect = labelText.GetComponent<RectTransform>();
             labelRect.anchorMin = new Vector2(0f, 0f);
@@ -936,12 +970,4 @@ public class CraftingBenchUI : MonoBehaviour
             Destroy(parent.GetChild(i).gameObject);
     }
 
-    void EnsureEventSystem()
-    {
-        if (EventSystem.current != null)
-            return;
-
-        GameObject eventSystemObject = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
-        DontDestroyOnLoad(eventSystemObject);
-    }
 }

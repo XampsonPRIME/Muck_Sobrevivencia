@@ -268,7 +268,7 @@ public class MushroomTyrantDungeon : MonoBehaviour
         Vector3 frontPoint = GetEntranceFrontPoint(2.5f);
         platform.transform.position = new Vector3(frontPoint.x, transform.position.y - 0.75f, frontPoint.z);
         platform.transform.localScale = entryPlatformSize;
-        SetupRenderer(platform, new Color(0.18f, 0.14f, 0.10f, 1f));
+        SetupRenderer(platform, new Color(0.24f, 0.12f, 0.22f, 1f));
 
         returnPoint = new GameObject("DungeonReturnPoint").transform;
         returnPoint.SetParent(transform, true);
@@ -310,19 +310,21 @@ public class MushroomTyrantDungeon : MonoBehaviour
         interiorRoot.SetParent(transform, false);
         interiorRoot.position = transform.position + Vector3.down * interiorDepth;
 
-        Transform mobRoom = CreateRoom(interiorRoot, "MobRoom", Vector3.zero, mobRoomSize, new Color(0.22f, 0.19f, 0.16f, 1f));
+        Transform mobRoom = CreateRoom(interiorRoot, "MobRoom", Vector3.zero, mobRoomSize, new Color(0.16f, 0.18f, 0.14f, 1f));
         mobRoomPlayerSpawn = CreateMarker(mobRoom, "MobRoomPlayerSpawn", new Vector3(0f, 0.2f, -mobRoomSize.z * 0.35f));
         mobRoomEnemyAnchor = CreateMarker(mobRoom, "MobRoomEnemyAnchor", Vector3.zero);
+        DecorateDungeonRoom(mobRoom, mobRoomSize, false);
 
         Transform bossRoom = CreateRoom(
             interiorRoot,
             "BossRoom",
             new Vector3(0f, 0f, mobRoomSize.z + bossRoomSize.z + 8f),
             bossRoomSize,
-            new Color(0.26f, 0.15f, 0.15f, 1f));
+            new Color(0.24f, 0.12f, 0.28f, 1f));
 
         bossRoomPlayerSpawn = CreateMarker(bossRoom, "BossRoomPlayerSpawn", new Vector3(0f, 0.2f, -bossRoomSize.z * 0.32f));
         bossRoomEnemyAnchor = CreateMarker(bossRoom, "BossRoomEnemyAnchor", new Vector3(0f, 0.2f, bossRoomSize.z * 0.1f));
+        DecorateDungeonRoom(bossRoom, bossRoomSize, true);
     }
 
     Transform CreateRoom(Transform parent, string roomName, Vector3 localPosition, Vector3 size, Color color)
@@ -338,6 +340,45 @@ public class MushroomTyrantDungeon : MonoBehaviour
         CreateCube(roomRoot, "WallWest", new Vector3(-size.x * 0.5f, size.y * 0.5f - 0.5f, 0f), new Vector3(1f, size.y, size.z), color * 0.9f);
 
         return roomRoot;
+    }
+
+    void DecorateDungeonRoom(Transform roomRoot, Vector3 size, bool bossRoom)
+    {
+        Color runeColor = bossRoom
+            ? new Color(0.82f, 0.18f, 1f, 1f)
+            : new Color(0.24f, 0.82f, 0.54f, 1f);
+        Color crystalColor = bossRoom
+            ? new Color(1f, 0.36f, 0.18f, 1f)
+            : new Color(0.2f, 0.72f, 1f, 1f);
+
+        float zOffset = size.z * 0.24f;
+        for (int i = 0; i < 4; i++)
+        {
+            float x = i < 2 ? -size.x * 0.36f : size.x * 0.36f;
+            float z = (i % 2 == 0 ? -zOffset : zOffset);
+            GameObject pillar = CreateCube(roomRoot, $"Pillar_{i}", new Vector3(x, 1.45f, z), new Vector3(0.8f, 3.8f, 0.8f), new Color(0.18f, 0.14f, 0.19f, 1f));
+            DisableLocalCollider(pillar);
+        }
+
+        int runeCount = bossRoom ? 7 : 5;
+        for (int i = 0; i < runeCount; i++)
+        {
+            float t = runeCount <= 1 ? 0f : i / (float)(runeCount - 1);
+            Vector3 localPosition = new Vector3(Mathf.Lerp(-size.x * 0.25f, size.x * 0.25f, t), 0.04f, Mathf.Lerp(-size.z * 0.28f, size.z * 0.18f, t));
+            GameObject rune = CreateCube(roomRoot, $"FloorRune_{i}", localPosition, new Vector3(0.85f, 0.05f, 0.18f), runeColor);
+            rune.transform.localRotation = Quaternion.Euler(0f, 32f, 0f);
+            DisableLocalCollider(rune);
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            Vector3 localPosition = new Vector3((i - 1) * 2.2f, 0.65f, bossRoom ? size.z * 0.25f : size.z * 0.12f);
+            GameObject crystal = CreateCube(roomRoot, $"CrystalCluster_{i}", localPosition, new Vector3(0.45f, 1.3f, 0.45f), crystalColor);
+            crystal.transform.localRotation = Quaternion.Euler(0f, 45f + i * 23f, 0f);
+            DisableLocalCollider(crystal);
+        }
+
+        AddRoomLight(roomRoot, bossRoom ? "BossRoomLight" : "MobRoomLight", new Vector3(0f, 4.2f, 0f), bossRoom ? new Color(0.95f, 0.28f, 1f, 1f) : new Color(0.22f, 0.72f, 0.55f, 1f));
     }
 
     Transform CreateMarker(Transform parent, string markerName, Vector3 localPosition)
@@ -369,18 +410,62 @@ public class MushroomTyrantDungeon : MonoBehaviour
         if (renderer == null)
             return;
 
-        Material material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        Material material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
         material.color = color;
         renderer.sharedMaterial = material;
     }
 
+    void DisableLocalCollider(GameObject target)
+    {
+        Collider collider = target != null ? target.GetComponent<Collider>() : null;
+        if (collider != null)
+            Object.Destroy(collider);
+    }
+
+    void AddRoomLight(Transform parent, string objectName, Vector3 localPosition, Color color)
+    {
+        AddRoomLight(parent, objectName, localPosition, color, 18f, 1.35f);
+    }
+
+    void AddRoomLight(Transform parent, string objectName, Vector3 localPosition, Color color, float range, float intensity)
+    {
+        GameObject lightObject = new GameObject(objectName);
+        lightObject.transform.SetParent(parent, false);
+        lightObject.transform.localPosition = localPosition;
+        Light light = lightObject.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = color;
+        light.range = range;
+        light.intensity = intensity;
+    }
+
     void CreateFallbackEntranceVisual(Transform parent)
     {
-        GameObject arch = CreateCube(parent, "FallbackDungeonArch", new Vector3(0f, 2f, 0f), new Vector3(6f, 4f, 1f), new Color(0.26f, 0.20f, 0.16f, 1f));
-        Object.Destroy(arch.GetComponent<BoxCollider>());
+        GameObject arch = CreateCube(parent, "FallbackDungeonArch", new Vector3(0f, 2f, 0f), new Vector3(6.4f, 4.2f, 1.05f), new Color(0.22f, 0.14f, 0.24f, 1f));
+        DisableLocalCollider(arch);
 
-        GameObject opening = CreateCube(parent, "FallbackDungeonOpening", new Vector3(0f, 1.3f, 0.55f), new Vector3(2.8f, 2.8f, 0.35f), Color.black);
-        Object.Destroy(opening.GetComponent<BoxCollider>());
+        GameObject opening = CreateCube(parent, "FallbackDungeonOpening", new Vector3(0f, 1.3f, 0.58f), new Vector3(2.8f, 2.85f, 0.38f), new Color(0.015f, 0.005f, 0.03f, 1f));
+        DisableLocalCollider(opening);
+
+        GameObject lintel = CreateCube(parent, "FallbackDungeonLintel", new Vector3(0f, 3.95f, 0.05f), new Vector3(7f, 0.55f, 1.35f), new Color(0.38f, 0.24f, 0.4f, 1f));
+        DisableLocalCollider(lintel);
+
+        for (int i = 0; i < 2; i++)
+        {
+            float side = i == 0 ? -1f : 1f;
+            GameObject pillar = CreateCube(parent, $"FallbackDungeonPillar_{i}", new Vector3(side * 3.15f, 1.85f, 0.08f), new Vector3(0.72f, 3.6f, 1.25f), new Color(0.28f, 0.2f, 0.32f, 1f));
+            DisableLocalCollider(pillar);
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            float x = Mathf.Lerp(-2.25f, 2.25f, i / 3f);
+            GameObject rune = CreateCube(parent, $"FallbackDungeonRune_{i}", new Vector3(x, 3.28f, 0.68f), new Vector3(0.22f, 0.55f, 0.06f), new Color(0.8f, 0.18f, 1f, 1f));
+            rune.transform.localRotation = Quaternion.Euler(0f, 0f, 35f);
+            DisableLocalCollider(rune);
+        }
+
+        AddRoomLight(parent, "DungeonEntranceLight", new Vector3(0f, 2.7f, 1.4f), new Color(0.78f, 0.22f, 1f, 1f), 12f, 1.7f);
     }
 
     void CreateFallbackNpcVisual(Transform parent)
@@ -390,7 +475,7 @@ public class MushroomTyrantDungeon : MonoBehaviour
         body.transform.SetParent(parent, false);
         body.transform.localPosition = new Vector3(0f, 0.95f, 0f);
         body.transform.localScale = new Vector3(0.75f, 0.95f, 0.75f);
-        SetupRenderer(body, new Color(0.48f, 0.36f, 0.22f, 1f));
+        SetupRenderer(body, new Color(0.52f, 0.28f, 0.62f, 1f));
 
         TextMesh label = new GameObject("Label").AddComponent<TextMesh>();
         label.transform.SetParent(parent, false);

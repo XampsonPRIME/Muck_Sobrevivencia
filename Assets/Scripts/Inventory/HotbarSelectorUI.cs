@@ -5,7 +5,7 @@ public class HotbarSelectorUI : MonoBehaviour
     public RectTransform selector;
     public Hotbar hotbar;
 
-    public float offsetY = 28; // ajuste no Inspector para alinhar verticalmente
+    public float offsetY = 42f;
 
     void Update()
     {
@@ -14,12 +14,15 @@ public class HotbarSelectorUI : MonoBehaviour
 
         for (int i = 0; i < hotbar.slots.Length; i++)
         {
-            if (hotbar.slots[i].isSelected)
+            if (hotbar.slots[i] != null && hotbar.slots[i].isSelected)
             {
                 MoveSelector(hotbar.slots[i]);
+                selector.gameObject.SetActive(true);
                 return;
             }
         }
+
+        selector.gameObject.SetActive(false);
     }
 
     void MoveSelector(HotbarSlot slot)

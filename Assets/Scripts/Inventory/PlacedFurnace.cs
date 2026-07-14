@@ -1,24 +1,35 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 
 public class PlacedFurnace : MonoBehaviour, IPlayerInteractable
 {
     public float smeltDuration = 8f;
 
     [SerializeField] int rawIronCount;
+    [SerializeField] int rawMeatCount;
+    [SerializeField] int rawBoarMeatCount;
+    [SerializeField] int rawCowMeatCount;
     [SerializeField] int fuelCount;
     [SerializeField] int refinedIronCount;
+    [SerializeField] int cookedMeatCount;
+    [SerializeField] int cookedChickenMeatCount;
+    [SerializeField] int cookedBoarMeatCount;
+    [SerializeField] int cookedCowMeatCount;
     [SerializeField] float smeltTimer;
 
     public int RawIronCount => rawIronCount;
+    public int RawMeatCount => rawMeatCount + rawBoarMeatCount + rawCowMeatCount;
     public int FuelCount => fuelCount;
     public int RefinedIronCount => refinedIronCount;
+    public int CookedMeatCount => cookedMeatCount + cookedChickenMeatCount + cookedBoarMeatCount + cookedCowMeatCount;
+    public int GenericCookedMeatCount => cookedMeatCount;
+    public int CookedChickenMeatCount => cookedMeatCount + cookedChickenMeatCount;
+    public int CookedBoarMeatCount => cookedBoarMeatCount;
+    public int CookedCowMeatCount => cookedCowMeatCount;
     public float SmeltProgress => smeltDuration > 0f && IsSmelting ? Mathf.Clamp01(smeltTimer / smeltDuration) : 0f;
-    public bool IsSmelting => rawIronCount > 0 && fuelCount > 0;
+    public bool IsSmelting => fuelCount > 0 && (rawIronCount > 0 || rawMeatCount > 0 || rawBoarMeatCount > 0 || rawCowMeatCount > 0);
 
     void Update()
     {
@@ -33,9 +44,34 @@ public class PlacedFurnace : MonoBehaviour, IPlayerInteractable
             return;
 
         smeltTimer = 0f;
-        rawIronCount--;
         fuelCount--;
-        refinedIronCount++;
+
+        if (rawIronCount > 0)
+        {
+            rawIronCount--;
+            refinedIronCount++;
+            return;
+        }
+
+        if (rawMeatCount > 0)
+        {
+            rawMeatCount--;
+            cookedChickenMeatCount++;
+            return;
+        }
+
+        if (rawBoarMeatCount > 0)
+        {
+            rawBoarMeatCount--;
+            cookedBoarMeatCount++;
+            return;
+        }
+
+        if (rawCowMeatCount > 0)
+        {
+            rawCowMeatCount--;
+            cookedCowMeatCount++;
+        }
     }
 
     public bool Interact(PlayerInteraction playerInteraction)
@@ -43,7 +79,7 @@ public class PlacedFurnace : MonoBehaviour, IPlayerInteractable
         if (playerInteraction == null || playerInteraction.inventory == null)
             return false;
 
-        PlacedFurnaceUI ui = PlacedFurnaceUI.Instance ?? FindFirstObjectByType<PlacedFurnaceUI>();
+        PlacedFurnaceUI ui = PlacedFurnaceUI.Instance ?? SceneObjectCache.Find<PlacedFurnaceUI>(true);
         if (ui == null)
         {
             GameObject uiObject = new GameObject("FurnaceUI");
@@ -57,6 +93,35 @@ public class PlacedFurnace : MonoBehaviour, IPlayerInteractable
     public bool TryAddRawIron(Inventory inventory, Hotbar hotbar)
     {
         return TryMoveFromInventory(inventory, hotbar, IronItemRegistry.ItemName, ref rawIronCount);
+    }
+
+    public bool TryAddRawMeat(Inventory inventory, Hotbar hotbar, out string meatName)
+    {
+        meatName = "";
+
+        if (inventory == null || inventory.items == null)
+            return false;
+
+        for (int i = 0; i < inventory.items.Count; i++)
+        {
+            InventoryItem item = inventory.items[i];
+            if (item == null || string.IsNullOrWhiteSpace(item.itemName) || item.quantity <= 0)
+                continue;
+
+            if (!IsCookableMeatItem(item.itemName))
+                continue;
+
+            meatName = item.itemName;
+            if (string.Equals(item.itemName.Trim(), BoarMeatItemRegistry.ItemName, System.StringComparison.OrdinalIgnoreCase))
+                return TryMoveFromInventory(inventory, hotbar, item.itemName, ref rawBoarMeatCount);
+
+            if (string.Equals(item.itemName.Trim(), CowMeatItemRegistry.ItemName, System.StringComparison.OrdinalIgnoreCase))
+                return TryMoveFromInventory(inventory, hotbar, item.itemName, ref rawCowMeatCount);
+
+            return TryMoveFromInventory(inventory, hotbar, item.itemName, ref rawMeatCount);
+        }
+
+        return false;
     }
 
     public bool TryAddFuel(Inventory inventory, Hotbar hotbar, out string fuelName)
@@ -82,15 +147,47 @@ public class PlacedFurnace : MonoBehaviour, IPlayerInteractable
         return false;
     }
 
-    public bool TryCollectOutput(Inventory inventory)
+    public bool TryCollectRefinedIron(Inventory inventory)
     {
         if (inventory == null || refinedIronCount <= 0)
             return false;
 
         Item refinedIron = RefinedIronItemRegistry.GetOrCreate();
-        inventory.AddItem(refinedIron.itemName, refinedIronCount, refinedIron);
+        if (!inventory.AddItem(refinedIron.itemName, refinedIronCount, refinedIron))
+        {
+            MessageSystem.Instance?.ShowMessage("Inventario cheio");
+            return false;
+        }
+
         refinedIronCount = 0;
         return true;
+    }
+
+    public bool TryCollectCookedMeat(Inventory inventory)
+    {
+        if (inventory == null || CookedChickenMeatCount <= 0)
+            return false;
+
+        Item cookedChickenMeat = CookedChickenMeatItemRegistry.GetOrCreate();
+        if (!inventory.AddItem(cookedChickenMeat.itemName, CookedChickenMeatCount, cookedChickenMeat))
+        {
+            MessageSystem.Instance?.ShowMessage("Inventario cheio");
+            return false;
+        }
+
+        cookedMeatCount = 0;
+        cookedChickenMeatCount = 0;
+        return true;
+    }
+
+    public bool TryCollectCookedBoarMeat(Inventory inventory)
+    {
+        return TryCollectCookedItem(inventory, CookedBoarMeatItemRegistry.GetOrCreate(), ref cookedBoarMeatCount);
+    }
+
+    public bool TryCollectCookedCowMeat(Inventory inventory)
+    {
+        return TryCollectCookedItem(inventory, CookedCowMeatItemRegistry.GetOrCreate(), ref cookedCowMeatCount);
     }
 
     public static bool IsFuelItem(string itemName)
@@ -103,6 +200,17 @@ public class PlacedFurnace : MonoBehaviour, IPlayerInteractable
                string.Equals(trimmedName, "Carvao", System.StringComparison.OrdinalIgnoreCase) ||
                string.Equals(trimmedName, "Carvão", System.StringComparison.OrdinalIgnoreCase) ||
                trimmedName.StartsWith("Madeira", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsCookableMeatItem(string itemName)
+    {
+        if (string.IsNullOrWhiteSpace(itemName))
+            return false;
+
+        string trimmedName = itemName.Trim();
+        return string.Equals(trimmedName, RawChickenMeatItemRegistry.ItemName, System.StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, BoarMeatItemRegistry.ItemName, System.StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmedName, CowMeatItemRegistry.ItemName, System.StringComparison.OrdinalIgnoreCase);
     }
 
     bool TryMoveFromInventory(Inventory inventory, Hotbar hotbar, string itemName, ref int targetCount)
@@ -121,6 +229,21 @@ public class PlacedFurnace : MonoBehaviour, IPlayerInteractable
         targetCount++;
         return true;
     }
+
+    bool TryCollectCookedItem(Inventory inventory, Item cookedItem, ref int outputCount)
+    {
+        if (inventory == null || cookedItem == null || outputCount <= 0)
+            return false;
+
+        if (!inventory.AddItem(cookedItem.itemName, outputCount, cookedItem))
+        {
+            MessageSystem.Instance?.ShowMessage("Inventario cheio");
+            return false;
+        }
+
+        outputCount = 0;
+        return true;
+    }
 }
 
 public class PlacedFurnaceUI : MonoBehaviour
@@ -130,12 +253,20 @@ public class PlacedFurnaceUI : MonoBehaviour
     GameObject overlayObject;
     Image progressFill;
     TextMeshProUGUI rawCountText;
+    TextMeshProUGUI rawMeatCountText;
     TextMeshProUGUI fuelCountText;
     TextMeshProUGUI outputCountText;
+    TextMeshProUGUI cookedMeatOutputCountText;
+    TextMeshProUGUI cookedBoarMeatOutputCountText;
+    TextMeshProUGUI cookedCowMeatOutputCountText;
     TextMeshProUGUI statusText;
     Button addOreButton;
+    Button addMeatButton;
     Button addFuelButton;
     Button collectButton;
+    Button collectCookedMeatButton;
+    Button collectCookedBoarMeatButton;
+    Button collectCookedCowMeatButton;
     InputAction closeAction;
 
     PlacedFurnace currentFurnace;
@@ -196,7 +327,7 @@ public class PlacedFurnaceUI : MonoBehaviour
         if (furnace == null || inventory == null)
             return;
 
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
         BuildUi();
 
         currentFurnace = furnace;
@@ -223,13 +354,13 @@ public class PlacedFurnaceUI : MonoBehaviour
         GameState.LastUiCloseFrame = Time.frameCount;
         SetVisible(false);
 
-        if (currentPlayerMovement != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby)
+        if (currentPlayerMovement != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby && !GameState.IsWorldLoading)
             currentPlayerMovement.enabled = true;
 
-        if (currentPlayerInteraction != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby)
+        if (currentPlayerInteraction != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby && !GameState.IsWorldLoading)
             currentPlayerInteraction.enabled = true;
 
-        if (!GameState.IsPaused && !GameState.IsInventoryOpen && !GameState.IsInLobby)
+        if (!GameState.IsPaused && !GameState.IsInventoryOpen && !GameState.IsInLobby && !GameState.IsWorldLoading)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -243,6 +374,20 @@ public class PlacedFurnaceUI : MonoBehaviour
 
         if (!currentFurnace.TryAddRawIron(currentInventory, currentHotbar))
             MessageSystem.Instance?.ShowMessage("Voce precisa de Ferro Bruto.");
+
+        RefreshInventoryUi();
+        Refresh();
+    }
+
+    void AddMeat()
+    {
+        if (currentFurnace == null || currentInventory == null)
+            return;
+
+        if (!currentFurnace.TryAddRawMeat(currentInventory, currentHotbar, out string meatName))
+            MessageSystem.Instance?.ShowMessage("Voce precisa de carne crua para cozinhar.");
+        else
+            MessageSystem.Instance?.ShowMessage($"+1 carne na fornalha ({meatName})");
 
         RefreshInventoryUi();
         Refresh();
@@ -267,8 +412,44 @@ public class PlacedFurnaceUI : MonoBehaviour
         if (currentFurnace == null || currentInventory == null)
             return;
 
-        if (!currentFurnace.TryCollectOutput(currentInventory))
+        if (!currentFurnace.TryCollectRefinedIron(currentInventory))
             MessageSystem.Instance?.ShowMessage("Nada refinado ainda.");
+
+        RefreshInventoryUi();
+        Refresh();
+    }
+
+    void CollectCookedMeat()
+    {
+        if (currentFurnace == null || currentInventory == null)
+            return;
+
+        if (!currentFurnace.TryCollectCookedMeat(currentInventory))
+            MessageSystem.Instance?.ShowMessage("Nada de galinha cozida ainda.");
+
+        RefreshInventoryUi();
+        Refresh();
+    }
+
+    void CollectCookedBoarMeat()
+    {
+        if (currentFurnace == null || currentInventory == null)
+            return;
+
+        if (!currentFurnace.TryCollectCookedBoarMeat(currentInventory))
+            MessageSystem.Instance?.ShowMessage("Nada de javali cozido ainda.");
+
+        RefreshInventoryUi();
+        Refresh();
+    }
+
+    void CollectCookedCowMeat()
+    {
+        if (currentFurnace == null || currentInventory == null)
+            return;
+
+        if (!currentFurnace.TryCollectCookedCowMeat(currentInventory))
+            MessageSystem.Instance?.ShowMessage("Nada de vaca cozida ainda.");
 
         RefreshInventoryUi();
         Refresh();
@@ -280,18 +461,26 @@ public class PlacedFurnaceUI : MonoBehaviour
             return;
 
         rawCountText.text = currentFurnace.RawIronCount.ToString();
+        rawMeatCountText.text = currentFurnace.RawMeatCount.ToString();
         fuelCountText.text = currentFurnace.FuelCount.ToString();
         outputCountText.text = currentFurnace.RefinedIronCount.ToString();
+        cookedMeatOutputCountText.text = currentFurnace.CookedChickenMeatCount.ToString();
+        cookedBoarMeatOutputCountText.text = currentFurnace.CookedBoarMeatCount.ToString();
+        cookedCowMeatOutputCountText.text = currentFurnace.CookedCowMeatCount.ToString();
         progressFill.fillAmount = currentFurnace.SmeltProgress;
 
         addOreButton.interactable = currentInventory != null && currentInventory.GetItem(IronItemRegistry.ItemName) != null;
+        addMeatButton.interactable = HasCookableMeatInInventory();
         addFuelButton.interactable = HasFuelInInventory();
         collectButton.interactable = currentFurnace.RefinedIronCount > 0;
+        collectCookedMeatButton.interactable = currentFurnace.CookedChickenMeatCount > 0;
+        collectCookedBoarMeatButton.interactable = currentFurnace.CookedBoarMeatCount > 0;
+        collectCookedCowMeatButton.interactable = currentFurnace.CookedCowMeatCount > 0;
 
         if (currentFurnace.IsSmelting)
-            statusText.text = "Refinando Ferro Bruto...";
-        else if (currentFurnace.RawIronCount <= 0)
-            statusText.text = "Adicione Ferro Bruto.";
+            statusText.text = currentFurnace.RawIronCount > 0 ? "Refinando Ferro Bruto..." : "Cozinhando carne...";
+        else if (currentFurnace.RawIronCount <= 0 && currentFurnace.RawMeatCount <= 0)
+            statusText.text = "Adicione Ferro Bruto ou carne crua.";
         else if (currentFurnace.FuelCount <= 0)
             statusText.text = "Adicione combustivel.";
         else
@@ -307,6 +496,21 @@ public class PlacedFurnaceUI : MonoBehaviour
         {
             InventoryItem item = currentInventory.items[i];
             if (item != null && item.quantity > 0 && PlacedFurnace.IsFuelItem(item.itemName))
+                return true;
+        }
+
+        return false;
+    }
+
+    bool HasCookableMeatInInventory()
+    {
+        if (currentInventory == null || currentInventory.items == null)
+            return false;
+
+        for (int i = 0; i < currentInventory.items.Count; i++)
+        {
+            InventoryItem item = currentInventory.items[i];
+            if (item != null && item.quantity > 0 && PlacedFurnace.IsCookableMeatItem(item.itemName))
                 return true;
         }
 
@@ -333,9 +537,7 @@ public class PlacedFurnaceUI : MonoBehaviour
         canvas.sortingOrder = 60;
 
         CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.matchWidthOrHeight = 0.5f;
+        DisplaySettingsManager.ConfigureCanvasScaler(scaler);
 
         overlayObject = CreatePanel("FurnaceOverlay", canvasObject.transform, new Color(0f, 0f, 0f, 0.55f));
         Stretch(overlayObject, 0f);
@@ -344,7 +546,7 @@ public class PlacedFurnaceUI : MonoBehaviour
         RectTransform panelRect = panel.GetComponent<RectTransform>();
         panelRect.anchorMin = new Vector2(0.5f, 0.5f);
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-        panelRect.sizeDelta = new Vector2(760f, 360f);
+        panelRect.sizeDelta = new Vector2(1240f, 470f);
         panelRect.anchoredPosition = Vector2.zero;
 
         VerticalLayoutGroup panelLayout = panel.AddComponent<VerticalLayoutGroup>();
@@ -355,12 +557,12 @@ public class PlacedFurnaceUI : MonoBehaviour
         panelLayout.childForceExpandWidth = true;
         panelLayout.childForceExpandHeight = false;
 
-        TextMeshProUGUI title = CreateText("Title", panel.transform, 28, FontStyles.Bold, TextAlignmentOptions.Center, "FORNALHA");
-        SetLayoutHeight(title.gameObject, 42f);
+        TextMeshProUGUI title = CreateText("Title", panel.transform, 32, FontStyles.Bold, TextAlignmentOptions.Center, "FORNALHA");
+        SetLayoutHeight(title.gameObject, 48f);
 
         GameObject workRow = new GameObject("WorkRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         workRow.transform.SetParent(panel.transform, false);
-        SetLayoutHeight(workRow, 205f);
+        SetLayoutHeight(workRow, 270f);
         HorizontalLayoutGroup workLayout = workRow.GetComponent<HorizontalLayoutGroup>();
         workLayout.spacing = 12f;
         workLayout.childControlWidth = true;
@@ -368,9 +570,16 @@ public class PlacedFurnaceUI : MonoBehaviour
         workLayout.childForceExpandWidth = true;
 
         CreateStationSection(workRow.transform, "Minerio", IronItemRegistry.GetSprite(), "Ferro Bruto", out rawCountText, out addOreButton, AddOre);
+        CreateStationSection(workRow.transform, "Carne", RawChickenMeatItemRegistry.GetSprite(), "Carne crua", out rawMeatCountText, out addMeatButton, AddMeat);
         CreateStationSection(workRow.transform, "Calor", null, "Combustivel", out fuelCountText, out addFuelButton, AddFuel);
         CreateStationSection(workRow.transform, "Refinado", RefinedIronItemRegistry.GetSprite(), RefinedIronItemRegistry.ItemName, out outputCountText, out collectButton, CollectOutput);
         collectButton.GetComponentInChildren<TextMeshProUGUI>().text = "Coletar";
+        CreateStationSection(workRow.transform, "Galinha", CookedChickenMeatItemRegistry.GetSprite(), CookedChickenMeatItemRegistry.ShortDisplayName, out cookedMeatOutputCountText, out collectCookedMeatButton, CollectCookedMeat);
+        collectCookedMeatButton.GetComponentInChildren<TextMeshProUGUI>().text = "Coletar";
+        CreateStationSection(workRow.transform, "Javali", CookedBoarMeatItemRegistry.GetSprite(), CookedBoarMeatItemRegistry.ShortDisplayName, out cookedBoarMeatOutputCountText, out collectCookedBoarMeatButton, CollectCookedBoarMeat);
+        collectCookedBoarMeatButton.GetComponentInChildren<TextMeshProUGUI>().text = "Coletar";
+        CreateStationSection(workRow.transform, "Vaca", CookedCowMeatItemRegistry.GetSprite(), CookedCowMeatItemRegistry.ShortDisplayName, out cookedCowMeatOutputCountText, out collectCookedCowMeatButton, CollectCookedCowMeat);
+        collectCookedCowMeatButton.GetComponentInChildren<TextMeshProUGUI>().text = "Coletar";
 
         GameObject progressPanel = CreatePanel("ProgressPanel", panel.transform, new Color(0f, 0f, 0f, 0.24f));
         SetLayoutHeight(progressPanel, 48f);
@@ -400,17 +609,17 @@ public class PlacedFurnaceUI : MonoBehaviour
     {
         GameObject section = CreatePanel(title + "Section", parent, sectionColor);
         VerticalLayoutGroup layout = section.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(10, 10, 9, 10);
-        layout.spacing = 8f;
+        layout.padding = new RectOffset(10, 10, 10, 10);
+        layout.spacing = 10f;
         layout.childAlignment = TextAnchor.UpperCenter;
         layout.childControlWidth = true;
         layout.childForceExpandWidth = true;
 
-        TextMeshProUGUI titleText = CreateText("Header", section.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center, title);
-        SetLayoutHeight(titleText.gameObject, 28f);
+        TextMeshProUGUI titleText = CreateText("Header", section.transform, 20, FontStyles.Bold, TextAlignmentOptions.Center, title);
+        SetLayoutHeight(titleText.gameObject, 32f);
 
         GameObject slot = CreatePanel("Slot", section.transform, slotColor);
-        SetLayoutHeight(slot, 86f);
+        SetLayoutHeight(slot, 118f);
 
         if (icon != null)
         {
@@ -418,8 +627,8 @@ public class PlacedFurnaceUI : MonoBehaviour
             iconImage.sprite = icon;
             iconImage.preserveAspect = true;
             RectTransform iconRect = iconImage.GetComponent<RectTransform>();
-            iconRect.anchorMin = new Vector2(0.22f, 0.16f);
-            iconRect.anchorMax = new Vector2(0.78f, 0.8f);
+            iconRect.anchorMin = new Vector2(0.12f, 0.12f);
+            iconRect.anchorMax = new Vector2(0.88f, 0.88f);
             iconRect.offsetMin = Vector2.zero;
             iconRect.offsetMax = Vector2.zero;
         }
@@ -428,14 +637,14 @@ public class PlacedFurnaceUI : MonoBehaviour
             CreateFuelGlyph(slot.transform);
         }
 
-        countText = CreateText("Count", slot.transform, 18, FontStyles.Bold, TextAlignmentOptions.BottomRight, "0");
+        countText = CreateText("Count", slot.transform, 22, FontStyles.Bold, TextAlignmentOptions.BottomRight, "0");
         Stretch(countText.gameObject, 6f);
 
-        TextMeshProUGUI label = CreateText("ItemName", section.transform, 14, FontStyles.Normal, TextAlignmentOptions.Center, itemName);
-        SetLayoutHeight(label.gameObject, 24f);
+        TextMeshProUGUI label = CreateText("ItemName", section.transform, 16, FontStyles.Normal, TextAlignmentOptions.Center, itemName);
+        SetLayoutHeight(label.gameObject, 30f);
 
         button = CreateButton(section.transform, "Adicionar", onClick, buttonColor);
-        SetLayoutHeight(button.gameObject, 34f);
+        SetLayoutHeight(button.gameObject, 40f);
     }
 
     void CreateFuelGlyph(Transform parent)
@@ -530,18 +739,6 @@ public class PlacedFurnaceUI : MonoBehaviour
             overlayObject.SetActive(visible);
     }
 
-    void EnsureEventSystem()
-    {
-        EventSystem eventSystem = FindFirstObjectByType<EventSystem>();
-        if (eventSystem == null)
-        {
-            GameObject eventSystemObject = new GameObject("EventSystem", typeof(EventSystem));
-            eventSystem = eventSystemObject.GetComponent<EventSystem>();
-        }
-
-        if (eventSystem.GetComponent<InputSystemUIInputModule>() == null)
-            eventSystem.gameObject.AddComponent<InputSystemUIInputModule>();
-    }
 }
 
 public static class RefinedIronItemRegistry

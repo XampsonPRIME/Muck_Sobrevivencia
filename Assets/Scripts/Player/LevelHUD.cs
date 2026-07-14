@@ -3,6 +3,8 @@ using UnityEngine;
 
 public class LevelHUD : MonoBehaviour
 {
+    static readonly bool ShowGameplayLevelPanel = false;
+
     public Vector2 anchoredPosition = new Vector2(28f, -250f);
     public Vector2 size = new Vector2(320f, 70f);
 
@@ -13,6 +15,10 @@ public class LevelHUD : MonoBehaviour
     void Start()
     {
         ResolveProgression();
+        HideLevelPanel();
+        if (!ShowGameplayLevelPanel)
+            return;
+
         EnsureUI();
         Refresh();
     }
@@ -20,6 +26,11 @@ public class LevelHUD : MonoBehaviour
     void Update()
     {
         ResolveProgression();
+        if (!ShowGameplayLevelPanel)
+        {
+            HideLevelPanel();
+            return;
+        }
 
         EnsureUI();
         Refresh();
@@ -44,6 +55,12 @@ public class LevelHUD : MonoBehaviour
 
     void EnsureUI()
     {
+        if (!ShowGameplayLevelPanel)
+        {
+            HideLevelPanel();
+            return;
+        }
+
         Canvas canvas = SceneObjectCache.Find<Canvas>(gameObject.scene, true);
         if (canvas == null)
             return;
@@ -111,6 +128,9 @@ public class LevelHUD : MonoBehaviour
 
     public void Refresh()
     {
+        if (!ShowGameplayLevelPanel)
+            return;
+
         if (levelText == null)
             return;
 
@@ -126,5 +146,16 @@ public class LevelHUD : MonoBehaviour
             : "MAX";
 
         levelText.text = $"Nivel {progression.currentLevel}\n{xpLabel}";
+    }
+
+    void HideLevelPanel()
+    {
+        if (levelText != null)
+            levelText.gameObject.SetActive(false);
+
+        Canvas canvas = SceneObjectCache.Find<Canvas>(gameObject.scene, true);
+        Transform existingRoot = canvas != null ? canvas.transform.Find("LevelPanel") : null;
+        if (existingRoot != null && existingRoot.gameObject.activeSelf)
+            existingRoot.gameObject.SetActive(false);
     }
 }

@@ -178,9 +178,9 @@ MonoBehaviour:
   gravetoRespawnTime: 20
   pedraPrefab: {fileID: 4616667006717134316, guid: 27d9fb52f1ac842fd8f9bdbcb3c48648, type: 3}
   pedraDensity: 0.025
-  treeDensity: 0.4
+  treeDensity: 0.02
   mushroomDensity: 0.2
-  treeStep: 10
+  treeStep: 22
   rockSmallPrefab: {fileID: 3405259022623784667, guid: 852eccd64e4ad4346b2488f794f86db3, type: 3}
   rockMediumPrefab: {fileID: 3405259022623784667, guid: cba36c3ea0c294b4a869ac9fdb883aff, type: 3}
   rockLargePrefab: {fileID: 3405259022623784667, guid: 03bba6ec90c414698987408ab359341f, type: 3}

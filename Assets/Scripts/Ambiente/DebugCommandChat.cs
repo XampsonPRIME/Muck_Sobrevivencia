@@ -7,13 +7,19 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 public class DebugCommandChat : MonoBehaviour
 {
     const int MaxHistoryLines = 8;
+    const int MaxSubmittedCommandHistory = 50;
     const float SubmittedHistoryVisibleSeconds = 4f;
+    const int DebugUnarmedDamage = 1000;
+    const float MerchantTeleportDistance = 2.4f;
+    static readonly Vector3 VillageMerchantLocalPosition = new Vector3(23.2f, 1.65f, 63f);
+    static readonly Quaternion VillageMerchantFallbackRotation = Quaternion.Euler(0f, 90f, 0f);
+
+    static DebugCommandChat instance;
 
     Canvas canvas;
     GameObject panel;
@@ -25,7 +31,12 @@ public class DebugCommandChat : MonoBehaviour
     Inventory inventory;
     Hotbar hotbar;
     readonly List<string> history = new List<string>();
+    readonly List<string> submittedCommandHistory = new List<string>();
     readonly Dictionary<string, Item> runtimeItems = new Dictionary<string, Item>();
+    int submittedCommandHistoryCursor;
+    string submittedCommandDraft = string.Empty;
+    bool debugGodCombatModeActive;
+    int savedUnarmedDamage = -1;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -33,7 +44,7 @@ public class DebugCommandChat : MonoBehaviour
         if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
             return;
 
-        if (FindFirstObjectByType<DebugCommandChat>() != null)
+        if (instance != null || FindFirstObjectByType<DebugCommandChat>() != null)
             return;
 
         GameObject chatObject = new GameObject("DebugCommandChat");
@@ -41,10 +52,36 @@ public class DebugCommandChat : MonoBehaviour
         chatObject.AddComponent<DebugCommandChat>();
     }
 
+    public static void AddSystemMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        DebugCommandChat chat = instance != null ? instance : FindFirstObjectByType<DebugCommandChat>();
+        if (chat == null)
+            return;
+
+        chat.AddHistory(message);
+        chat.ShowHistoryBriefly();
+    }
+
     void Awake()
     {
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        instance = this;
         BuildUI();
         SetOpen(false);
+    }
+
+    void OnDestroy()
+    {
+        if (instance == this)
+            instance = null;
     }
 
     void Update()
@@ -66,16 +103,33 @@ public class DebugCommandChat : MonoBehaviour
             return;
         }
 
+        if (Keyboard.current.upArrowKey.wasPressedThisFrame)
+        {
+            ShowPreviousSubmittedCommand();
+            return;
+        }
+
+        if (Keyboard.current.downArrowKey.wasPressedThisFrame)
+        {
+            ShowNextSubmittedCommand();
+            return;
+        }
+
         if (Keyboard.current.enterKey.wasPressedThisFrame)
             SubmitInput();
     }
 
     bool CanOpenChat()
     {
-        return !GameState.IsPaused &&
+        return (Debug.isDebugBuild || Application.isEditor) &&
+               !GameState.IsPaused &&
                !GameState.IsInLobby &&
+               !GameState.IsWorldLoading &&
+               !GameState.IsPowerSelectionOpen &&
                !GameState.IsPlayerDead &&
                !GameState.IsInventoryOpen &&
+               !GameState.IsBestiaryOpen &&
+               !GameState.IsQuestJournalOpen &&
                !GameState.IsVendorOpen &&
                !GameState.IsCraftingOpen;
     }
@@ -102,6 +156,7 @@ public class DebugCommandChat : MonoBehaviour
                 inputRoot.SetActive(true);
             inputField.text = string.Empty;
             inputField.interactable = true;
+            ResetSubmittedCommandNavigation();
             inputField.ActivateInputField();
             EventSystem.current?.SetSelectedGameObject(inputField.gameObject);
             AddHistory("Digite /help para ver os comandos.");
@@ -117,7 +172,7 @@ public class DebugCommandChat : MonoBehaviour
             if (inputRoot != null)
                 inputRoot.SetActive(false);
 
-            if (!GameState.IsInventoryOpen && !GameState.IsVendorOpen && !GameState.IsCraftingOpen && !GameState.IsPaused)
+            if (!GameState.IsInventoryOpen && !GameState.IsBestiaryOpen && !GameState.IsQuestJournalOpen && !GameState.IsVendorOpen && !GameState.IsCraftingOpen && !GameState.IsPaused)
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
@@ -137,8 +192,72 @@ public class DebugCommandChat : MonoBehaviour
         }
 
         AddHistory($"> {command}");
+        AddSubmittedCommand(command);
         ExecuteCommand(command);
         CloseAfterSubmit();
+    }
+
+    void AddSubmittedCommand(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+            return;
+
+        if (submittedCommandHistory.Count > 0 && submittedCommandHistory[submittedCommandHistory.Count - 1] == command)
+        {
+            ResetSubmittedCommandNavigation();
+            return;
+        }
+
+        if (submittedCommandHistory.Count >= MaxSubmittedCommandHistory)
+            submittedCommandHistory.RemoveAt(0);
+
+        submittedCommandHistory.Add(command);
+        ResetSubmittedCommandNavigation();
+    }
+
+    void ShowPreviousSubmittedCommand()
+    {
+        if (inputField == null || submittedCommandHistory.Count == 0)
+            return;
+
+        if (submittedCommandHistoryCursor >= submittedCommandHistory.Count)
+            submittedCommandDraft = inputField.text;
+
+        submittedCommandHistoryCursor = Mathf.Max(0, submittedCommandHistoryCursor - 1);
+        SetInputTextFromHistory(submittedCommandHistory[submittedCommandHistoryCursor]);
+    }
+
+    void ShowNextSubmittedCommand()
+    {
+        if (inputField == null || submittedCommandHistory.Count == 0)
+            return;
+
+        if (submittedCommandHistoryCursor >= submittedCommandHistory.Count)
+            return;
+
+        submittedCommandHistoryCursor++;
+        if (submittedCommandHistoryCursor >= submittedCommandHistory.Count)
+            SetInputTextFromHistory(submittedCommandDraft);
+        else
+            SetInputTextFromHistory(submittedCommandHistory[submittedCommandHistoryCursor]);
+    }
+
+    void ResetSubmittedCommandNavigation()
+    {
+        submittedCommandHistoryCursor = submittedCommandHistory.Count;
+        submittedCommandDraft = string.Empty;
+    }
+
+    void SetInputTextFromHistory(string value)
+    {
+        if (inputField == null)
+            return;
+
+        inputField.text = value ?? string.Empty;
+        inputField.caretPosition = inputField.text.Length;
+        inputField.stringPosition = inputField.text.Length;
+        inputField.ActivateInputField();
+        EventSystem.current?.SetSelectedGameObject(inputField.gameObject);
     }
 
     void CloseAfterSubmit()
@@ -154,11 +273,28 @@ public class DebugCommandChat : MonoBehaviour
         if (inputRoot != null)
             inputRoot.SetActive(false);
 
-        if (!GameState.IsInventoryOpen && !GameState.IsVendorOpen && !GameState.IsCraftingOpen && !GameState.IsPaused)
+        if (!GameState.IsInventoryOpen && !GameState.IsBestiaryOpen && !GameState.IsQuestJournalOpen && !GameState.IsVendorOpen && !GameState.IsCraftingOpen && !GameState.IsPaused)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
+
+        if (hideHistoryRoutine != null)
+            StopCoroutine(hideHistoryRoutine);
+
+        hideHistoryRoutine = StartCoroutine(HideHistoryAfterDelay());
+    }
+
+    void ShowHistoryBriefly()
+    {
+        if (GameState.IsDebugChatOpen)
+            return;
+
+        if (panel != null)
+            panel.SetActive(true);
+
+        if (inputRoot != null)
+            inputRoot.SetActive(false);
 
         if (hideHistoryRoutine != null)
             StopCoroutine(hideHistoryRoutine);
@@ -212,6 +348,30 @@ public class DebugCommandChat : MonoBehaviour
             case "cheio":
                 HandleFull();
                 break;
+            case "level":
+            case "lvl":
+            case "nivel":
+            case "levelup":
+            case "upar":
+                HandleLevel(command, parts);
+                break;
+            case "xp":
+            case "exp":
+                HandleXp(parts);
+                break;
+            case "habilidades":
+            case "skills":
+            case "unlockskills":
+            case "liberarhabilidades":
+                HandleUnlockAbilities();
+                break;
+            case "god":
+            case "imortal":
+            case "deus":
+            case "testmode":
+            case "testecombate":
+                HandleGodCombatMode(parts);
+                break;
             case "time":
             case "hora":
                 HandleTime(parts);
@@ -219,6 +379,29 @@ public class DebugCommandChat : MonoBehaviour
             case "tp":
             case "teleport":
                 HandleTeleport(parts);
+                break;
+            case "comerciante":
+            case "mercador":
+            case "vendedor":
+            case "vendor":
+            case "loja":
+                TeleportToMerchant();
+                break;
+            case "spawn":
+            case "summon":
+                HandleSpawn(parts);
+                break;
+            case "golem":
+            case "golemterra":
+                SpawnEarthGolem();
+                break;
+            case "kaeltor":
+            case "bossdemo":
+                SpawnKaelTor();
+                break;
+            case "totem":
+            case "totemancestral":
+                SpawnAncestralTotem(AncestralTotemTier.Common);
                 break;
             case "clearinventory":
             case "clearinv":
@@ -243,7 +426,9 @@ public class DebugCommandChat : MonoBehaviour
     {
         AddHistory("/give Ferro Bruto 10 | /give Trigo 4 | /give Corda 1");
         AddHistory("/heal | /full | /time day | /time night | /time 14");
-        AddHistory("/tp village | /clearinventory | /pos | /close");
+        AddHistory("/level 15 | /levelup | /levelup 3 | /xp 1000 | /habilidades");
+        AddHistory("/god on | /god off  (imortal + soco 1000)");
+        AddHistory("/spawn golem | /spawn kaeltor | /spawn totem 1 | /golem | /tp village | /comerciante | /clearinventory | /pos | /close");
     }
 
     void HandleGive(string arguments)
@@ -318,6 +503,191 @@ public class DebugCommandChat : MonoBehaviour
         AddHistory("Vida, stamina, fome e sede restauradas.");
     }
 
+    void HandleLevel(string command, string[] parts)
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        PlayerProgression progression = player.GetComponent<PlayerProgression>() ??
+                                        player.gameObject.AddComponent<PlayerProgression>();
+
+        bool relativeLevelUp = command == "levelup" || command == "upar";
+        int targetLevel = progression.currentLevel + 1;
+
+        if (parts.Length >= 2)
+        {
+            if (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedValue))
+            {
+                AddHistory(relativeLevelUp ? "Uso: /levelup 3" : "Uso: /level 10");
+                return;
+            }
+
+            targetLevel = relativeLevelUp
+                ? progression.currentLevel + Mathf.Max(1, parsedValue)
+                : parsedValue;
+        }
+
+        targetLevel = Mathf.Clamp(targetLevel, 1, progression.maxLevel);
+        if (targetLevel <= progression.currentLevel)
+        {
+            AddHistory($"Nivel atual ja e {progression.currentLevel}.");
+            return;
+        }
+
+        int targetXp = progression.GetXpThresholdForLevel(targetLevel);
+        int xpToAdd = Mathf.Max(0, targetXp - progression.currentXp);
+        if (xpToAdd <= 0)
+            xpToAdd = 1;
+
+        progression.AddExperience(xpToAdd, "Debug");
+        player.currentHealth = player.maxHealth;
+        player.currentStamina = player.maxStamina;
+
+        AddHistory($"Nivel debug: {progression.currentLevel}.");
+        MessageSystem.Instance?.ShowMessage($"Nivel debug: {progression.currentLevel}.");
+    }
+
+    void HandleUnlockAbilities()
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        PlayerProgression progression = player.GetComponent<PlayerProgression>() ??
+                                        player.gameObject.AddComponent<PlayerProgression>();
+
+        int targetLevel = Mathf.Clamp(GetHighestAbilityUnlockLevel(player), 1, progression.maxLevel);
+        if (targetLevel <= progression.currentLevel)
+        {
+            AddHistory($"Habilidades ja liberadas no nivel {progression.currentLevel}.");
+            return;
+        }
+
+        int targetXp = progression.GetXpThresholdForLevel(targetLevel);
+        int xpToAdd = Mathf.Max(1, targetXp - progression.currentXp);
+        progression.AddExperience(xpToAdd, "Debug habilidades");
+        player.currentHealth = player.maxHealth;
+        player.currentStamina = player.maxStamina;
+
+        AddHistory($"Habilidades liberadas ate o nivel {progression.currentLevel}.");
+        MessageSystem.Instance?.ShowMessage($"Habilidades liberadas: nivel {progression.currentLevel}.");
+    }
+
+    int GetHighestAbilityUnlockLevel(PlayerMovement targetPlayer)
+    {
+        BearerPowerService powerService = targetPlayer != null ? targetPlayer.GetComponent<BearerPowerService>() : null;
+        BearerPowerDefinition currentDefinition = powerService != null ? powerService.CurrentDefinition : null;
+        if (currentDefinition != null)
+            return GetHighestAbilityUnlockLevel(currentDefinition);
+
+        int highest = 1;
+        IReadOnlyList<BearerPowerDefinition> definitions = BearerPowerCatalog.All;
+        for (int i = 0; i < definitions.Count; i++)
+            highest = Mathf.Max(highest, GetHighestAbilityUnlockLevel(definitions[i]));
+
+        return highest;
+    }
+
+    int GetHighestAbilityUnlockLevel(BearerPowerDefinition definition)
+    {
+        if (definition?.abilities == null)
+            return 1;
+
+        int highest = 1;
+        for (int i = 0; i < definition.abilities.Count; i++)
+        {
+            BearerPowerAbilityDefinition ability = definition.abilities[i];
+            if (ability != null)
+                highest = Mathf.Max(highest, ability.unlockLevel);
+        }
+
+        return highest;
+    }
+
+    void HandleXp(string[] parts)
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        if (parts.Length < 2 || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int amount))
+        {
+            AddHistory("Uso: /xp 1000");
+            return;
+        }
+
+        PlayerProgression progression = player.GetComponent<PlayerProgression>() ??
+                                        player.gameObject.AddComponent<PlayerProgression>();
+        amount = Mathf.Max(1, amount);
+        progression.AddExperience(amount, "Debug");
+        AddHistory($"+{amount} XP debug. Nivel {progression.currentLevel}.");
+    }
+
+    void HandleGodCombatMode(string[] parts)
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        PlayerInteraction playerInteraction = player.GetComponent<PlayerInteraction>();
+        if (playerInteraction == null)
+        {
+            AddHistory("Interacao do player nao encontrada.");
+            return;
+        }
+
+        bool enable = !debugGodCombatModeActive;
+        if (parts.Length >= 2)
+        {
+            string value = Normalize(parts[1]);
+            if (value == "on" || value == "1" || value == "true" || value == "ligar" || value == "sim")
+                enable = true;
+            else if (value == "off" || value == "0" || value == "false" || value == "desligar" || value == "nao")
+                enable = false;
+        }
+
+        if (enable)
+        {
+            if (!debugGodCombatModeActive || savedUnarmedDamage < 0)
+                savedUnarmedDamage = playerInteraction.unarmedDamage;
+
+            debugGodCombatModeActive = true;
+            player.debugImmortal = true;
+            playerInteraction.unarmedDamage = DebugUnarmedDamage;
+            player.currentHealth = player.maxHealth;
+
+            AddHistory("Modo teste ligado: imortalidade + soco 1000.");
+            MessageSystem.Instance?.ShowMessage("Modo teste ligado: imortal + soco 1000.");
+            return;
+        }
+
+        debugGodCombatModeActive = false;
+        player.debugImmortal = false;
+        if (savedUnarmedDamage >= 0)
+            playerInteraction.unarmedDamage = savedUnarmedDamage;
+
+        savedUnarmedDamage = -1;
+        AddHistory("Modo teste desligado.");
+        MessageSystem.Instance?.ShowMessage("Modo teste desligado.");
+    }
+
     void HandleTime(string[] parts)
     {
         DayNightCycle cycle = DayNightCycle.Instance ?? FindFirstObjectByType<DayNightCycle>();
@@ -363,11 +733,17 @@ public class DebugCommandChat : MonoBehaviour
 
         if (parts.Length < 2)
         {
-            AddHistory("Uso: /tp village");
+            AddHistory("Uso: /tp village ou /tp comerciante");
             return;
         }
 
         string destination = Normalize(parts[1]);
+        if (IsMerchantDestination(destination))
+        {
+            TeleportToMerchant();
+            return;
+        }
+
         if (destination != "village" && destination != "vila")
         {
             AddHistory($"Destino nao conhecido: {parts[1]}");
@@ -389,6 +765,383 @@ public class DebugCommandChat : MonoBehaviour
         }
 
         AddHistory("Teleportado para a vila.");
+    }
+
+    bool IsMerchantDestination(string destination)
+    {
+        return destination == "comerciante" ||
+               destination == "mercador" ||
+               destination == "vendedor" ||
+               destination == "vendor" ||
+               destination == "loja";
+    }
+
+    void TeleportToMerchant()
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        VillageCraftingSetup village = FindFirstObjectByType<VillageCraftingSetup>();
+        if (village != null)
+            village.RequestGroundAlign();
+
+        Transform target = FindMerchantTarget();
+        if (target != null)
+        {
+            if (!TryTeleportNearTarget(target, MerchantTeleportDistance, true, out bool usedAirFallback))
+            {
+                AddHistory("Nao consegui encontrar um ponto perto do comerciante.");
+                return;
+            }
+
+            AddHistory(usedAirFallback
+                ? "Teleportado para cima do comerciante; aguarde o terreno carregar."
+                : "Teleportado para o comerciante.");
+            if (village != null)
+                village.RequestGroundAlign();
+            MessageSystem.Instance?.ShowMessage("Teleportado para o comerciante.");
+            return;
+        }
+
+        if (TryGetMerchantFallbackPose(out Vector3 fallbackPosition, out Quaternion fallbackRotation))
+        {
+            if (!TryTeleportNearPosition(fallbackPosition, fallbackRotation, MerchantTeleportDistance, true, out bool usedAirFallback))
+            {
+                AddHistory("Nao consegui encontrar um ponto perto do comerciante.");
+                return;
+            }
+
+            AddHistory("Teleportado para a posicao do comerciante da vila.");
+            if (usedAirFallback)
+                AddHistory("Aguarde o terreno carregar ao redor da vila.");
+            if (village != null)
+                village.RequestGroundAlign();
+            MessageSystem.Instance?.ShowMessage("Teleportado para o comerciante.");
+            return;
+        }
+
+        AddHistory("Comerciante nao encontrado nessa cena.");
+    }
+
+    bool TryTeleportNearTarget(Transform target, float distance, bool allowAirFallback, out bool usedAirFallback)
+    {
+        usedAirFallback = false;
+        if (target == null || player == null)
+            return false;
+
+        return TryTeleportNearPosition(target.position, target.rotation, distance, allowAirFallback, out usedAirFallback);
+    }
+
+    bool TryTeleportNearPosition(Vector3 targetPosition, Quaternion targetRotation, float distance, bool allowAirFallback, out bool usedAirFallback)
+    {
+        usedAirFallback = false;
+        if (player == null)
+            return false;
+
+        Vector3 forward = FlattenDirection(targetRotation * Vector3.forward, Vector3.forward);
+        Vector3 right = FlattenDirection(targetRotation * Vector3.right, Vector3.right);
+
+        Vector3[] offsets =
+        {
+            forward * distance,
+            right * distance,
+            -right * distance,
+            -forward * distance,
+            (forward + right).normalized * distance,
+            (forward - right).normalized * distance,
+            (-forward + right).normalized * distance,
+            (-forward - right).normalized * distance
+        };
+
+        for (int i = 0; i < offsets.Length; i++)
+        {
+            Vector3 desiredPosition = targetPosition + offsets[i];
+            Vector3 lookDirection = targetPosition - desiredPosition;
+            lookDirection.y = 0f;
+            Quaternion rotation = lookDirection.sqrMagnitude > 0.001f
+                ? Quaternion.LookRotation(lookDirection.normalized, Vector3.up)
+                : player.transform.rotation;
+
+            if (TryResolveTeleportGround(desiredPosition, out Vector3 groundedPosition))
+            {
+                player.TeleportExact(groundedPosition, rotation);
+                return true;
+            }
+        }
+
+        if (!allowAirFallback)
+            return false;
+
+        Vector3 airPosition = targetPosition + forward * distance;
+        airPosition.y = Mathf.Max(airPosition.y + 18f, DemoWorldProgression.FreshSpawnHeight);
+        Vector3 airLookDirection = targetPosition - airPosition;
+        airLookDirection.y = 0f;
+        Quaternion airRotation = airLookDirection.sqrMagnitude > 0.001f
+            ? Quaternion.LookRotation(airLookDirection.normalized, Vector3.up)
+            : player.transform.rotation;
+
+        player.TeleportExact(airPosition, airRotation);
+        usedAirFallback = true;
+        return true;
+    }
+
+    bool TryResolveTeleportGround(Vector3 desiredPosition, out Vector3 groundedPosition)
+    {
+        Vector3 rayOrigin = desiredPosition + Vector3.up * 80f;
+        RaycastHit[] hits = Physics.RaycastAll(rayOrigin, Vector3.down, 180f, ~0, QueryTriggerInteraction.Ignore);
+        groundedPosition = desiredPosition;
+
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        bool foundFallback = false;
+        Vector3 fallbackGround = desiredPosition;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit hit = hits[i];
+            Collider collider = hit.collider;
+            if (collider == null || hit.normal.y < 0.35f)
+                continue;
+
+            if (IsBlockedTeleportSurface(collider))
+                continue;
+
+            Vector3 candidate = hit.point + Vector3.up * GetPlayerGroundLift();
+            if (collider.GetComponentInParent<TerrainChunk>() != null ||
+                collider.GetComponentInParent<ProceduralTerrain>() != null)
+            {
+                groundedPosition = candidate;
+                return true;
+            }
+
+            if (!foundFallback)
+            {
+                foundFallback = true;
+                fallbackGround = candidate;
+            }
+        }
+
+        if (foundFallback)
+        {
+            groundedPosition = fallbackGround;
+            return true;
+        }
+
+        return false;
+    }
+
+    bool IsBlockedTeleportSurface(Collider collider)
+    {
+        return collider.GetComponentInParent<PlayerMovement>() != null ||
+               collider.GetComponentInParent<RemotePlayerReplica>() != null ||
+               collider.GetComponentInParent<VendorShop>() != null ||
+               collider.GetComponentInParent<CraftingNpc>() != null ||
+               collider.GetComponentInParent<VillageChest>() != null ||
+               collider.GetComponentInParent<CraftingBench>() != null ||
+               collider.GetComponentInParent<DistantMountains>() != null ||
+               collider.GetComponentInParent<AncestralTotem>() != null ||
+               collider.GetComponentInParent<EarthGolem>() != null ||
+               collider.GetComponentInParent<WildBoar>() != null ||
+               collider.GetComponentInParent<WildChicken>() != null ||
+               collider.GetComponentInParent<Cow>() != null ||
+               collider.GetComponentInParent<MiniKrug>() != null ||
+               collider.GetComponentInParent<BossEnemy>() != null ||
+               collider.GetComponentInParent<KaelTorGuardian>() != null;
+    }
+
+    float GetPlayerGroundLift()
+    {
+        CharacterController controller = player != null ? player.GetComponent<CharacterController>() : null;
+        if (controller == null)
+            return 1.08f;
+
+        float bottomOffset = controller.center.y - controller.height * 0.5f;
+        return Mathf.Max(player.spawnGroundPadding, -bottomOffset + player.spawnGroundPadding);
+    }
+
+    Vector3 FlattenDirection(Vector3 direction, Vector3 fallback)
+    {
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.001f)
+            return direction.normalized;
+
+        fallback.y = 0f;
+        return fallback.sqrMagnitude > 0.001f ? fallback.normalized : Vector3.forward;
+    }
+
+    void HandleSpawn(string[] parts)
+    {
+        if (parts.Length < 2)
+        {
+            AddHistory("Uso: /spawn golem");
+            return;
+        }
+
+        string target = Normalize(parts[1]);
+        if (target == "golem" || target == "golemterra" || target == "golem de terra")
+        {
+            SpawnEarthGolem();
+            return;
+        }
+
+        if (target == "kaeltor" || target == "kael tor" || target == "bossdemo" || target == "boss demo")
+        {
+            SpawnKaelTor();
+            return;
+        }
+
+        if (target == "totem" || target == "totemancestral" || target == "totem ancestral")
+        {
+            SpawnAncestralTotem(ParseTotemTier(parts));
+            return;
+        }
+
+        AddHistory($"Spawn desconhecido: {parts[1]}");
+    }
+
+    AncestralTotemTier ParseTotemTier(string[] parts)
+    {
+        if (parts.Length < 3)
+            return AncestralTotemTier.Common;
+
+        string tierValue = Normalize(parts[2]);
+        if (tierValue == "3" || tierValue == "lendario" || tierValue == "legendary")
+            return AncestralTotemTier.Legendary;
+
+        if (tierValue == "2" || tierValue == "raro" || tierValue == "rare")
+            return AncestralTotemTier.Rare;
+
+        return AncestralTotemTier.Common;
+    }
+
+    void SpawnEarthGolem()
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        Vector3 forward = player.transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+            forward = Vector3.forward;
+
+        Vector3 desiredPosition = player.transform.position + forward.normalized * 7f;
+        Vector3 spawnPosition = ResolveGroundedSpawnPosition(desiredPosition);
+
+        GameObject golemObject = new GameObject("Golem de Terra Debug");
+        golemObject.transform.SetPositionAndRotation(spawnPosition, Quaternion.LookRotation(-forward.normalized, Vector3.up));
+
+        EarthGolem golem = golemObject.AddComponent<EarthGolem>();
+        golem.patrolRadius = 6f;
+        golem.SetSpawnData(null, spawnPosition);
+        LanNetworkEntity.Ensure(golem, $"DebugEarthGolem|{DateTime.UtcNow.Ticks}");
+
+        AddHistory("Golem de Terra spawnado.");
+        MessageSystem.Instance?.ShowMessage("Golem de Terra spawnado.");
+    }
+
+    void SpawnKaelTor()
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        Vector3 forward = player.transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+            forward = Vector3.forward;
+
+        if (!KaelTorSpawnUtility.TryFindArenaSpawnPosition(player, 24f, out Vector3 spawnPosition))
+        {
+            AddHistory("Nao encontrei chao valido para spawnar Kael'Tor perto do player.");
+            MessageSystem.Instance?.ShowMessage("Sem chao valido para Kael'Tor.");
+            return;
+        }
+
+        KaelTorArenaBuilder.Build(spawnPosition);
+
+        GameObject bossObject = new GameObject("Kael'Tor Debug");
+        bossObject.transform.SetPositionAndRotation(spawnPosition + Vector3.up * 0.05f, Quaternion.LookRotation(-forward.normalized, Vector3.up));
+        bossObject.AddComponent<KaelTorGuardian>();
+
+        AddHistory("Kael'Tor spawnado.");
+        MessageSystem.Instance?.ShowMessage("Kael'Tor spawnado.");
+    }
+
+    void SpawnAncestralTotem(AncestralTotemTier tier)
+    {
+        ResolveReferences();
+
+        if (player == null)
+        {
+            AddHistory("Player nao encontrado.");
+            return;
+        }
+
+        Vector3 forward = player.transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+            forward = Vector3.forward;
+
+        Vector3 desiredPosition = player.transform.position + forward.normalized * 6f;
+        Vector3 spawnPosition = ResolveGroundedSpawnPosition(desiredPosition);
+
+        GameObject totemObject = new GameObject($"Totem Ancestral Debug {tier}");
+        totemObject.transform.SetPositionAndRotation(spawnPosition, Quaternion.LookRotation(-forward.normalized, Vector3.up));
+
+        AncestralTotem totem = totemObject.AddComponent<AncestralTotem>();
+        totem.Configure(tier);
+
+        AddHistory($"Totem Ancestral {tier} spawnado.");
+        MessageSystem.Instance?.ShowMessage($"Totem Ancestral {tier} spawnado.");
+    }
+
+    Vector3 ResolveGroundedSpawnPosition(Vector3 desiredPosition)
+    {
+        Vector3 rayOrigin = desiredPosition + Vector3.up * 24f;
+        RaycastHit[] hits = Physics.RaycastAll(rayOrigin, Vector3.down, 72f, ~0, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0)
+            return desiredPosition;
+
+        Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider collider = hits[i].collider;
+            if (collider == null || hits[i].normal.y < 0.35f)
+                continue;
+
+            if (collider.GetComponentInParent<PlayerMovement>() != null ||
+                collider.GetComponentInParent<RemotePlayerReplica>() != null ||
+                collider.GetComponentInParent<AncestralTotem>() != null ||
+                collider.GetComponentInParent<EarthGolem>() != null ||
+                collider.GetComponentInParent<WildBoar>() != null ||
+                collider.GetComponentInParent<WildChicken>() != null ||
+                collider.GetComponentInParent<Cow>() != null ||
+                collider.GetComponentInParent<MiniKrug>() != null ||
+                collider.GetComponentInParent<BossEnemy>() != null ||
+                collider.GetComponentInParent<KaelTorGuardian>() != null)
+                continue;
+
+            return hits[i].point;
+        }
+
+        return desiredPosition;
     }
 
     void HandleClearInventory()
@@ -447,6 +1200,76 @@ public class DebugCommandChat : MonoBehaviour
             case "corda":
             case "rope":
                 return RopeItemRegistry.GetOrCreate();
+            case "arco":
+            case "arco simples":
+            case "bow":
+            case "simple bow":
+                return SimpleBowItemRegistry.GetOrCreate();
+            case "pena":
+            case "feather":
+                return FeatherItemRegistry.GetOrCreate();
+            case "carne crua":
+            case "raw meat":
+            case "raw chicken":
+                return RawChickenMeatItemRegistry.GetOrCreate();
+            case "carne de javali":
+            case "boar meat":
+                return BoarMeatItemRegistry.GetOrCreate();
+            case "carne de vaca":
+            case "cow meat":
+            case "beef":
+                return CowMeatItemRegistry.GetOrCreate();
+            case "carne de galinha cozida":
+            case "carne cozida de galinha":
+            case "cooked chicken meat":
+            case "chicken cooked meat":
+                return CookedChickenMeatItemRegistry.GetOrCreate();
+            case "carne de javali cozida":
+            case "carne cozida de javali":
+            case "cooked boar meat":
+            case "boar cooked meat":
+                return CookedBoarMeatItemRegistry.GetOrCreate();
+            case "carne de vaca cozida":
+            case "carne cozida de vaca":
+            case "cooked cow meat":
+            case "cow cooked meat":
+            case "cooked beef":
+                return CookedCowMeatItemRegistry.GetOrCreate();
+            case "carne cozida":
+            case "cooked meat":
+            case "cozida":
+                return CookedMeatItemRegistry.GetOrCreate();
+            case "flecha":
+            case "flechas":
+            case "arrow":
+            case "arrows":
+                return ArrowItemRegistry.GetOrCreate();
+            case "fragmento de pedra":
+            case "fragmentos de pedra":
+            case "stone fragment":
+            case "stone fragments":
+                return StoneFragmentItemRegistry.GetOrCreate();
+            case "musgo resiliente":
+            case "moss":
+                return ResilientMossItemRegistry.GetOrCreate();
+            case "nucleo de terra":
+            case "nucleo":
+            case "earth core":
+                return EarthCoreItemRegistry.GetOrCreate();
+            case "nucleo ancestral":
+            case "ancestral core":
+                return AncestralCoreItemRegistry.GetOrCreate();
+            case "fragmento do primeiro artefato":
+            case "fragmento artefato":
+            case "artifact fragment":
+                return FirstArtifactFragmentItemRegistry.GetOrCreate();
+            case "trofeu de kaeltor":
+            case "trofeu kaeltor":
+            case "kaeltor trophy":
+                return KaelTorTrophyItemRegistry.GetOrCreate();
+            case "primeiro artefato":
+            case "first artifact":
+                return FirstArtifactItemRegistry.GetOrCreate();
             case "machado":
             case "axe":
                 return LoadResourceItem("VendorItems/Axe") ?? LoadResourceItem("Weapons/Axe") ?? GetRuntimeItem("Machado", ItemType.Tool, ToolType.Axe, 2);
@@ -460,6 +1283,10 @@ public class DebugCommandChat : MonoBehaviour
             case "pedra":
             case "pedras":
                 return GetRuntimeItem("Pedras", ItemType.Resource, ToolType.None, 0);
+            case "madeira de carvalho":
+            case "carvalho":
+            case "oak wood":
+                return OakWoodItemRegistry.GetOrCreate();
             case "madeira":
             case "madeiras":
                 return GetRuntimeItem("Madeira", ItemType.Resource, ToolType.None, 0);
@@ -567,6 +1394,61 @@ public class DebugCommandChat : MonoBehaviour
         return benchComponent != null ? benchComponent.transform : null;
     }
 
+    Transform FindMerchantTarget()
+    {
+        VillageCraftingSetup village = FindFirstObjectByType<VillageCraftingSetup>();
+        if (village != null)
+        {
+            Transform villageVendor = village.transform.Find("VillageVendor");
+            if (villageVendor != null)
+                return villageVendor;
+        }
+
+        VendorShop[] vendors = FindObjectsByType<VendorShop>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        Transform fallback = null;
+        for (int i = 0; i < vendors.Length; i++)
+        {
+            VendorShop vendor = vendors[i];
+            if (vendor == null)
+                continue;
+
+            Transform vendorTransform = vendor.transform;
+            if (fallback == null)
+                fallback = vendorTransform;
+
+            string objectName = Normalize(vendorTransform.name);
+            string vendorName = Normalize(vendor.vendorName);
+            if (objectName.Contains("villagevendor") ||
+                objectName.Contains("merchant") ||
+                objectName.Contains("mercador") ||
+                objectName.Contains("comerciante") ||
+                vendorName.Contains("mercador") ||
+                vendorName.Contains("comerciante"))
+                return vendorTransform;
+        }
+
+        GameObject namedVendor = GameObject.Find("VillageVendor");
+        if (namedVendor != null)
+            return namedVendor.transform;
+
+        return fallback;
+    }
+
+    bool TryGetMerchantFallbackPose(out Vector3 position, out Quaternion rotation)
+    {
+        GameObject villageRoot = GameObject.Find("Village");
+        if (villageRoot != null)
+        {
+            position = villageRoot.transform.TransformPoint(VillageMerchantLocalPosition);
+            rotation = villageRoot.transform.rotation * VillageMerchantFallbackRotation;
+            return true;
+        }
+
+        position = DemoWorldProgression.ResolveVillagePosition() + VillageMerchantLocalPosition;
+        rotation = VillageMerchantFallbackRotation;
+        return true;
+    }
+
     void ResolveReferences()
     {
         if (player == null)
@@ -638,7 +1520,7 @@ public class DebugCommandChat : MonoBehaviour
 
     void BuildUI()
     {
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
 
         GameObject canvasObject = new GameObject("DebugCommandChatCanvas");
         canvasObject.transform.SetParent(transform, false);
@@ -732,16 +1614,4 @@ public class DebugCommandChat : MonoBehaviour
         return label;
     }
 
-    void EnsureEventSystem()
-    {
-        EventSystem eventSystem = EventSystem.current;
-        if (eventSystem == null)
-        {
-            GameObject eventSystemObject = new GameObject("EventSystem");
-            eventSystem = eventSystemObject.AddComponent<EventSystem>();
-        }
-
-        if (eventSystem.GetComponent<InputSystemUIInputModule>() == null)
-            eventSystem.gameObject.AddComponent<InputSystemUIInputModule>();
-    }
 }

@@ -97,8 +97,8 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 1000
-  field of view: 60
+  far clip plane: 420
+  field of view: 72
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -109,8 +109,8 @@ Camera:
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
   m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
+  m_HDR: 0
+  m_AllowMSAA: 0
   m_AllowDynamicResolution: 0
   m_ForceIntoRT: 0
   m_OcclusionCulling: 1
@@ -147,7 +147,7 @@ MonoBehaviour:
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 1
+  m_RenderPostProcessing: 0
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
@@ -259,12 +259,11 @@ Transform:
   m_GameObject: {fileID: 7853121101900016851}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 100, y: 20, z: 100}
+  m_LocalPosition: {x: 900, y: 20, z: -650}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8010306353902048352}
-  - {fileID: 3381149181386814260}
   - {fileID: 7507991917159962838}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -390,31 +389,3 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &3381149181386814260
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8401812318578981924}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 22c282f927b80074fbfe8d5f8a165cc4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerInteraction
-  interactDistance: 4
-  inventory: {fileID: 0}
-  hotbar: {fileID: 0}
-  useTime: 1.5
-  hitRate: 0.5
-  currentTool: 0
-  toolDamage: 1
-  handPoint: {fileID: 695384276088008089}
-  axePrefab: {fileID: 8955917039299750008, guid: 969b4ee4c144a4a04b96afdce21c299b, type: 3}
-  pickaxePrefab: {fileID: 8955917039299750008, guid: c4d2d0336d4204359b964dd972eae7b2, type: 3}
-  bottlePrefab: {fileID: 100100000000000105, guid: c5ef9170f2e64af1b731d24f95fd2910, type: 3}
-  silverAxePrefab: {fileID: 8955917039299750008, guid: d215fcaf207af4183bc25052fa77702c, type: 3}
-  silverPickaxePrefab: {fileID: 8955917039299750008, guid: 1c3e4197aa9254fd9a31fcb90da93413, type: 3}
-  startWithAxe: 1
-  startWithPickaxe: 1
-  startWithBottle: 1

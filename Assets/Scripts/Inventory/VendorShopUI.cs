@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 public class VendorShopUI : MonoBehaviour
@@ -74,7 +72,7 @@ public class VendorShopUI : MonoBehaviour
             return;
         }
 
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
         BuildUi();
         SetVisible(false);
     }
@@ -128,13 +126,13 @@ public class VendorShopUI : MonoBehaviour
         GameState.LastUiCloseFrame = Time.frameCount;
         SetVisible(false);
 
-        if (currentPlayerMovement != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby)
+        if (currentPlayerMovement != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby && !GameState.IsWorldLoading)
             currentPlayerMovement.enabled = true;
 
-        if (currentPlayerInteraction != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby)
+        if (currentPlayerInteraction != null && !GameState.IsPlayerDead && !GameState.IsPaused && !GameState.IsInLobby && !GameState.IsWorldLoading)
             currentPlayerInteraction.enabled = true;
 
-        if (!GameState.IsPaused && !GameState.IsInventoryOpen && !GameState.IsInLobby)
+        if (!GameState.IsPaused && !GameState.IsInventoryOpen && !GameState.IsInLobby && !GameState.IsWorldLoading)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -153,7 +151,7 @@ public class VendorShopUI : MonoBehaviour
         RebuildBuyList();
         RebuildSellList();
 
-        InventoryUI inventoryUi = FindFirstObjectByType<InventoryUI>();
+        InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(true);
         if (inventoryUi != null)
             inventoryUi.Refresh();
 
@@ -292,7 +290,7 @@ public class VendorShopUI : MonoBehaviour
         panelRect.anchorMin = new Vector2(0.5f, 0.5f);
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.sizeDelta = new Vector2(1120f, 700f);
+        panelRect.sizeDelta = new Vector2(1260f, 760f);
         panelRect.anchoredPosition = Vector2.zero;
 
         // 🔥 LAYOUT PRINCIPAL
@@ -324,7 +322,7 @@ public class VendorShopUI : MonoBehaviour
         columnsLayout.childForceExpandHeight = true;
 
         LayoutElement columnsLayoutElement = columns.AddComponent<LayoutElement>();
-        columnsLayoutElement.preferredHeight = 500f;
+        columnsLayoutElement.preferredHeight = 560f;
         columnsLayoutElement.flexibleHeight = 1f;
 
         buyContent = CreateShopColumn(columns.transform, "Comprar");
@@ -385,10 +383,10 @@ public class VendorShopUI : MonoBehaviour
 
         LayoutElement scrollLayout = scrollObject.AddComponent<LayoutElement>();
         scrollLayout.flexibleHeight = 1f;
-        scrollLayout.preferredHeight = 420f;
+        scrollLayout.preferredHeight = 500f;
 
         RectTransform scrollRect = scrollObject.GetComponent<RectTransform>();
-        scrollRect.sizeDelta = new Vector2(0f, 420f);
+        scrollRect.sizeDelta = new Vector2(0f, 500f);
 
         GameObject viewport = new GameObject("Viewport", typeof(RectTransform));
         viewport.transform.SetParent(scrollObject.transform, false);
@@ -432,7 +430,7 @@ public class VendorShopUI : MonoBehaviour
     {
         GameObject row = CreatePanel($"{itemName}Row", parent, new Color(0.29f, 0.23f, 0.13f, 0.95f));
         LayoutElement layout = row.AddComponent<LayoutElement>();
-        layout.preferredHeight = 88f;
+        layout.preferredHeight = 108f;
 
         HorizontalLayoutGroup rowLayout = row.AddComponent<HorizontalLayoutGroup>();
         rowLayout.padding = new RectOffset(14, 14, 12, 12);
@@ -450,8 +448,8 @@ public class VendorShopUI : MonoBehaviour
         iconImage.preserveAspect = true;
         iconImage.enabled = iconSprite != null;
         LayoutElement iconLayout = iconObject.AddComponent<LayoutElement>();
-        iconLayout.preferredWidth = 56f;
-        iconLayout.preferredHeight = 56f;
+        iconLayout.preferredWidth = 76f;
+        iconLayout.preferredHeight = 76f;
 
         GameObject textColumn = new GameObject("TextColumn", typeof(RectTransform), typeof(VerticalLayoutGroup));
         textColumn.transform.SetParent(row.transform, false);
@@ -464,14 +462,14 @@ public class VendorShopUI : MonoBehaviour
         LayoutElement textColumnLayout = textColumn.AddComponent<LayoutElement>();
         textColumnLayout.flexibleWidth = 1f;
 
-        CreateText("ItemName", textColumn.transform, 22, FontStyles.Bold, TextAlignmentOptions.Left, itemName);
-        CreateText("Details", textColumn.transform, 17, FontStyles.Normal, TextAlignmentOptions.Left, detailText);
+        CreateText("ItemName", textColumn.transform, 24, FontStyles.Bold, TextAlignmentOptions.Left, itemName);
+        CreateText("Details", textColumn.transform, 18, FontStyles.Normal, TextAlignmentOptions.Left, detailText);
 
         Button actionButton = CreateButton(row.transform, buttonLabel, action);
         actionButton.interactable = buttonInteractable;
         LayoutElement buttonLayout = actionButton.gameObject.AddComponent<LayoutElement>();
-        buttonLayout.preferredWidth = 136f;
-        buttonLayout.preferredHeight = 50f;
+        buttonLayout.preferredWidth = 150f;
+        buttonLayout.preferredHeight = 56f;
     }
 
     void CreateEmptyState(Transform parent, string message)
@@ -551,12 +549,4 @@ public class VendorShopUI : MonoBehaviour
             Destroy(parent.GetChild(i).gameObject);
     }
 
-    void EnsureEventSystem()
-    {
-        if (EventSystem.current != null)
-            return;
-
-        GameObject eventSystemObject = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
-        DontDestroyOnLoad(eventSystemObject);
-    }
 }

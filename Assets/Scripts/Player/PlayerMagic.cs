@@ -68,7 +68,7 @@ public class PlayerMagic : MonoBehaviour
         if (!hasUnlockedAreaMagic)
             return;
 
-        if (GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInventoryOpen || GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen)
+        if (GameState.IsInLobby || GameState.IsWorldLoading || GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInventoryOpen || GameState.IsBestiaryOpen || GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen || GameState.IsDemoGuideOpen)
             return;
 
         if (!castMagicAction.WasPressedThisFrame())
@@ -178,6 +178,7 @@ public class PlayerMagic : MonoBehaviour
         Collider[] hits = Physics.OverlapSphere(transform.position, areaMagicRange, ~0, QueryTriggerInteraction.Collide);
         HashSet<MiniKrug> hitMiniKrugs = new HashSet<MiniKrug>();
         HashSet<BossEnemy> hitBosses = new HashSet<BossEnemy>();
+        HashSet<EarthGolem> hitGolems = new HashSet<EarthGolem>();
         int affectedCount = 0;
         bool hitBossOrMiniBoss = false;
 
@@ -198,6 +199,23 @@ public class PlayerMagic : MonoBehaviour
                 }
 
                 miniKrug.Hit(areaMagicDamage, playerMovement);
+                affectedCount++;
+                hitBossOrMiniBoss = true;
+                continue;
+            }
+
+            EarthGolem earthGolem = hit.GetComponent<EarthGolem>() ?? hit.GetComponentInParent<EarthGolem>();
+            if (earthGolem != null && hitGolems.Add(earthGolem))
+            {
+                if (LanMultiplayerManager.Instance != null &&
+                    LanMultiplayerManager.Instance.TryHandleGameplayHit(earthGolem, playerMovement, ToolType.Axe, areaMagicDamage))
+                {
+                    affectedCount++;
+                    hitBossOrMiniBoss = true;
+                    continue;
+                }
+
+                earthGolem.Hit(areaMagicDamage, playerMovement);
                 affectedCount++;
                 hitBossOrMiniBoss = true;
                 continue;
