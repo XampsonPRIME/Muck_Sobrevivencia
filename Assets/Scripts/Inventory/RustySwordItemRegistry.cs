@@ -18,6 +18,13 @@ public static class RustySwordItemRegistry
         swordItem = itemObject.AddComponent<Item>();
         swordItem.itemName = ItemName;
         swordItem.itemType = ItemType.Tool;
+        swordItem.category = InventoryCategory.Weapons;
+        swordItem.rarity = ItemRarity.Common;
+        swordItem.description = "Espada desgastada, mas ainda util em combate corpo a corpo.";
+        swordItem.weight = 2.8f;
+        swordItem.maxStack = Item.EquipmentStackLimit;
+        swordItem.equipmentSlot = EquipmentSlotType.MainHand;
+        swordItem.durability = 80;
         swordItem.toolType = ToolType.Sword;
         swordItem.toolDamage = 4;
         swordItem.buyPrice = 0;

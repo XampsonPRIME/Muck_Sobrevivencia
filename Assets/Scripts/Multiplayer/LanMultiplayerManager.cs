@@ -11,6 +11,8 @@ using UnityEngine.SceneManagement;
 
 public class LanMultiplayerManager : MonoBehaviour
 {
+    public static event Action BearerPowerAvailabilityChanged;
+
     static bool dedicatedProcessRequested;
     static bool dedicatedStartupConsumed;
     static int dedicatedStartupPort = 7777;
@@ -61,6 +63,7 @@ public class LanMultiplayerManager : MonoBehaviour
         public bool thirdPerson;
         public bool isDead;
         public int level;
+        public string bearerPowerId;
     }
 
     [Serializable]
@@ -109,6 +112,7 @@ public class LanMultiplayerManager : MonoBehaviour
         public int goldAmount;
         public int xpAmount;
         public bool unlockAreaMagic;
+        public string bestiaryCreatureId;
         public string message;
     }
 
@@ -145,6 +149,29 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         public string playerId;
         public float damage;
+    }
+
+    [Serializable]
+    class LanBearerPowerClaim
+    {
+        public string playerId;
+        public string powerId;
+    }
+
+    [Serializable]
+    class LanBearerPowerClaimResult
+    {
+        public string playerId;
+        public string powerId;
+        public bool accepted;
+        public string message;
+        public string[] claimedPowerIds;
+    }
+
+    [Serializable]
+    class LanBearerPowerSnapshot
+    {
+        public string[] claimedPowerIds;
     }
 
     class PeerConnection
@@ -184,6 +211,8 @@ public class LanMultiplayerManager : MonoBehaviour
     readonly Dictionary<string, string> destroyedEntities = new Dictionary<string, string>();
     readonly Dictionary<string, LanEntityUpdate> pendingEntityUpdates = new Dictionary<string, LanEntityUpdate>();
     readonly List<LanReward> pendingLocalRewards = new List<LanReward>();
+    readonly Dictionary<string, string> bearerPowerOwners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    readonly HashSet<string> claimedBearerPowerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     TcpListener hostListener;
     Thread acceptThread;
@@ -322,6 +351,9 @@ public class LanMultiplayerManager : MonoBehaviour
 
         FlushPendingEntityUpdates();
 
+        RemoveInvalidRemoteReplicas();
+        EnforceSingleSoloPlayer();
+
         ResolveLocalPlayer();
         TryApplyPendingWorldState();
         TryApplyPendingLocalRewards();
@@ -364,19 +396,24 @@ public class LanMultiplayerManager : MonoBehaviour
         ShutdownSession();
     }
 
-    public bool StartSolo()
+    public bool StartSolo(int? savedWorldSeed = null)
     {
         ShutdownSession();
         MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
         if (startupSceneSet != null)
             MultiplayerSceneSetCatalog.ApplyToRuntime(startupSceneSet);
 
-        worldSeed = Environment.TickCount;
+        worldSeed = savedWorldSeed.HasValue && savedWorldSeed.Value != 0
+            ? savedWorldSeed.Value
+            : Environment.TickCount;
         SessionId = null;
         Mode = SessionMode.Solo;
         State = SessionState.Ready;
         StatusMessage = "Solo";
         LastErrorMessage = null;
+        bearerPowerOwners.Clear();
+        claimedBearerPowerIds.Clear();
+        BearerPowerAvailabilityChanged?.Invoke();
         return true;
     }
 
@@ -438,6 +475,8 @@ public class LanMultiplayerManager : MonoBehaviour
             MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
             StatusMessage = $"Servidor dedicado ativo em {CurrentAddress}:{CurrentPort} [{SessionId}]";
             knownStates.Clear();
+            bearerPowerOwners.Clear();
+            claimedBearerPowerIds.Clear();
 
             hostListener = new TcpListener(IPAddress.Any, CurrentPort);
             hostListener.Start();
@@ -486,6 +525,9 @@ public class LanMultiplayerManager : MonoBehaviour
             LastErrorMessage = null;
             StatusMessage = $"Host ativo em {CurrentAddress}:{CurrentPort} [{SessionId}]";
             knownStates.Clear();
+            bearerPowerOwners.Clear();
+            claimedBearerPowerIds.Clear();
+            BearerPowerAvailabilityChanged?.Invoke();
 
             hostListener = new TcpListener(IPAddress.Any, CurrentPort);
             hostListener.Start();
@@ -553,6 +595,75 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityId = entity.EntityId,
                 entityKind = nameof(Cow),
                 health = cows[i].CurrentHealth,
+                destroyed = false
+            });
+        }
+
+        WildChicken[] chickens = FindObjectsByType<WildChicken>(FindObjectsSortMode.None);
+        for (int i = 0; i < chickens.Length; i++)
+        {
+            if (chickens[i] == null || chickens[i].IsDead)
+                continue;
+
+            LanNetworkEntity entity = chickens[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(chickens[i]);
+
+            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
+                continue;
+
+            liveIds.Add(entity.EntityId);
+            results.Add(new LanSavedEntityState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(WildChicken),
+                health = chickens[i].CurrentHealth,
+                destroyed = false
+            });
+        }
+
+        WildBoar[] boars = FindObjectsByType<WildBoar>(FindObjectsSortMode.None);
+        for (int i = 0; i < boars.Length; i++)
+        {
+            if (boars[i] == null || boars[i].IsDead)
+                continue;
+
+            LanNetworkEntity entity = boars[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(boars[i]);
+
+            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
+                continue;
+
+            liveIds.Add(entity.EntityId);
+            results.Add(new LanSavedEntityState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(WildBoar),
+                health = boars[i].CurrentHealth,
+                destroyed = false
+            });
+        }
+
+        EarthGolem[] golems = FindObjectsByType<EarthGolem>(FindObjectsSortMode.None);
+        for (int i = 0; i < golems.Length; i++)
+        {
+            if (golems[i] == null || golems[i].IsDead)
+                continue;
+
+            LanNetworkEntity entity = golems[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                entity = LanNetworkEntity.Ensure(golems[i]);
+
+            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
+                continue;
+
+            liveIds.Add(entity.EntityId);
+            results.Add(new LanSavedEntityState
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(EarthGolem),
+                health = golems[i].CurrentHealth,
                 destroyed = false
             });
         }
@@ -641,6 +752,9 @@ public class LanMultiplayerManager : MonoBehaviour
         LastErrorMessage = null;
         StatusMessage = $"Conectando em {CurrentAddress}:{CurrentPort}...";
         knownStates.Clear();
+        bearerPowerOwners.Clear();
+        claimedBearerPowerIds.Clear();
+        BearerPowerAvailabilityChanged?.Invoke();
 
         connectThread = new Thread(() => ConnectToHost(CurrentAddress, CurrentPort))
         {
@@ -658,6 +772,10 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (Instance != null && Instance.Mode == SessionMode.DedicatedServer)
             return null;
+
+        PlayerMovement cameraPlayer = FindMainCameraPlayer();
+        if (cameraPlayer != null)
+            return cameraPlayer;
 
         if (Instance != null && Instance.localPlayer != null && !IsReplica(Instance.localPlayer))
             return Instance.localPlayer;
@@ -689,6 +807,10 @@ public class LanMultiplayerManager : MonoBehaviour
         if (Instance != null && Instance.Mode == SessionMode.DedicatedServer)
             return Array.Empty<PlayerMovement>();
 
+        PlayerMovement cameraPlayer = FindMainCameraPlayer();
+        if (cameraPlayer != null)
+            return new[] { cameraPlayer };
+
         PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
         List<PlayerMovement> filteredPlayers = new List<PlayerMovement>();
 
@@ -712,7 +834,7 @@ public class LanMultiplayerManager : MonoBehaviour
 
     public static bool IsReplica(Component component)
     {
-        return component != null && component.GetComponent<RemotePlayerReplica>() != null;
+        return component != null && component.GetComponentInParent<RemotePlayerReplica>() != null;
     }
 
     static bool IsValidLocalPlayerCandidate(PlayerMovement player)
@@ -734,6 +856,37 @@ public class LanMultiplayerManager : MonoBehaviour
         return true;
     }
 
+    static PlayerMovement FindMainCameraPlayer()
+    {
+        Camera bestCamera = null;
+        Camera[] cameras = Camera.allCameras;
+        for (int i = 0; i < cameras.Length; i++)
+        {
+            Camera candidate = cameras[i];
+            if (candidate == null ||
+                !candidate.enabled ||
+                !candidate.gameObject.activeInHierarchy ||
+                !candidate.CompareTag("MainCamera"))
+            {
+                continue;
+            }
+
+            PlayerMovement candidatePlayer = candidate.GetComponentInParent<PlayerMovement>();
+            if (!IsValidLocalPlayerCandidate(candidatePlayer))
+                continue;
+
+            if (bestCamera == null || candidate.depth >= bestCamera.depth)
+                bestCamera = candidate;
+        }
+
+        Camera mainCamera = bestCamera != null ? bestCamera : Camera.main;
+        if (mainCamera == null)
+            return null;
+
+        PlayerMovement cameraPlayer = mainCamera.GetComponentInParent<PlayerMovement>();
+        return IsValidLocalPlayerCandidate(cameraPlayer) ? cameraPlayer : null;
+    }
+
     public static Transform FindWorldFocusTransform()
     {
         if (dedicatedProcessRequested && (Instance == null || Instance.Mode == SessionMode.DedicatedServer))
@@ -749,6 +902,10 @@ public class LanMultiplayerManager : MonoBehaviour
 
             return null;
         }
+
+        PlayerMovement cameraPlayer = FindMainCameraPlayer();
+        if (cameraPlayer != null)
+            return cameraPlayer.transform;
 
         if (Instance == null)
         {
@@ -777,6 +934,14 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
         }
 
+        PlayerMovement cameraPlayer = FindMainCameraPlayer();
+        if (cameraPlayer != null && localPlayer != cameraPlayer)
+        {
+            localPlayer = cameraPlayer;
+            lastLocalPosition = localPlayer.transform.position;
+            return;
+        }
+
         if (localPlayer != null && !IsReplica(localPlayer))
             return;
 
@@ -798,6 +963,13 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (Mode == SessionMode.Host)
         {
+            if (!string.IsNullOrWhiteSpace(state.bearerPowerId) &&
+                (!bearerPowerOwners.TryGetValue(state.bearerPowerId, out string ownerId) ||
+                 string.Equals(ownerId, state.playerId, StringComparison.Ordinal)))
+            {
+                RegisterBearerPowerOwner(state.playerId, state.bearerPowerId);
+            }
+
             BroadcastPacket(CreatePacket("state", state));
         }
         else if (Mode == SessionMode.Client && serverConnection != null)
@@ -830,8 +1002,104 @@ public class LanMultiplayerManager : MonoBehaviour
             animationSpeed = animationSpeed,
             thirdPerson = localPlayer.thirdPerson,
             isDead = GameState.IsPlayerDead,
-            level = GetLocalPlayerLevel()
+            level = GetLocalPlayerLevel(),
+            bearerPowerId = localPlayer.GetComponent<BearerPowerService>()?.CurrentPowerId
         };
+    }
+
+    public bool IsBearerPowerClaimed(string powerId)
+    {
+        if (string.IsNullOrWhiteSpace(powerId))
+            return false;
+
+        if (Mode == SessionMode.Client)
+            return claimedBearerPowerIds.Contains(powerId);
+
+        return bearerPowerOwners.ContainsKey(powerId);
+    }
+
+    public void CaptureBearerPowerOwnership(List<string> powerIds, List<string> playerIds)
+    {
+        if (powerIds == null || playerIds == null)
+            return;
+
+        powerIds.Clear();
+        playerIds.Clear();
+
+        foreach (KeyValuePair<string, string> ownership in bearerPowerOwners)
+        {
+            powerIds.Add(ownership.Key);
+            playerIds.Add(ownership.Value);
+        }
+    }
+
+    public void RestoreBearerPowerOwnership(IReadOnlyList<string> powerIds, IReadOnlyList<string> playerIds)
+    {
+        if (!IsServerAuthority)
+            return;
+
+        bearerPowerOwners.Clear();
+        claimedBearerPowerIds.Clear();
+
+        int savedCount = Mathf.Min(powerIds?.Count ?? 0, playerIds?.Count ?? 0);
+        for (int i = 0; i < savedCount; i++)
+        {
+            if (BearerPowerCatalog.Find(powerIds[i]) != null && !string.IsNullOrWhiteSpace(playerIds[i]))
+                RegisterBearerPowerOwner(playerIds[i], powerIds[i]);
+        }
+
+        ResolveLocalPlayer();
+        BearerPowerService localPower = localPlayer != null ? localPlayer.GetComponent<BearerPowerService>() : null;
+        if (localPower != null && localPower.HasPower)
+        {
+            string ownerId = string.IsNullOrWhiteSpace(localPlayerId) ? "host" : localPlayerId;
+            if (!bearerPowerOwners.TryGetValue(localPower.CurrentPowerId, out string savedOwner) ||
+                string.Equals(savedOwner, ownerId, StringComparison.Ordinal))
+            {
+                RegisterBearerPowerOwner(ownerId, localPower.CurrentPowerId);
+            }
+            else
+            {
+                localPower.LoadState(string.Empty, false);
+                MessageSystem.Instance?.ShowMessage("Seu legado pertence a outro portador neste mundo.");
+            }
+        }
+
+        BroadcastBearerPowerSnapshot();
+    }
+
+    public void RequestBearerPowerClaim(string powerId)
+    {
+        BearerPowerDefinition definition = BearerPowerCatalog.Find(powerId);
+        if (definition == null)
+        {
+            MessageSystem.Instance?.ShowMessage("Legado desconhecido.");
+            return;
+        }
+
+        ResolveLocalPlayer();
+        if (localPlayer == null)
+            return;
+
+        if (Mode == SessionMode.Client)
+        {
+            if (serverConnection == null || !IsSessionReady)
+            {
+                MessageSystem.Instance?.ShowMessage("Aguardando o mundo responder...");
+                return;
+            }
+
+            SendPacket(serverConnection, CreatePacket("bearer_power_claim", new LanBearerPowerClaim
+            {
+                playerId = localPlayerId,
+                powerId = definition.stableId
+            }));
+            MessageSystem.Instance?.ShowMessage($"O legado {definition.displayName} esta respondendo...");
+            return;
+        }
+
+        string ownerId = string.IsNullOrWhiteSpace(localPlayerId) ? "solo" : localPlayerId;
+        ResolveBearerPowerClaim(ownerId, definition.stableId, null);
     }
 
     public bool TryHandleGameplayHit(Component target, PlayerMovement attacker, ToolType toolType, int damage)
@@ -1139,6 +1407,21 @@ public class LanMultiplayerManager : MonoBehaviour
                 if (!isHostSide)
                     ApplyDamageLocally(JsonUtility.FromJson<LanDamageEvent>(packet.payload));
                 break;
+
+            case "bearer_power_claim":
+                if (isHostSide)
+                    HandleBearerPowerClaim(connection, packet.payload);
+                break;
+
+            case "bearer_power_result":
+                if (!isHostSide)
+                    ApplyBearerPowerClaimResult(JsonUtility.FromJson<LanBearerPowerClaimResult>(packet.payload));
+                break;
+
+            case "bearer_power_snapshot":
+                if (!isHostSide)
+                    ApplyBearerPowerSnapshot(JsonUtility.FromJson<LanBearerPowerSnapshot>(packet.payload));
+                break;
         }
     }
 
@@ -1167,6 +1450,7 @@ public class LanMultiplayerManager : MonoBehaviour
         foreach (KeyValuePair<string, LanPlayerState> state in knownStates)
             SendPacket(connection, CreatePacket("state", state.Value));
 
+        SendBearerPowerSnapshot(connection);
         SyncWorldEntitiesTo(connection);
         SyncEnemyStatesTo(connection);
         BroadcastWorldState();
@@ -1265,6 +1549,7 @@ public class LanMultiplayerManager : MonoBehaviour
                     playerId = attackerPlayerId,
                     goldAmount = goldAmount,
                     xpAmount = xpAmount,
+                    bestiaryCreatureId = destroyed ? BestiaryDatabase.MiniKrugId : null,
                     message = $"+{goldAmount} gold"
                 });
 
@@ -1300,6 +1585,7 @@ public class LanMultiplayerManager : MonoBehaviour
                     itemName = rewardItemName,
                     prefabName = rewardPrefabName,
                     itemAmount = rewardAmount,
+                    bestiaryCreatureId = destroyed ? BestiaryDatabase.CowId : null,
                     message = $"+{rewardAmount} {rewardItemName}"
                 });
 
@@ -1312,7 +1598,16 @@ public class LanMultiplayerManager : MonoBehaviour
             if (cow == null)
                 return;
 
-            cow.ApplyNetworkHit(damage, out int rewardAmount, out string rewardItemName, out string rewardPrefabName, out int remainingHealth, out bool destroyed);
+            cow.ApplyNetworkHit(
+                damage,
+                out int meatAmount,
+                out string meatItemName,
+                out string meatPrefabName,
+                out int leatherAmount,
+                out string leatherItemName,
+                out string leatherPrefabName,
+                out int remainingHealth,
+                out bool destroyed);
             BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
             {
                 entityId = entityId,
@@ -1326,15 +1621,163 @@ public class LanMultiplayerManager : MonoBehaviour
             else
                 destroyedEntities.Remove(entityId);
 
-            if (rewardAmount > 0)
+            bool bestiarySent = false;
+            if (meatAmount > 0)
+            {
                 GrantReward(attackerPlayerId, new LanReward
                 {
                     playerId = attackerPlayerId,
-                    itemName = rewardItemName,
-                    prefabName = rewardPrefabName,
-                    itemAmount = rewardAmount,
-                    message = $"+{rewardAmount} {rewardItemName}"
+                    itemName = meatItemName,
+                    prefabName = meatPrefabName,
+                    itemAmount = meatAmount,
+                    bestiaryCreatureId = destroyed ? BestiaryDatabase.CowId : null,
+                    message = $"+{meatAmount} {meatItemName}"
                 });
+
+                bestiarySent = destroyed;
+            }
+
+            if (leatherAmount > 0)
+            {
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    itemName = leatherItemName,
+                    prefabName = leatherPrefabName,
+                    itemAmount = leatherAmount,
+                    bestiaryCreatureId = destroyed && !bestiarySent ? BestiaryDatabase.CowId : null,
+                    message = $"+{leatherAmount} {leatherItemName}"
+                });
+
+                bestiarySent = bestiarySent || destroyed;
+            }
+
+            if (destroyed && !bestiarySent)
+            {
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    bestiaryCreatureId = BestiaryDatabase.CowId
+                });
+            }
+
+            return;
+        }
+
+        if (entityKind == nameof(WildChicken))
+        {
+            WildChicken chicken = FindEntity<WildChicken>(entityId);
+            if (chicken == null)
+                return;
+
+            chicken.ApplyNetworkHit(damage, out int featherAmount, out int rawMeatAmount, out int remainingHealth, out bool destroyed);
+            BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
+            {
+                entityId = entityId,
+                entityKind = entityKind,
+                health = remainingHealth,
+                destroyed = destroyed
+            }));
+
+            if (destroyed)
+                destroyedEntities[entityId] = entityKind;
+            else
+                destroyedEntities.Remove(entityId);
+
+            if (featherAmount > 0)
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    itemName = FeatherItemRegistry.ItemName,
+                    itemAmount = featherAmount,
+                    bestiaryCreatureId = destroyed ? BestiaryDatabase.WildChickenId : null,
+                    message = $"+{featherAmount} {FeatherItemRegistry.ItemName}"
+                });
+
+            if (rawMeatAmount > 0)
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    itemName = RawChickenMeatItemRegistry.ItemName,
+                    itemAmount = rawMeatAmount,
+                    message = $"+{rawMeatAmount} {RawChickenMeatItemRegistry.ItemName}"
+                });
+
+            return;
+        }
+
+        if (entityKind == nameof(WildBoar))
+        {
+            WildBoar boar = FindEntity<WildBoar>(entityId);
+            if (boar == null)
+                return;
+
+            boar.ApplyNetworkHit(damage, out int leatherAmount, out int tuskAmount, out int meatAmount, out int trophyAmount, out int remainingHealth, out bool destroyed);
+            BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
+            {
+                entityId = entityId,
+                entityKind = entityKind,
+                health = remainingHealth,
+                destroyed = destroyed
+            }));
+
+            if (destroyed)
+                destroyedEntities[entityId] = entityKind;
+            else
+                destroyedEntities.Remove(entityId);
+
+            bool bestiarySent = false;
+            GrantBoarReward(attackerPlayerId, ThickLeatherItemRegistry.ItemName, leatherAmount, destroyed, ref bestiarySent);
+            GrantBoarReward(attackerPlayerId, SharpTuskItemRegistry.ItemName, tuskAmount, destroyed, ref bestiarySent);
+            GrantBoarReward(attackerPlayerId, BoarMeatItemRegistry.ItemName, meatAmount, destroyed, ref bestiarySent);
+            GrantBoarReward(attackerPlayerId, BoarTrophyItemRegistry.ItemName, trophyAmount, destroyed, ref bestiarySent);
+
+            if (destroyed && !bestiarySent)
+            {
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    bestiaryCreatureId = BestiaryDatabase.WildBoarId
+                });
+            }
+
+            return;
+        }
+
+        if (entityKind == nameof(EarthGolem))
+        {
+            EarthGolem golem = FindEntity<EarthGolem>(entityId);
+            if (golem == null)
+                return;
+
+            golem.ApplyNetworkHit(damage, out int stoneAmount, out int mossAmount, out int ironAmount, out int coreAmount, out int remainingHealth, out bool destroyed);
+            BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
+            {
+                entityId = entityId,
+                entityKind = entityKind,
+                health = remainingHealth,
+                destroyed = destroyed
+            }));
+
+            if (destroyed)
+                destroyedEntities[entityId] = entityKind;
+            else
+                destroyedEntities.Remove(entityId);
+
+            bool bestiarySent = false;
+            GrantGolemReward(attackerPlayerId, StoneFragmentItemRegistry.ItemName, stoneAmount, destroyed, ref bestiarySent);
+            GrantGolemReward(attackerPlayerId, ResilientMossItemRegistry.ItemName, mossAmount, destroyed, ref bestiarySent);
+            GrantGolemReward(attackerPlayerId, IronItemRegistry.ItemName, ironAmount, destroyed, ref bestiarySent);
+            GrantGolemReward(attackerPlayerId, EarthCoreItemRegistry.ItemName, coreAmount, destroyed, ref bestiarySent);
+
+            if (destroyed && !bestiarySent)
+            {
+                GrantReward(attackerPlayerId, new LanReward
+                {
+                    playerId = attackerPlayerId,
+                    bestiaryCreatureId = BestiaryDatabase.EarthGolemId
+                });
+            }
 
             return;
         }
@@ -1377,9 +1820,46 @@ public class LanMultiplayerManager : MonoBehaviour
                     goldAmount = goldAmount,
                     xpAmount = xpAmount,
                     unlockAreaMagic = unlockMagic,
+                    bestiaryCreatureId = destroyed ? BestiaryDatabase.BossEnemyId : null,
                     message = unlockMagic ? "Magia ancestral desbloqueada!" : $"+{goldAmount} gold"
                 });
         }
+    }
+
+    void GrantBoarReward(string attackerPlayerId, string itemName, int amount, bool destroyed, ref bool bestiarySent)
+    {
+        if (amount <= 0)
+            return;
+
+        GrantReward(attackerPlayerId, new LanReward
+        {
+            playerId = attackerPlayerId,
+            itemName = itemName,
+            itemAmount = amount,
+            bestiaryCreatureId = destroyed && !bestiarySent ? BestiaryDatabase.WildBoarId : null,
+            message = $"+{amount} {itemName}"
+        });
+
+        if (destroyed)
+            bestiarySent = true;
+    }
+
+    void GrantGolemReward(string attackerPlayerId, string itemName, int amount, bool destroyed, ref bool bestiarySent)
+    {
+        if (amount <= 0)
+            return;
+
+        GrantReward(attackerPlayerId, new LanReward
+        {
+            playerId = attackerPlayerId,
+            itemName = itemName,
+            itemAmount = amount,
+            bestiaryCreatureId = destroyed && !bestiarySent ? BestiaryDatabase.EarthGolemId : null,
+            message = $"+{amount} {itemName}"
+        });
+
+        if (destroyed)
+            bestiarySent = true;
     }
 
     void ApplyEntityUpdate(LanEntityUpdate update)
@@ -1402,6 +1882,36 @@ public class LanMultiplayerManager : MonoBehaviour
             Cow cow = FindEntity<Cow>(update.entityId);
             if (cow != null)
                 cow.ApplyNetworkState(update.health, update.destroyed);
+            else
+                pendingEntityUpdates[update.entityId] = update;
+            return;
+        }
+
+        if (update.entityKind == nameof(WildChicken))
+        {
+            WildChicken chicken = FindEntity<WildChicken>(update.entityId);
+            if (chicken != null)
+                chicken.ApplyNetworkState(update.health, update.destroyed);
+            else
+                pendingEntityUpdates[update.entityId] = update;
+            return;
+        }
+
+        if (update.entityKind == nameof(WildBoar))
+        {
+            WildBoar boar = FindEntity<WildBoar>(update.entityId);
+            if (boar != null)
+                boar.ApplyNetworkState(update.health, update.destroyed);
+            else
+                pendingEntityUpdates[update.entityId] = update;
+            return;
+        }
+
+        if (update.entityKind == nameof(EarthGolem))
+        {
+            EarthGolem golem = FindEntity<EarthGolem>(update.entityId);
+            if (golem != null)
+                golem.ApplyNetworkState(update.health, update.destroyed);
             else
                 pendingEntityUpdates[update.entityId] = update;
             return;
@@ -1494,6 +2004,9 @@ public class LanMultiplayerManager : MonoBehaviour
             magic?.UnlockAreaMagic();
         }
 
+        if (!string.IsNullOrWhiteSpace(reward.bestiaryCreatureId))
+            BestiaryService.Instance?.RecordDefeat(reward.bestiaryCreatureId);
+
         if (!string.IsNullOrWhiteSpace(reward.message))
             MessageSystem.Instance?.ShowMessage(reward.message);
 
@@ -1518,6 +2031,24 @@ public class LanMultiplayerManager : MonoBehaviour
         if (isHostSide && !string.IsNullOrWhiteSpace(connection.playerId))
             state.playerId = connection.playerId;
 
+        if (isHostSide && !string.IsNullOrWhiteSpace(state.bearerPowerId))
+        {
+            if (!bearerPowerOwners.TryGetValue(state.bearerPowerId, out string ownerId))
+            {
+                RegisterBearerPowerOwner(state.playerId, state.bearerPowerId);
+            }
+            else if (!string.Equals(ownerId, state.playerId, StringComparison.Ordinal))
+            {
+                state.bearerPowerId = string.Empty;
+                SendBearerPowerClaimResult(
+                    connection,
+                    state.playerId,
+                    string.Empty,
+                    false,
+                    "Seu legado ja possui outro portador neste mundo.");
+            }
+        }
+
         knownStates[state.playerId] = state;
         UpsertServerPlayerTarget(state);
 
@@ -1526,6 +2057,177 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (isHostSide)
             BroadcastPacket(CreatePacket("state", state), connection.playerId);
+    }
+
+    void HandleBearerPowerClaim(PeerConnection connection, string payload)
+    {
+        LanBearerPowerClaim claim = JsonUtility.FromJson<LanBearerPowerClaim>(payload);
+        if (claim == null || connection == null)
+            return;
+
+        string playerId = !string.IsNullOrWhiteSpace(connection.playerId)
+            ? connection.playerId
+            : claim.playerId;
+        ResolveBearerPowerClaim(playerId, claim.powerId, connection);
+    }
+
+    void ResolveBearerPowerClaim(string playerId, string powerId, PeerConnection requestingConnection)
+    {
+        BearerPowerDefinition definition = BearerPowerCatalog.Find(powerId);
+        if (definition == null || string.IsNullOrWhiteSpace(playerId))
+        {
+            SendBearerPowerClaimResult(requestingConnection, playerId, powerId, false, "Este legado nao reconheceu o portador.");
+            return;
+        }
+
+        foreach (KeyValuePair<string, string> ownership in bearerPowerOwners)
+        {
+            if (string.Equals(ownership.Value, playerId, StringComparison.Ordinal) &&
+                !string.Equals(ownership.Key, definition.stableId, StringComparison.OrdinalIgnoreCase))
+            {
+                SendBearerPowerClaimResult(requestingConnection, playerId, definition.stableId, false, "Cada portador pode carregar apenas um legado.");
+                return;
+            }
+        }
+
+        if (bearerPowerOwners.TryGetValue(definition.stableId, out string currentOwner) &&
+            !string.Equals(currentOwner, playerId, StringComparison.Ordinal))
+        {
+            SendBearerPowerClaimResult(requestingConnection, playerId, definition.stableId, false, $"{definition.displayName} ja escolheu outro portador.");
+            return;
+        }
+
+        RegisterBearerPowerOwner(playerId, definition.stableId);
+
+        if (requestingConnection != null)
+        {
+            SendBearerPowerClaimResult(requestingConnection, playerId, definition.stableId, true, $"Voce absorveu {definition.displayName}.");
+        }
+        else
+        {
+            ResolveLocalPlayer();
+            BearerPowerService service = localPlayer != null
+                ? localPlayer.GetComponent<BearerPowerService>() ?? localPlayer.gameObject.AddComponent<BearerPowerService>()
+                : null;
+            service?.AcceptPower(definition.stableId);
+        }
+
+        BroadcastBearerPowerSnapshot();
+    }
+
+    void RegisterBearerPowerOwner(string playerId, string powerId)
+    {
+        if (string.IsNullOrWhiteSpace(playerId) || BearerPowerCatalog.Find(powerId) == null)
+            return;
+
+        if (bearerPowerOwners.TryGetValue(powerId, out string existingOwner) &&
+            string.Equals(existingOwner, playerId, StringComparison.Ordinal))
+        {
+            claimedBearerPowerIds.Add(powerId);
+            return;
+        }
+
+        bearerPowerOwners[powerId] = playerId;
+        claimedBearerPowerIds.Add(powerId);
+        BearerPowerAvailabilityChanged?.Invoke();
+    }
+
+    void SendBearerPowerClaimResult(PeerConnection connection, string playerId, string powerId, bool accepted, string message)
+    {
+        LanBearerPowerClaimResult result = new LanBearerPowerClaimResult
+        {
+            playerId = playerId,
+            powerId = powerId,
+            accepted = accepted,
+            message = message,
+            claimedPowerIds = BuildClaimedBearerPowerIds()
+        };
+
+        if (connection != null)
+        {
+            SendPacket(connection, CreatePacket("bearer_power_result", result));
+            return;
+        }
+
+        ApplyBearerPowerClaimResult(result);
+    }
+
+    void ApplyBearerPowerClaimResult(LanBearerPowerClaimResult result)
+    {
+        if (result == null)
+            return;
+
+        ReplaceClaimedBearerPowers(result.claimedPowerIds);
+
+        if (!string.IsNullOrWhiteSpace(result.message))
+            MessageSystem.Instance?.ShowMessage(result.message);
+
+        if (result.playerId != localPlayerId)
+            return;
+
+        ResolveLocalPlayer();
+        BearerPowerService service = localPlayer != null
+            ? localPlayer.GetComponent<BearerPowerService>() ?? localPlayer.gameObject.AddComponent<BearerPowerService>()
+            : null;
+
+        if (!result.accepted)
+        {
+            if (service != null && service.HasPower && string.IsNullOrWhiteSpace(result.powerId))
+                service.LoadState(string.Empty, false);
+            return;
+        }
+
+        service?.AcceptPower(result.powerId);
+    }
+
+    void SendBearerPowerSnapshot(PeerConnection connection)
+    {
+        if (connection == null)
+            return;
+
+        SendPacket(connection, CreatePacket("bearer_power_snapshot", new LanBearerPowerSnapshot
+        {
+            claimedPowerIds = BuildClaimedBearerPowerIds()
+        }));
+    }
+
+    void BroadcastBearerPowerSnapshot()
+    {
+        LanBearerPowerSnapshot snapshot = new LanBearerPowerSnapshot
+        {
+            claimedPowerIds = BuildClaimedBearerPowerIds()
+        };
+        BroadcastPacket(CreatePacket("bearer_power_snapshot", snapshot));
+        ApplyBearerPowerSnapshot(snapshot);
+    }
+
+    void ApplyBearerPowerSnapshot(LanBearerPowerSnapshot snapshot)
+    {
+        ReplaceClaimedBearerPowers(snapshot?.claimedPowerIds);
+    }
+
+    string[] BuildClaimedBearerPowerIds()
+    {
+        string[] ids = new string[bearerPowerOwners.Count];
+        int index = 0;
+        foreach (string powerId in bearerPowerOwners.Keys)
+            ids[index++] = powerId;
+        return ids;
+    }
+
+    void ReplaceClaimedBearerPowers(string[] powerIds)
+    {
+        claimedBearerPowerIds.Clear();
+        if (powerIds != null)
+        {
+            for (int i = 0; i < powerIds.Length; i++)
+            {
+                if (BearerPowerCatalog.Find(powerIds[i]) != null)
+                    claimedBearerPowerIds.Add(powerIds[i]);
+            }
+        }
+
+        BearerPowerAvailabilityChanged?.Invoke();
     }
 
     void HandleLeavePacket(string payload)
@@ -1541,10 +2243,20 @@ public class LanMultiplayerManager : MonoBehaviour
 
     void UpsertReplica(LanPlayerState state)
     {
+        if (state == null || string.IsNullOrWhiteSpace(state.playerId) || state.playerId == localPlayerId)
+            return;
+
+        if (!ShouldKeepRemoteReplica(state.playerId))
+        {
+            Debug.LogWarning($"Replica remota bloqueada: {state.playerId}. Modo={Mode}, Sessao={State}.");
+            RemoveReplica(state.playerId);
+            return;
+        }
+
         if (localPlayer == null)
             ResolveLocalPlayer();
 
-        if (localPlayer == null || state == null)
+        if (localPlayer == null)
             return;
 
         if (!remoteReplicas.TryGetValue(state.playerId, out RemotePlayerReplica replica) || replica == null)
@@ -1557,6 +2269,81 @@ public class LanMultiplayerManager : MonoBehaviour
         }
 
         replica.ApplyState(state);
+    }
+
+    public bool ShouldKeepRemoteReplica(string playerId)
+    {
+        if (string.IsNullOrWhiteSpace(playerId) || playerId == localPlayerId || !IsSessionReady)
+            return false;
+
+        return Mode switch
+        {
+            SessionMode.Client => true,
+            SessionMode.Host => hostPeers.ContainsKey(playerId),
+            _ => false
+        };
+    }
+
+    void RemoveInvalidRemoteReplicas()
+    {
+        List<string> staleIds = null;
+        foreach (KeyValuePair<string, RemotePlayerReplica> entry in remoteReplicas)
+        {
+            if (entry.Value != null && ShouldKeepRemoteReplica(entry.Key))
+                continue;
+
+            staleIds ??= new List<string>();
+            staleIds.Add(entry.Key);
+        }
+
+        if (staleIds != null)
+        {
+            for (int i = 0; i < staleIds.Count; i++)
+                RemoveReplica(staleIds[i]);
+        }
+
+        RemotePlayerReplica[] looseReplicas = FindObjectsByType<RemotePlayerReplica>(FindObjectsSortMode.None);
+        for (int i = 0; i < looseReplicas.Length; i++)
+        {
+            RemotePlayerReplica replica = looseReplicas[i];
+            if (replica == null || ShouldKeepRemoteReplica(replica.PlayerId))
+                continue;
+
+            if (!string.IsNullOrWhiteSpace(replica.PlayerId))
+                remoteReplicas.Remove(replica.PlayerId);
+
+            Debug.LogWarning($"Replica remota solta removida: {replica.PlayerId}. Modo={Mode}, Sessao={State}.");
+            Destroy(replica.gameObject);
+        }
+    }
+
+    void EnforceSingleSoloPlayer()
+    {
+        if (GameState.IsInLobby || Mode == SessionMode.DedicatedServer)
+            return;
+
+        PlayerMovement authoritativePlayer = FindMainCameraPlayer();
+        if (authoritativePlayer == null && localPlayer != null && !IsReplica(localPlayer))
+            authoritativePlayer = localPlayer;
+
+        if (authoritativePlayer == null)
+            return;
+
+        PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
+        for (int i = 0; i < players.Length; i++)
+        {
+            PlayerMovement candidate = players[i];
+            if (candidate == null || candidate == authoritativePlayer || IsReplica(candidate))
+                continue;
+
+            Debug.LogWarning(
+                $"Player duplicado removido: {candidate.name} em {candidate.transform.position}. " +
+                $"Player mantido: {authoritativePlayer.name} em {authoritativePlayer.transform.position}."
+            );
+            Destroy(candidate.gameObject);
+        }
+
+        localPlayer = authoritativePlayer;
     }
 
     void RemoveReplica(string playerId)
@@ -1803,6 +2590,33 @@ public class LanMultiplayerManager : MonoBehaviour
                     applied = true;
                 }
             }
+            else if (update.entityKind == nameof(WildChicken))
+            {
+                WildChicken chicken = FindEntity<WildChicken>(update.entityId);
+                if (chicken != null)
+                {
+                    chicken.ApplyNetworkState(update.health, update.destroyed);
+                    applied = true;
+                }
+            }
+            else if (update.entityKind == nameof(WildBoar))
+            {
+                WildBoar boar = FindEntity<WildBoar>(update.entityId);
+                if (boar != null)
+                {
+                    boar.ApplyNetworkState(update.health, update.destroyed);
+                    applied = true;
+                }
+            }
+            else if (update.entityKind == nameof(EarthGolem))
+            {
+                EarthGolem golem = FindEntity<EarthGolem>(update.entityId);
+                if (golem != null)
+                {
+                    golem.ApplyNetworkState(update.health, update.destroyed);
+                    applied = true;
+                }
+            }
             else if (update.entityKind == nameof(BossEnemy))
             {
                 BossEnemy boss = FindEntity<BossEnemy>(update.entityId);
@@ -1857,6 +2671,27 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityId = entity.EntityId,
                 entityKind = nameof(Cow),
                 health = cows[i].CurrentHealth,
+                destroyed = false
+            }));
+        }
+
+        WildChicken[] chickens = FindObjectsByType<WildChicken>(FindObjectsSortMode.None);
+        for (int i = 0; i < chickens.Length; i++)
+        {
+            if (chickens[i] == null || chickens[i].IsDead)
+                continue;
+
+            LanNetworkEntity entity = chickens[i].GetComponent<LanNetworkEntity>();
+            if (entity == null)
+                continue;
+
+            liveIds.Add(entity.EntityId);
+
+            SendPacket(connection, CreatePacket("entity_update", new LanEntityUpdate
+            {
+                entityId = entity.EntityId,
+                entityKind = nameof(WildChicken),
+                health = chickens[i].CurrentHealth,
                 destroyed = false
             }));
         }
@@ -2052,6 +2887,24 @@ public class LanMultiplayerManager : MonoBehaviour
         if (target is MiniKrug miniKrug)
         {
             miniKrug.PlayLocalHitFeedback(damage);
+            return;
+        }
+
+        if (target is WildChicken chicken)
+        {
+            chicken.PlayLocalHitFeedback(damage);
+            return;
+        }
+
+        if (target is WildBoar boar)
+        {
+            boar.PlayLocalHitFeedback(damage);
+            return;
+        }
+
+        if (target is EarthGolem golem)
+        {
+            golem.PlayLocalHitFeedback(damage);
             return;
         }
 
@@ -2361,6 +3214,8 @@ public class LanMultiplayerManager : MonoBehaviour
         knownStates.Clear();
         destroyedEntities.Clear();
         pendingEntityUpdates.Clear();
+        bearerPowerOwners.Clear();
+        claimedBearerPowerIds.Clear();
         State = SessionState.Idle;
         Mode = SessionMode.None;
         SessionId = null;
@@ -2369,6 +3224,7 @@ public class LanMultiplayerManager : MonoBehaviour
         cachedAnimSpeed = 0f;
         isShuttingDown = false;
         LanSessionDiscovery.Instance?.StopAnnouncing();
+        BearerPowerAvailabilityChanged?.Invoke();
     }
 
     void ClearRemoteReplicas()
@@ -2453,6 +3309,15 @@ public class LanMultiplayerManager : MonoBehaviour
         if (target.GetComponentInParent<Cow>() is Cow cow)
             return LanNetworkEntity.Ensure(cow);
 
+        if (target.GetComponentInParent<WildChicken>() is WildChicken chicken)
+            return LanNetworkEntity.Ensure(chicken);
+
+        if (target.GetComponentInParent<WildBoar>() is WildBoar boar)
+            return LanNetworkEntity.Ensure(boar);
+
+        if (target.GetComponentInParent<EarthGolem>() is EarthGolem golem)
+            return LanNetworkEntity.Ensure(golem);
+
         if (target.GetComponentInParent<MiniKrug>() is MiniKrug miniKrug)
             return LanNetworkEntity.Ensure(miniKrug);
 
@@ -2472,6 +3337,15 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (target.GetComponentInParent<Cow>() != null)
             return nameof(Cow);
+
+        if (target.GetComponentInParent<WildChicken>() != null)
+            return nameof(WildChicken);
+
+        if (target.GetComponentInParent<WildBoar>() != null)
+            return nameof(WildBoar);
+
+        if (target.GetComponentInParent<EarthGolem>() != null)
+            return nameof(EarthGolem);
 
         if (target.GetComponentInParent<MiniKrug>() != null)
             return nameof(MiniKrug);
@@ -2560,11 +3434,18 @@ public class LanMultiplayerManager : MonoBehaviour
         if (enemy is BossEnemy bossEnemy)
             return bossEnemy.BossLevel;
 
+        if (enemy is EarthGolem earthGolem)
+            return earthGolem.GolemLevel;
+
         return 1;
     }
 
     Item ResolveItem(string itemName, string prefabName)
     {
+        Item resolvedInventoryItem = InventoryItemResolver.Resolve(itemName, prefabName);
+        if (resolvedInventoryItem != null)
+            return resolvedInventoryItem;
+
         if (string.Equals(itemName, "Gold", StringComparison.OrdinalIgnoreCase))
             return GoldItemRegistry.GetOrCreate();
 
@@ -2586,6 +3467,33 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (string.Equals(itemName, FurnaceItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
             return FurnaceItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, SimpleBowItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return SimpleBowItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, FeatherItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return FeatherItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, RawChickenMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return RawChickenMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedChickenMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedChickenMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedBoarMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedBoarMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CowMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CowMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CookedCowMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CookedCowMeatItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, ArrowItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return ArrowItemRegistry.GetOrCreate();
 
         if (string.Equals(itemName, "Machado", StringComparison.OrdinalIgnoreCase))
             return LoadResourceItem("VendorItems/Axe");

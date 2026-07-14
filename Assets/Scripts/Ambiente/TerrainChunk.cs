@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
+using TMPro;
+using UnityEngine.UI;
 
 public class TerrainChunk : MonoBehaviour
 {
@@ -83,27 +85,27 @@ public class TerrainChunk : MonoBehaviour
     public float wheatGroupRadius = 1.35f;
     public float wheatYOffset = 0.05f;
 
-    public float treeDensity = 0.12f;
-    public int maxTreesPerChunk = 22;
-    public float forestTreeHeightMultiplier = 1.45f;
-    public float forestTreeWidthMultiplier = 1.12f;
+    public float treeDensity = 0.004f;
+    public int maxTreesPerChunk = 1;
+    public float forestTreeHeightMultiplier = 1.15f;
+    public float forestTreeWidthMultiplier = 1.02f;
     public float treeExclusionPadding = 0.75f;
     public float mushroomDensity = 0.001f;
     public int rockClusterCount = 3;
-    public int generationYieldInterval = 120;
+    public int generationYieldInterval = 60;
 
     [Header("Grama Leve")]
-    [Range(0f, 1f)] public float forestGrassDensity = 1f;
-    public int maxForestGrassPerChunk = 2200;
-    public float forestGrassMinDistance = 0.12f;
-    public int forestGrassSampleStep = 2;
-    [Range(0f, 1f)] public float forestGrassExtraCoverage = 0.8f;
+    [Range(0f, 1f)] public float forestGrassDensity = 0.25f;
+    public int maxForestGrassPerChunk = 420;
+    public float forestGrassMinDistance = 0.35f;
+    public int forestGrassSampleStep = 5;
+    [Range(0f, 1f)] public float forestGrassExtraCoverage = 0.15f;
     public Vector2 forestGrassWidthRange = new Vector2(1.2f, 1.8f);
     public Vector2 forestGrassHeightRange = new Vector2(0.42f, 0.62f);
     public float forestGrassSpawnJitter = 0.42f;
     public float forestGrassYOffset = 0.02f;
     public float forestGrassRoadPadding = 1.6f;
-    public float forestGrassRenderDistance = 72f;
+    public float forestGrassRenderDistance = 30f;
     public float forestGrassWindStrength = 0.08f;
     public float forestGrassWindSpeed = 1.65f;
     public float forestGrassBendStrength = 0.1f;
@@ -127,8 +129,8 @@ public class TerrainChunk : MonoBehaviour
     [Range(0f, 1f)] public float riverSurfaceSmoothing = 0.7f;
     public float riverMaxSegmentGap = 4.5f;
 
-    public float minDistanceBetweenObjects = 12f;
-    public float minTreeDistance = 6.2f;
+    public float minDistanceBetweenObjects = 10f;
+    public float minTreeDistance = 28f;
 
     [Header("Respawn de Recursos")]
     public Vector2 groundPickupRespawnDelayRange = new Vector2(120f, 240f);
@@ -147,7 +149,9 @@ public class TerrainChunk : MonoBehaviour
     [Header("Animais")]
     public GameObject cowPrefab;
     public Item cowMeatItem;
+    public Item cowLeatherItem;
     public GameObject cowMeatDropPrefab;
+    public GameObject cowLeatherDropPrefab;
     public Material cowBodyMaterial;
     public Material cowSpotMaterial;
     public Material cowHoofMaterial;
@@ -157,6 +161,33 @@ public class TerrainChunk : MonoBehaviour
     public float cowSpawnRadius = 5f;
     public float cowRespawnDelay = 25f;
     public float cowWanderRadius = 8f;
+    public GameObject chickenPrefab;
+    [Range(0f, 1f)] public float chickenGroupChance = 0.28f;
+    public int maxChickenGroupsPerChunk = 1;
+    public int chickensPerGroup = 3;
+    public float minDistanceBetweenChickenGroups = 16f;
+    public float chickenSpawnRadius = 4.5f;
+    public float chickenRespawnDelay = 35f;
+    public float chickenWanderRadius = 7f;
+    public GameObject boarPrefab;
+    [Range(0f, 1f)] public float forestBoarGroupChance = 0.42f;
+    [Range(0f, 1f)] public float plainsBoarGroupChance = 0.24f;
+    public int maxBoarGroupsPerChunk = 1;
+    public int boarsPerGroup = 1;
+    public float minDistanceBetweenBoarGroups = 22f;
+    public float boarSpawnRadius = 4.5f;
+    public float boarRespawnDelay = 55f;
+    public float boarPatrolRadius = 10f;
+
+    [Header("Golem de Terra")]
+    public GameObject earthGolemPrefab;
+    [Range(0f, 1f)] public float desertEarthGolemGroupChance = 0.1f;
+    public int maxEarthGolemGroupsPerChunk = 1;
+    public int earthGolemsPerGroup = 1;
+    public float minDistanceBetweenEarthGolemGroups = 42f;
+    public float earthGolemSpawnRadius = 3f;
+    public float earthGolemRespawnDelay = 180f;
+    public float earthGolemPatrolRadius = 8f;
 
     [Header("Inimigos da Floresta")]
     public GameObject forestMushroomMonsterPrefab;
@@ -166,6 +197,14 @@ public class TerrainChunk : MonoBehaviour
     public float minDistanceBetweenForestMushroomGroups = 20f;
     public float forestMushroomSpawnRadius = 4.5f;
     public float forestMushroomRespawnDelay = 40f;
+
+    [Header("Totens Ancestrais")]
+    [Range(0f, 1f)] public float commonAncestralTotemChance = 0.18f;
+    [Range(0f, 1f)] public float rareAncestralTotemChance = 0.07f;
+    [Range(0f, 1f)] public float legendaryAncestralTotemChance = 0.025f;
+    public int maxAncestralTotemsPerChunk = 1;
+    public float minDistanceBetweenAncestralTotems = 44f;
+    public float ancestralTotemMinPlayerDistance = 34f;
 
 
     [Header("Material")]
@@ -189,7 +228,7 @@ public class TerrainChunk : MonoBehaviour
     public float safeRadius = 12f;
     public float forwardSafeDistance = 8f;
 
-    public float rockDensity = 0.5f; // base
+    public float rockDensity = 0.25f; // base
 
     Mesh mesh;
     Vector3[] vertices;
@@ -199,7 +238,11 @@ public class TerrainChunk : MonoBehaviour
 
     List<Vector3> usedPositions = new List<Vector3>();
     List<Vector3> cowGroupPositions = new List<Vector3>();
+    List<Vector3> chickenGroupPositions = new List<Vector3>();
+    List<Vector3> boarGroupPositions = new List<Vector3>();
+    List<Vector3> earthGolemGroupPositions = new List<Vector3>();
     List<Vector3> forestMushroomGroupPositions = new List<Vector3>();
+    List<Vector3> ancestralTotemPositions = new List<Vector3>();
     List<Matrix4x4[]> forestGrassBatches = new List<Matrix4x4[]>();
     List<int> forestGrassBatchCounts = new List<int>();
     static Material riverMaterial;
@@ -379,7 +422,15 @@ public class TerrainChunk : MonoBehaviour
         yield return null;
         yield return SpawnCowGroupsAsync(offset);
         yield return null;
+        yield return SpawnChickenGroupsAsync(offset);
+        yield return null;
+        yield return SpawnBoarGroupsAsync(offset);
+        yield return null;
+        yield return SpawnEarthGolemGroupsAsync(offset);
+        yield return null;
         yield return SpawnForestMushroomGroupsAsync(offset);
+        yield return null;
+        yield return SpawnAncestralTotemsAsync(offset);
     }
 
     BiomeType GetBiome(Vector2 point)
@@ -993,9 +1044,9 @@ public class TerrainChunk : MonoBehaviour
 
             if (IsEnchantedForestScene() && biome == BiomeType.Forest)
             {
-                density = Mathf.Clamp01(density * 1.55f);
-                maxTreesForChunk = Mathf.Max(maxTreesPerChunk, 34);
-                minTreeSpacing = Mathf.Min(minTreeDistance, 5f);
+                density = Mathf.Clamp01(density * 0.35f);
+                maxTreesForChunk = Mathf.Max(maxTreesPerChunk, 2);
+                minTreeSpacing = Mathf.Max(minTreeDistance, 24f);
             }
 
 
@@ -1021,11 +1072,11 @@ public class TerrainChunk : MonoBehaviour
                     if (IsTooClose(groundPoint, minTreeSpacing))
                         continue;
 
-                    GameObject tree = Instantiate(
-                        selected.prefab,
+                    GameObject tree = MeshyOakTreeRuntimeFactory.Spawn(
                         groundPoint,
                         Quaternion.Euler(0f, rng.Range(0f, 360f), 0f),
-                        transform
+                        transform,
+                        selected.prefab
                     );
 
                     if (biome == BiomeType.Forest)
@@ -1038,7 +1089,12 @@ public class TerrainChunk : MonoBehaviour
                         );
                     }
 
-                    AlignObjectBaseToGround(tree, groundPoint, selected.yOffset);
+                    AlignObjectBaseToGround(
+                        tree,
+                        groundPoint,
+                        selected.yOffset - MeshyOakTreeRuntimeFactory.GroundSinkDepth
+                    );
+                    EnsureTreeIsCollectable(tree);
                     ConfigureResourceRespawn(tree, woodRespawnDelayRange);
 
                     usedPositions.Add(groundPoint);
@@ -1101,7 +1157,7 @@ public class TerrainChunk : MonoBehaviour
                         transform
                     );
 
-                    float scale = rng.Range(0.85f, 1.15f);
+                    float scale = rng.Range(1.15f, 1.45f);
                     pedra.transform.localScale *= scale;
                     ConfigurePickupRespawn(pedra);
                     usedPositions.Add(groundPoint);
@@ -1265,7 +1321,7 @@ public class TerrainChunk : MonoBehaviour
         if (IsEnchantedForestScene())
         {
             grassDensity = Mathf.Clamp01(grassDensity);
-            maxGrassForChunk = Mathf.Max(maxGrassForChunk, 2800);
+            maxGrassForChunk = Mathf.Max(maxGrassForChunk, 1100);
         }
 
         int secondaryOffset = sampleStep > 1 ? Mathf.Max(1, sampleStep / 2) : 0;
@@ -1593,6 +1649,7 @@ public class TerrainChunk : MonoBehaviour
                     transform
                 );
 
+                ScalePickaxeResourceRock(rock, rng);
                 AlignObjectBaseToGround(rock, spawnPos);
                 ConfigureResourceRespawn(rock, stoneResourceRespawnDelayRange);
 
@@ -1855,11 +1912,294 @@ public class TerrainChunk : MonoBehaviour
         spawnPoint.spawnRadius = cowSpawnRadius;
         spawnPoint.respawnDelay = cowRespawnDelay;
         spawnPoint.cowWanderRadius = cowWanderRadius;
-        spawnPoint.meatItemData = cowMeatItem;
+        spawnPoint.meatItemData = cowMeatItem != null ? cowMeatItem : CowMeatItemRegistry.GetOrCreate();
+        spawnPoint.leatherItemData = cowLeatherItem != null ? cowLeatherItem : CowLeatherItemRegistry.GetOrCreate();
         spawnPoint.meatDropPrefab = cowMeatDropPrefab;
+        spawnPoint.leatherDropPrefab = cowLeatherDropPrefab;
         spawnPoint.bodyMaterial = cowBodyMaterial;
         spawnPoint.spotMaterial = cowSpotMaterial;
         spawnPoint.hoofMaterial = cowHoofMaterial;
+    }
+
+    IEnumerator SpawnChickenGroupsAsync(Vector2 offset)
+    {
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 404));
+        int desiredGroups = Mathf.Max(0, maxChickenGroupsPerChunk);
+
+        if (desiredGroups == 0)
+            yield break;
+
+        chickenGroupPositions.Clear();
+        List<Vector3> validPositions = new List<Vector3>();
+        int iterationsSinceYield = 0;
+
+        for (int i = 0; i < vertices.Length; i += 16)
+        {
+            iterationsSinceYield++;
+            if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
+            {
+                iterationsSinceYield = 0;
+                yield return null;
+            }
+
+            Vector3 localPos = vertices[i];
+            Vector3 worldPos = localPos + transform.position;
+
+            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 10f)
+                continue;
+
+            if (mesh.normals[i].y < 0.9f)
+                continue;
+
+            Vector2 point = new Vector2(localPos.x + offset.x, localPos.z + offset.y);
+            BiomeType biome = GetBiome(point);
+            if (!IsChickenBiome(biome))
+                continue;
+
+            if (IsRiverZone(point, 2.4f))
+                continue;
+
+            if (IsNearRoadZone(point, 1.6f))
+                continue;
+
+            Vector3 groundPoint = GetGroundPoint(worldPos);
+            if (IsTooClose(groundPoint, minDistanceBetweenObjects * 0.75f))
+                continue;
+
+            validPositions.Add(groundPoint);
+        }
+
+        int groupsSpawned = 0;
+
+        while (groupsSpawned < desiredGroups && validPositions.Count > 0)
+        {
+            yield return null;
+
+            if (rng.Value() > chickenGroupChance)
+                break;
+
+            int index = rng.Range(0, validPositions.Count);
+            Vector3 chosenPos = validPositions[index];
+
+            CreateChickenSpawnPoint(chosenPos);
+            chickenGroupPositions.Add(chosenPos);
+            usedPositions.Add(chosenPos);
+            groupsSpawned++;
+
+            validPositions.RemoveAll(pos => Vector3.Distance(pos, chosenPos) < minDistanceBetweenChickenGroups);
+        }
+    }
+
+    bool IsChickenBiome(BiomeType biome)
+    {
+        return biome == BiomeType.Forest || biome == BiomeType.Desert;
+    }
+
+    void CreateChickenSpawnPoint(Vector3 worldPos)
+    {
+        GameObject spawnObject = new GameObject("Wild Chicken Spawn Point");
+        spawnObject.transform.SetParent(transform, true);
+        spawnObject.transform.position = worldPos;
+
+        WildChickenSpawnPoint spawnPoint = spawnObject.AddComponent<WildChickenSpawnPoint>();
+        spawnPoint.chickenPrefab = chickenPrefab;
+        spawnPoint.chickensPerGroup = Mathf.Max(1, chickensPerGroup);
+        spawnPoint.spawnRadius = chickenSpawnRadius;
+        spawnPoint.respawnDelay = chickenRespawnDelay;
+        spawnPoint.chickenWanderRadius = chickenWanderRadius;
+        spawnPoint.featherItemData = FeatherItemRegistry.GetOrCreate();
+        spawnPoint.rawMeatItemData = RawChickenMeatItemRegistry.GetOrCreate();
+    }
+
+    IEnumerator SpawnBoarGroupsAsync(Vector2 offset)
+    {
+        int desiredGroups = Mathf.Max(0, maxBoarGroupsPerChunk);
+        if (desiredGroups == 0)
+            yield break;
+
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 515));
+        boarGroupPositions.Clear();
+        List<Vector3> validPositions = new List<Vector3>();
+        List<float> positionChances = new List<float>();
+        int iterationsSinceYield = 0;
+
+        for (int i = 0; i < vertices.Length; i += 16)
+        {
+            iterationsSinceYield++;
+            if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
+            {
+                iterationsSinceYield = 0;
+                yield return null;
+            }
+
+            Vector3 localPos = vertices[i];
+            Vector3 worldPos = localPos + transform.position;
+
+            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 16f)
+                continue;
+
+            if (mesh.normals[i].y < 0.86f)
+                continue;
+
+            Vector2 point = new Vector2(localPos.x + offset.x, localPos.z + offset.y);
+            BiomeType biome = GetBiome(point);
+            if (!IsBoarBiome(biome))
+                continue;
+
+            if (IsRiverZone(point, 2.8f))
+                continue;
+
+            if (IsNearRoadZone(point, 1.8f))
+                continue;
+
+            Vector3 groundPoint = GetGroundPoint(worldPos);
+            if (IsTooClose(groundPoint, minDistanceBetweenBoarGroups * 0.7f))
+                continue;
+
+            validPositions.Add(groundPoint);
+            positionChances.Add(GetBoarSpawnChance(biome));
+        }
+
+        int groupsSpawned = 0;
+        while (groupsSpawned < desiredGroups && validPositions.Count > 0)
+        {
+            yield return null;
+
+            int index = rng.Range(0, validPositions.Count);
+            Vector3 chosenPos = validPositions[index];
+            float spawnChance = positionChances[index];
+
+            if (rng.Value() <= spawnChance)
+            {
+                CreateBoarSpawnPoint(chosenPos);
+                boarGroupPositions.Add(chosenPos);
+                usedPositions.Add(chosenPos);
+                groupsSpawned++;
+            }
+
+            for (int i = validPositions.Count - 1; i >= 0; i--)
+            {
+                if (Vector3.Distance(validPositions[i], chosenPos) < minDistanceBetweenBoarGroups)
+                {
+                    validPositions.RemoveAt(i);
+                    positionChances.RemoveAt(i);
+                }
+            }
+        }
+    }
+
+    bool IsBoarBiome(BiomeType biome)
+    {
+        return biome == BiomeType.Forest || biome == BiomeType.Desert;
+    }
+
+    float GetBoarSpawnChance(BiomeType biome)
+    {
+        return biome == BiomeType.Forest
+            ? Mathf.Clamp01(forestBoarGroupChance)
+            : Mathf.Clamp01(plainsBoarGroupChance);
+    }
+
+    void CreateBoarSpawnPoint(Vector3 worldPos)
+    {
+        GameObject spawnObject = new GameObject("Wild Boar Spawn Point");
+        spawnObject.transform.SetParent(transform, true);
+        spawnObject.transform.position = worldPos;
+
+        WildBoarSpawnPoint spawnPoint = spawnObject.AddComponent<WildBoarSpawnPoint>();
+        spawnPoint.boarPrefab = boarPrefab;
+        spawnPoint.boarsPerGroup = Mathf.Max(1, boarsPerGroup);
+        spawnPoint.spawnRadius = boarSpawnRadius;
+        spawnPoint.respawnDelay = boarRespawnDelay;
+        spawnPoint.boarPatrolRadius = boarPatrolRadius;
+        spawnPoint.thickLeatherItemData = ThickLeatherItemRegistry.GetOrCreate();
+        spawnPoint.sharpTuskItemData = SharpTuskItemRegistry.GetOrCreate();
+        spawnPoint.boarMeatItemData = BoarMeatItemRegistry.GetOrCreate();
+        spawnPoint.trophyItemData = BoarTrophyItemRegistry.GetOrCreate();
+    }
+
+    IEnumerator SpawnEarthGolemGroupsAsync(Vector2 offset)
+    {
+        int desiredGroups = Mathf.Max(0, maxEarthGolemGroupsPerChunk);
+        if (desiredGroups == 0)
+            yield break;
+
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 616));
+        earthGolemGroupPositions.Clear();
+        List<Vector3> validPositions = new List<Vector3>();
+        int iterationsSinceYield = 0;
+
+        for (int i = 0; i < vertices.Length; i += 20)
+        {
+            iterationsSinceYield++;
+            if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
+            {
+                iterationsSinceYield = 0;
+                yield return null;
+            }
+
+            Vector3 localPos = vertices[i];
+            Vector3 worldPos = localPos + transform.position;
+
+            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + 28f)
+                continue;
+
+            if (mesh.normals[i].y < 0.84f)
+                continue;
+
+            Vector2 point = new Vector2(localPos.x + offset.x, localPos.z + offset.y);
+            if (GetBiome(point) != BiomeType.Desert)
+                continue;
+
+            if (IsRiverZone(point, 3.2f))
+                continue;
+
+            if (IsNearRoadZone(point, 2.4f))
+                continue;
+
+            Vector3 groundPoint = GetGroundPoint(worldPos);
+            if (IsTooClose(groundPoint, minDistanceBetweenEarthGolemGroups * 0.7f))
+                continue;
+
+            validPositions.Add(groundPoint);
+        }
+
+        int groupsSpawned = 0;
+        while (groupsSpawned < desiredGroups && validPositions.Count > 0)
+        {
+            yield return null;
+
+            int index = rng.Range(0, validPositions.Count);
+            Vector3 chosenPos = validPositions[index];
+
+            if (rng.Value() <= desertEarthGolemGroupChance)
+            {
+                CreateEarthGolemSpawnPoint(chosenPos);
+                earthGolemGroupPositions.Add(chosenPos);
+                usedPositions.Add(chosenPos);
+                groupsSpawned++;
+            }
+
+            validPositions.RemoveAll(pos => Vector3.Distance(pos, chosenPos) < minDistanceBetweenEarthGolemGroups);
+        }
+    }
+
+    void CreateEarthGolemSpawnPoint(Vector3 worldPos)
+    {
+        GameObject spawnObject = new GameObject("Earth Golem Spawn Point");
+        spawnObject.transform.SetParent(transform, true);
+        spawnObject.transform.position = worldPos;
+
+        EarthGolemSpawnPoint spawnPoint = spawnObject.AddComponent<EarthGolemSpawnPoint>();
+        spawnPoint.golemPrefab = earthGolemPrefab;
+        spawnPoint.golemsPerGroup = Mathf.Max(1, earthGolemsPerGroup);
+        spawnPoint.spawnRadius = earthGolemSpawnRadius;
+        spawnPoint.respawnDelay = earthGolemRespawnDelay;
+        spawnPoint.golemPatrolRadius = earthGolemPatrolRadius;
+        spawnPoint.stoneFragmentItemData = StoneFragmentItemRegistry.GetOrCreate();
+        spawnPoint.resilientMossItemData = ResilientMossItemRegistry.GetOrCreate();
+        spawnPoint.ironOreItemData = IronItemRegistry.GetOrCreate();
+        spawnPoint.earthCoreItemData = EarthCoreItemRegistry.GetOrCreate();
     }
 
     IEnumerator SpawnForestMushroomGroupsAsync(Vector2 offset)
@@ -1943,6 +2283,140 @@ public class TerrainChunk : MonoBehaviour
         spawnPoint.respawnDelay = forestMushroomRespawnDelay;
     }
 
+    IEnumerator SpawnAncestralTotemsAsync(Vector2 offset)
+    {
+        int desiredTotems = Mathf.Max(0, maxAncestralTotemsPerChunk);
+        if (desiredTotems == 0)
+            yield break;
+
+        ChunkRandom rng = new ChunkRandom(BuildChunkSeed(offset, 727));
+        ancestralTotemPositions.Clear();
+        List<Vector3> validPositions = new List<Vector3>();
+        List<AncestralTotemTier> validTiers = new List<AncestralTotemTier>();
+        int iterationsSinceYield = 0;
+
+        for (int i = 0; i < vertices.Length; i += 22)
+        {
+            iterationsSinceYield++;
+            if (iterationsSinceYield >= Mathf.Max(20, generationYieldInterval))
+            {
+                iterationsSinceYield = 0;
+                yield return null;
+            }
+
+            Vector3 localPos = vertices[i];
+            Vector3 worldPos = localPos + transform.position;
+
+            if (player != null && Vector3.Distance(worldPos, player.position) < safeRadius + ancestralTotemMinPlayerDistance)
+                continue;
+
+            if (mesh.normals[i].y < 0.84f)
+                continue;
+
+            Vector2 point = new Vector2(localPos.x + offset.x, localPos.z + offset.y);
+            if (IsRiverZone(point, 3.2f))
+                continue;
+
+            if (IsNearRoadZone(point, 2.4f))
+                continue;
+
+            Vector3 groundPoint = GetGroundPoint(worldPos);
+            if (IsTooClose(groundPoint, minDistanceBetweenAncestralTotems * 0.7f))
+                continue;
+
+            BiomeType biome = GetBiome(point);
+            if (!TryRollAncestralTotemTier(biome, rng, out AncestralTotemTier tier))
+                continue;
+
+            validPositions.Add(groundPoint);
+            validTiers.Add(tier);
+        }
+
+        int spawned = 0;
+        while (spawned < desiredTotems && validPositions.Count > 0)
+        {
+            yield return null;
+
+            int index = rng.Range(0, validPositions.Count);
+            Vector3 chosenPos = validPositions[index];
+            AncestralTotemTier tier = validTiers[index];
+
+            CreateAncestralTotem(chosenPos, tier);
+            ancestralTotemPositions.Add(chosenPos);
+            usedPositions.Add(chosenPos);
+            spawned++;
+
+            for (int i = validPositions.Count - 1; i >= 0; i--)
+            {
+                if (Vector3.Distance(validPositions[i], chosenPos) < minDistanceBetweenAncestralTotems)
+                {
+                    validPositions.RemoveAt(i);
+                    validTiers.RemoveAt(i);
+                }
+            }
+        }
+    }
+
+    bool TryRollAncestralTotemTier(BiomeType biome, ChunkRandom rng, out AncestralTotemTier tier)
+    {
+        float commonChance = Mathf.Clamp01(commonAncestralTotemChance);
+        float rareChance = Mathf.Clamp01(rareAncestralTotemChance);
+        float legendaryChance = Mathf.Clamp01(legendaryAncestralTotemChance);
+
+        if (biome == BiomeType.Forest)
+        {
+            rareChance *= 0.65f;
+            legendaryChance *= 0.25f;
+        }
+        else if (biome == BiomeType.Desert)
+        {
+            commonChance *= 0.65f;
+            rareChance *= 1.1f;
+            legendaryChance *= 1.35f;
+        }
+        else
+        {
+            commonChance *= 0.45f;
+            rareChance *= 0.9f;
+            legendaryChance *= 1.15f;
+        }
+
+        float roll = rng.Value();
+        if (roll <= legendaryChance)
+        {
+            tier = AncestralTotemTier.Legendary;
+            return true;
+        }
+
+        roll = rng.Value();
+        if (roll <= rareChance)
+        {
+            tier = AncestralTotemTier.Rare;
+            return true;
+        }
+
+        roll = rng.Value();
+        if (roll <= commonChance)
+        {
+            tier = AncestralTotemTier.Common;
+            return true;
+        }
+
+        tier = AncestralTotemTier.Common;
+        return false;
+    }
+
+    void CreateAncestralTotem(Vector3 worldPos, AncestralTotemTier tier)
+    {
+        GameObject totemObject = new GameObject($"Ancestral Totem {tier}");
+        totemObject.transform.SetParent(transform, true);
+        totemObject.transform.position = worldPos;
+        totemObject.transform.rotation = Quaternion.Euler(0f, Mathf.Abs(worldPos.x + worldPos.z) % 360f, 0f);
+
+        AncestralTotem totem = totemObject.AddComponent<AncestralTotem>();
+        totem.Configure(tier);
+    }
+
     GameObject GetRandomRock(ChunkRandom rng)
     {
         float r = rng.Value();
@@ -1958,15 +2432,23 @@ public class TerrainChunk : MonoBehaviour
         oreRoot.transform.SetParent(transform, true);
         oreRoot.transform.position = worldPos;
         oreRoot.transform.rotation = Quaternion.Euler(0f, rng.Range(0f, 360f), 0f);
+        oreRoot.transform.localScale = Vector3.one;
 
-        CreateIronOrePiece(oreRoot.transform, new Vector3(-0.28f, 0.13f, 0.05f), new Vector3(0.85f, 0.34f, 0.72f), new Color(0.24f, 0.24f, 0.22f, 1f));
-        CreateIronOrePiece(oreRoot.transform, new Vector3(0.22f, 0.1f, -0.18f), new Vector3(0.62f, 0.3f, 0.54f), new Color(0.18f, 0.18f, 0.17f, 1f));
-        CreateIronOrePiece(oreRoot.transform, new Vector3(0.08f, 0.25f, 0.18f), new Vector3(0.34f, 0.12f, 0.42f), new Color(0.62f, 0.38f, 0.16f, 1f));
-        CreateIronOrePiece(oreRoot.transform, new Vector3(-0.18f, 0.23f, -0.14f), new Vector3(0.28f, 0.1f, 0.38f), new Color(0.76f, 0.52f, 0.24f, 1f));
+        float oreDiameter = rng.Range(2.55f, 3.25f);
+        bool usingMeshyIron = MeshyIronOreRuntimeVisual.TryAttachTo(oreRoot, oreDiameter);
+        if (!usingMeshyIron)
+        {
+            oreRoot.transform.localScale = new Vector3(1.35f, 1.25f, 1.35f);
+
+            CreateIronOrePiece(oreRoot.transform, new Vector3(-0.28f, 0.13f, 0.05f), new Vector3(0.85f, 0.34f, 0.72f), new Color(0.24f, 0.24f, 0.22f, 1f));
+            CreateIronOrePiece(oreRoot.transform, new Vector3(0.22f, 0.1f, -0.18f), new Vector3(0.62f, 0.3f, 0.54f), new Color(0.18f, 0.18f, 0.17f, 1f));
+            CreateIronOrePiece(oreRoot.transform, new Vector3(0.08f, 0.25f, 0.18f), new Vector3(0.34f, 0.12f, 0.42f), new Color(0.62f, 0.38f, 0.16f, 1f));
+            CreateIronOrePiece(oreRoot.transform, new Vector3(-0.18f, 0.23f, -0.14f), new Vector3(0.28f, 0.1f, 0.38f), new Color(0.76f, 0.52f, 0.24f, 1f));
+        }
 
         SphereCollider collider = oreRoot.AddComponent<SphereCollider>();
-        collider.radius = 0.7f;
-        collider.center = new Vector3(0f, 0.24f, 0f);
+        collider.radius = usingMeshyIron ? Mathf.Max(0.85f, oreDiameter * 0.56f) : 1.05f;
+        collider.center = usingMeshyIron ? new Vector3(0f, Mathf.Max(0.3f, oreDiameter * 0.28f), 0f) : new Vector3(0f, 0.34f, 0f);
 
         ResourceNode resource = oreRoot.AddComponent<ResourceNode>();
         resource.itemName = IronItemRegistry.ItemName;
@@ -1974,9 +2456,9 @@ public class TerrainChunk : MonoBehaviour
         resource.itemData = IronItemRegistry.GetOrCreate();
         resource.requiredTool = ToolType.Pickaxe;
         resource.allowEmptyHand = false;
-        resource.maxHealth = 5;
+        resource.maxHealth = 6;
         resource.minDrop = 2;
-        resource.maxDrop = 4;
+        resource.maxDrop = 5;
         resource.emptyHandDamage = 0;
         resource.emptyHandMinDrop = 0;
         resource.emptyHandMaxDrop = 0;
@@ -2166,6 +2648,60 @@ public class TerrainChunk : MonoBehaviour
         resource.respawnDelayRange = delayRange;
     }
 
+    void ScalePickaxeResourceRock(GameObject rock, ChunkRandom rng)
+    {
+        if (rock == null)
+            return;
+
+        ResourceNode resource = rock.GetComponent<ResourceNode>() ??
+                                rock.GetComponentInChildren<ResourceNode>();
+
+        if (resource == null || resource.requiredTool != ToolType.Pickaxe)
+            return;
+
+        float scale = rng.Range(1.45f, 1.9f);
+        rock.transform.localScale = Vector3.Scale(
+            rock.transform.localScale,
+            new Vector3(scale, scale * 1.08f, scale));
+
+        resource.allowEmptyHand = false;
+        resource.maxHealth = Mathf.Max(resource.maxHealth, 5);
+        resource.minDrop = Mathf.Max(resource.minDrop, 2);
+        resource.maxDrop = Mathf.Max(resource.maxDrop, 4);
+    }
+
+    void EnsureTreeIsCollectable(GameObject tree)
+    {
+        if (tree == null)
+            return;
+
+        ResourceNode resource = tree.GetComponent<ResourceNode>() ??
+                                tree.GetComponentInChildren<ResourceNode>();
+
+        if (resource == null)
+        {
+            resource = tree.AddComponent<ResourceNode>();
+        }
+
+        resource.itemName = MeshyOakTreeRuntimeFactory.OakWoodItemName;
+        resource.itemData = OakWoodItemRegistry.GetOrCreate();
+        resource.maxHealth = Mathf.Max(resource.maxHealth, 4);
+        resource.minDrop = Mathf.Max(resource.minDrop, 2);
+        resource.maxDrop = 4;
+        resource.requiredTool = ToolType.Axe;
+        resource.allowEmptyHand = false;
+        resource.emptyHandDamage = 0;
+        resource.emptyHandMinDrop = 0;
+        resource.emptyHandMaxDrop = 0;
+
+        if (tree.GetComponentInChildren<Collider>() == null)
+        {
+            BoxCollider collider = tree.AddComponent<BoxCollider>();
+            collider.center = new Vector3(0f, 1.7f, 0f);
+            collider.size = new Vector3(1.8f, 3.4f, 1.8f);
+        }
+    }
+
     void ConfigurePickupRespawn(GameObject pickup)
     {
         if (pickup == null)
@@ -2194,5 +2730,2068 @@ public class TerrainChunk : MonoBehaviour
         Renderer renderer = piece.GetComponent<Renderer>();
         if (renderer != null)
             renderer.material.color = color;
+    }
+}
+
+public static class MeshyIronOreRuntimeVisual
+{
+    const string ResourceRoot = "World/IronOre/MeshyIronOre/Meshy_AI_Stylized_fantasy_mini_0630231038_texture_fbx/";
+    const string ModelResourcePath = ResourceRoot + "Meshy_AI_Stylized_fantasy_mini_0630231038_texture";
+    const string AlbedoResourcePath = ResourceRoot + "Meshy_AI_Stylized_fantasy_mini_0630231038_texture";
+    const string EmissionResourcePath = ResourceRoot + "Meshy_AI_Stylized_fantasy_mini_0630231038_texture_emission";
+    const string MetallicResourcePath = ResourceRoot + "Meshy_AI_Stylized_fantasy_mini_0630231038_texture_metallic";
+    const string NormalResourcePath = ResourceRoot + "Meshy_AI_Stylized_fantasy_mini_0630231038_texture_normal";
+    const string MaterialResourcePath = "World/IronOre/MeshyIronOre/MeshyIronOre_Material";
+    const string VisualName = "MeshyIronOreVisual";
+
+    static GameObject cachedModel;
+    static Material cachedMaterial;
+
+    public static bool TryAttachTo(GameObject root, float targetDiameter)
+    {
+        if (root == null)
+            return false;
+
+        GameObject model = LoadModel();
+        if (model == null)
+            return false;
+
+        GameObject visual = Object.Instantiate(model, root.transform);
+        visual.name = VisualName;
+        visual.transform.localPosition = Vector3.zero;
+        visual.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+        visual.transform.localScale = Vector3.one;
+
+        RemoveRuntimeOnlyComponents(visual);
+        ApplyMaterial(visual);
+        NormalizeVisual(root.transform, visual, targetDiameter);
+        return true;
+    }
+
+    static GameObject LoadModel()
+    {
+        if (cachedModel == null)
+            cachedModel = Resources.Load<GameObject>(ModelResourcePath);
+
+        return cachedModel;
+    }
+
+    static Material LoadMaterial()
+    {
+        if (cachedMaterial != null)
+            return cachedMaterial;
+
+        cachedMaterial = Resources.Load<Material>(MaterialResourcePath);
+        if (cachedMaterial != null)
+            return cachedMaterial;
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        if (shader == null)
+            return null;
+
+        cachedMaterial = new Material(shader)
+        {
+            name = "MeshyIronOreRuntime"
+        };
+
+        Texture2D albedo = Resources.Load<Texture2D>(AlbedoResourcePath);
+        Texture2D normal = Resources.Load<Texture2D>(NormalResourcePath);
+        Texture2D metallic = Resources.Load<Texture2D>(MetallicResourcePath);
+        Texture2D emission = Resources.Load<Texture2D>(EmissionResourcePath);
+
+        SetTexture(cachedMaterial, "_BaseMap", albedo);
+        SetTexture(cachedMaterial, "_MainTex", albedo);
+        SetColor(cachedMaterial, "_BaseColor", Color.white);
+        SetColor(cachedMaterial, "_Color", Color.white);
+
+        SetTexture(cachedMaterial, "_BumpMap", normal);
+        if (normal != null)
+            cachedMaterial.EnableKeyword("_NORMALMAP");
+
+        SetTexture(cachedMaterial, "_MetallicGlossMap", metallic);
+        if (metallic != null)
+            cachedMaterial.EnableKeyword("_METALLICSPECGLOSSMAP");
+
+        SetFloat(cachedMaterial, "_Metallic", 0.45f);
+        SetFloat(cachedMaterial, "_Smoothness", 0.38f);
+        SetFloat(cachedMaterial, "_Glossiness", 0.38f);
+
+        SetTexture(cachedMaterial, "_EmissionMap", emission);
+        if (emission != null)
+        {
+            cachedMaterial.EnableKeyword("_EMISSION");
+            SetColor(cachedMaterial, "_EmissionColor", new Color(0.18f, 0.14f, 0.1f));
+        }
+
+        return cachedMaterial;
+    }
+
+    static void RemoveRuntimeOnlyComponents(GameObject visual)
+    {
+        Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
+        for (int i = colliders.Length - 1; i >= 0; i--)
+            Object.Destroy(colliders[i]);
+
+        Animator[] animators = visual.GetComponentsInChildren<Animator>(true);
+        for (int i = animators.Length - 1; i >= 0; i--)
+            Object.Destroy(animators[i]);
+
+        Animation[] animations = visual.GetComponentsInChildren<Animation>(true);
+        for (int i = animations.Length - 1; i >= 0; i--)
+            Object.Destroy(animations[i]);
+    }
+
+    static void ApplyMaterial(GameObject visual)
+    {
+        Material material = LoadMaterial();
+        if (material == null)
+            return;
+
+        Renderer[] renderers = visual.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            Material[] materials = renderer.sharedMaterials;
+            if (materials == null || materials.Length == 0)
+            {
+                materials = new[] { material };
+            }
+            else
+            {
+                for (int j = 0; j < materials.Length; j++)
+                    materials[j] = material;
+            }
+
+            renderer.sharedMaterials = materials;
+            renderer.receiveShadows = true;
+        }
+    }
+
+    static void NormalizeVisual(Transform root, GameObject visual, float targetDiameter)
+    {
+        Renderer[] renderers = visual.GetComponentsInChildren<Renderer>(true);
+        if (!TryCalculateLocalBounds(root, renderers, out Bounds bounds))
+            return;
+
+        float currentDiameter = Mathf.Max(bounds.size.x, bounds.size.z);
+        if (currentDiameter > 0.001f)
+            visual.transform.localScale = Vector3.one * (targetDiameter / currentDiameter);
+
+        if (!TryCalculateLocalBounds(root, renderers, out bounds))
+            return;
+
+        visual.transform.localPosition += new Vector3(-bounds.center.x, -bounds.min.y, -bounds.center.z);
+    }
+
+    static bool TryCalculateLocalBounds(Transform root, Renderer[] renderers, out Bounds localBounds)
+    {
+        localBounds = default;
+        bool initialized = false;
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || !renderer.enabled)
+                continue;
+
+            Bounds worldBounds = renderer.bounds;
+            Vector3 center = worldBounds.center;
+            Vector3 extents = worldBounds.extents;
+
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(-extents.x, -extents.y, -extents.z)), ref localBounds, ref initialized);
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(-extents.x, -extents.y, extents.z)), ref localBounds, ref initialized);
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(-extents.x, extents.y, -extents.z)), ref localBounds, ref initialized);
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(-extents.x, extents.y, extents.z)), ref localBounds, ref initialized);
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(extents.x, -extents.y, -extents.z)), ref localBounds, ref initialized);
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(extents.x, -extents.y, extents.z)), ref localBounds, ref initialized);
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(extents.x, extents.y, -extents.z)), ref localBounds, ref initialized);
+            Encapsulate(root.InverseTransformPoint(center + new Vector3(extents.x, extents.y, extents.z)), ref localBounds, ref initialized);
+        }
+
+        return initialized;
+    }
+
+    static void Encapsulate(Vector3 point, ref Bounds bounds, ref bool initialized)
+    {
+        if (!initialized)
+        {
+            bounds = new Bounds(point, Vector3.zero);
+            initialized = true;
+            return;
+        }
+
+        bounds.Encapsulate(point);
+    }
+
+    static void SetTexture(Material material, string propertyName, Texture texture)
+    {
+        if (texture != null && material.HasProperty(propertyName))
+            material.SetTexture(propertyName, texture);
+    }
+
+    static void SetColor(Material material, string propertyName, Color color)
+    {
+        if (material.HasProperty(propertyName))
+            material.SetColor(propertyName, color);
+    }
+
+    static void SetFloat(Material material, string propertyName, float value)
+    {
+        if (material.HasProperty(propertyName))
+            material.SetFloat(propertyName, value);
+    }
+}
+
+public enum AncestralTotemTier
+{
+    Common = 1,
+    Rare = 2,
+    Legendary = 3
+}
+
+public class AncestralPowerDefinition
+{
+    const string IconRootPath = "Icons/AncestralPowers/";
+
+    public string id;
+    public string displayName;
+    public string description;
+    public AncestralTotemTier tier;
+    public float maxHealthBonus;
+    public float maxStaminaBonus;
+    public float damageBonus;
+    public float animalDamageBonus;
+    public float resourceBonusChance;
+    public float bonusDefense;
+    public float healthRegenBonus;
+    public float speedBonus;
+    public float attackSpeedBonus;
+    public float ignoreDamageChance;
+
+    Sprite icon;
+
+    public AncestralPowerDefinition(string id, string displayName, string description, AncestralTotemTier tier)
+    {
+        this.id = id;
+        this.displayName = displayName;
+        this.description = description;
+        this.tier = tier;
+    }
+
+    public Sprite GetIcon()
+    {
+        if (icon != null)
+            return icon;
+
+        icon = Resources.Load<Sprite>(IconRootPath + id);
+        return icon;
+    }
+}
+
+public static class AncestralPowerCatalog
+{
+    static readonly List<AncestralPowerDefinition> definitions = new List<AncestralPowerDefinition>
+    {
+        new AncestralPowerDefinition("explorer_vigor", "Vigor do Explorador", "+10 Vida maxima", AncestralTotemTier.Common)
+        {
+            maxHealthBonus = 10f
+        },
+        new AncestralPowerDefinition("strong_lungs", "Pulmoes Fortes", "+10 Stamina maxima", AncestralTotemTier.Common)
+        {
+            maxStaminaBonus = 10f
+        },
+        new AncestralPowerDefinition("efficient_harvest", "Colheita Eficiente", "+5% chance de ganhar recurso extra", AncestralTotemTier.Common)
+        {
+            resourceBonusChance = 0.05f
+        },
+        new AncestralPowerDefinition("novice_hunter", "Cacador Iniciante", "+5% dano contra animais", AncestralTotemTier.Common)
+        {
+            animalDamageBonus = 0.05f
+        },
+        new AncestralPowerDefinition("warrior_spirit", "Espirito Guerreiro", "+15% dano", AncestralTotemTier.Rare)
+        {
+            damageBonus = 0.15f
+        },
+        new AncestralPowerDefinition("resistant_skin", "Pele Resistente", "+20 defesa", AncestralTotemTier.Rare)
+        {
+            bonusDefense = 20f
+        },
+        new AncestralPowerDefinition("natural_recovery", "Recuperacao Natural", "+1 HP por segundo", AncestralTotemTier.Rare)
+        {
+            healthRegenBonus = 1f
+        },
+        new AncestralPowerDefinition("improved_agility", "Agilidade Aprimorada", "+10% velocidade", AncestralTotemTier.Rare)
+        {
+            speedBonus = 0.1f
+        },
+        new AncestralPowerDefinition("ancestral_blood", "Sangue Ancestral", "+25% dano total", AncestralTotemTier.Legendary)
+        {
+            damageBonus = 0.25f
+        },
+        new AncestralPowerDefinition("earth_titan", "Tita da Terra", "+50 Vida maxima", AncestralTotemTier.Legendary)
+        {
+            maxHealthBonus = 50f
+        },
+        new AncestralPowerDefinition("storm_spirit", "Espirito da Tempestade", "+15% velocidade de ataque", AncestralTotemTier.Legendary)
+        {
+            attackSpeedBonus = 0.15f
+        },
+        new AncestralPowerDefinition("immortal_guardian", "Guardiao Imortal", "20% chance de ignorar dano recebido", AncestralTotemTier.Legendary)
+        {
+            ignoreDamageChance = 0.2f
+        }
+    };
+
+    public static AncestralPowerDefinition Find(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+
+        for (int i = 0; i < definitions.Count; i++)
+        {
+            if (definitions[i].id == id)
+                return definitions[i];
+        }
+
+        return null;
+    }
+
+    public static List<AncestralPowerDefinition> BuildRewardPool(AncestralTotemTier tier, List<string> ownedIds)
+    {
+        List<AncestralPowerDefinition> pool = new List<AncestralPowerDefinition>();
+        AddDefinitions(pool, tier, ownedIds);
+
+        if (pool.Count == 0)
+        {
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                if (!ownedIds.Contains(definitions[i].id))
+                    pool.Add(definitions[i]);
+            }
+        }
+
+        return pool;
+    }
+
+    static void AddDefinitions(List<AncestralPowerDefinition> pool, AncestralTotemTier tier, List<string> ownedIds)
+    {
+        for (int i = 0; i < definitions.Count; i++)
+        {
+            AncestralPowerDefinition definition = definitions[i];
+            if (definition.tier == tier && !ownedIds.Contains(definition.id))
+                pool.Add(definition);
+        }
+    }
+}
+
+public class AncestralPowerService : MonoBehaviour
+{
+    public int maxActivePowers = 10;
+
+    readonly List<string> activePowerIds = new List<string>();
+    PlayerMovement playerMovement;
+
+    float appliedMaxHealthBonus;
+    float appliedMaxStaminaBonus;
+    float appliedHealthRegenBonus;
+    float appliedSpeedMultiplier = 1f;
+
+    public float DamageBonus { get; private set; }
+    public float AnimalDamageBonus { get; private set; }
+    public float ResourceBonusChance { get; private set; }
+    public float BonusDefense { get; private set; }
+    public float IgnoreDamageChance { get; private set; }
+    public float AttackCooldownMultiplier { get; private set; } = 1f;
+    public int ActivePowerCount => activePowerIds.Count;
+    public int MaxActivePowers => maxActivePowers;
+
+    public static AncestralPowerService GetOrCreate(PlayerMovement movement)
+    {
+        if (movement == null)
+            return null;
+
+        AncestralPowerService service = movement.GetComponent<AncestralPowerService>();
+        if (service == null)
+            service = movement.gameObject.AddComponent<AncestralPowerService>();
+
+        service.ResolveReferences();
+        return service;
+    }
+
+    void Awake()
+    {
+        ResolveReferences();
+        NotifyHudChanged();
+    }
+
+    void ResolveReferences()
+    {
+        if (playerMovement == null)
+            playerMovement = GetComponent<PlayerMovement>();
+    }
+
+    public List<string> CapturePowerIds()
+    {
+        return new List<string>(activePowerIds);
+    }
+
+    public List<AncestralPowerDefinition> GetActivePowerDefinitions()
+    {
+        List<AncestralPowerDefinition> activeDefinitions = new List<AncestralPowerDefinition>();
+
+        for (int i = 0; i < activePowerIds.Count; i++)
+        {
+            AncestralPowerDefinition definition = AncestralPowerCatalog.Find(activePowerIds[i]);
+            if (definition != null)
+                activeDefinitions.Add(definition);
+        }
+
+        return activeDefinitions;
+    }
+
+    public void LoadPowers(List<string> savedPowerIds)
+    {
+        ClearPowers(false);
+
+        if (savedPowerIds == null)
+            return;
+
+        for (int i = 0; i < savedPowerIds.Count; i++)
+        {
+            string id = savedPowerIds[i];
+            if (activePowerIds.Count >= maxActivePowers)
+                break;
+
+            if (AncestralPowerCatalog.Find(id) == null || activePowerIds.Contains(id))
+                continue;
+
+            activePowerIds.Add(id);
+        }
+
+        RecalculatePassiveEffects(false);
+        NotifyHudChanged();
+    }
+
+    public void ClearPowers(bool showMessage)
+    {
+        RemoveAppliedStats();
+        activePowerIds.Clear();
+        ResetRuntimeBonuses();
+
+        if (showMessage)
+            MessageSystem.Instance?.ShowMessage("Poderes ancestrais perdidos.");
+
+        NotifyHudChanged();
+    }
+
+    public bool GrantRandomPower(AncestralTotemTier tier)
+    {
+        if (activePowerIds.Count >= maxActivePowers)
+        {
+            MessageSystem.Instance?.ShowMessage("Limite de poderes ancestrais atingido.");
+            return false;
+        }
+
+        List<AncestralPowerDefinition> pool = AncestralPowerCatalog.BuildRewardPool(tier, activePowerIds);
+        if (pool.Count == 0)
+        {
+            MessageSystem.Instance?.ShowMessage("Nenhum poder ancestral novo disponivel.");
+            return false;
+        }
+
+        AncestralPowerDefinition reward = pool[Random.Range(0, pool.Count)];
+        activePowerIds.Add(reward.id);
+        RecalculatePassiveEffects(true);
+
+        string rewardMessage = $"{reward.displayName}: {reward.description}";
+        MessageSystem.Instance?.ShowMessage(rewardMessage);
+        DebugCommandChat.AddSystemMessage($"Poder ancestral coletado: {rewardMessage}");
+        NotifyHudChanged();
+        return true;
+    }
+
+    public float GetOutgoingDamageMultiplier(bool animalTarget)
+    {
+        return Mathf.Max(0.1f, 1f + DamageBonus + (animalTarget ? AnimalDamageBonus : 0f));
+    }
+
+    public bool TryIgnoreIncomingDamage()
+    {
+        return IgnoreDamageChance > 0f && Random.value < IgnoreDamageChance;
+    }
+
+    public bool TryRollBonusResource()
+    {
+        return ResourceBonusChance > 0f && Random.value < ResourceBonusChance;
+    }
+
+    void RecalculatePassiveEffects(bool increaseCurrentResources)
+    {
+        RemoveAppliedStats();
+        ResetRuntimeBonuses();
+        ResolveReferences();
+
+        float maxHealthBonus = 0f;
+        float maxStaminaBonus = 0f;
+        float healthRegenBonus = 0f;
+        float speedBonus = 0f;
+        float attackSpeedBonus = 0f;
+
+        for (int i = 0; i < activePowerIds.Count; i++)
+        {
+            AncestralPowerDefinition definition = AncestralPowerCatalog.Find(activePowerIds[i]);
+            if (definition == null)
+                continue;
+
+            maxHealthBonus += definition.maxHealthBonus;
+            maxStaminaBonus += definition.maxStaminaBonus;
+            healthRegenBonus += definition.healthRegenBonus;
+            speedBonus += definition.speedBonus;
+            attackSpeedBonus += definition.attackSpeedBonus;
+            DamageBonus += definition.damageBonus;
+            AnimalDamageBonus += definition.animalDamageBonus;
+            ResourceBonusChance += definition.resourceBonusChance;
+            BonusDefense += definition.bonusDefense;
+            IgnoreDamageChance += definition.ignoreDamageChance;
+        }
+
+        AttackCooldownMultiplier = Mathf.Max(0.35f, 1f - attackSpeedBonus);
+
+        if (playerMovement == null)
+            return;
+
+        if (maxHealthBonus > 0f)
+        {
+            playerMovement.maxHealth += maxHealthBonus;
+            if (increaseCurrentResources)
+                playerMovement.currentHealth = Mathf.Min(playerMovement.maxHealth, playerMovement.currentHealth + maxHealthBonus);
+            else
+                playerMovement.currentHealth = Mathf.Clamp(playerMovement.currentHealth, 0f, playerMovement.maxHealth);
+
+            appliedMaxHealthBonus = maxHealthBonus;
+        }
+
+        if (maxStaminaBonus > 0f)
+        {
+            playerMovement.maxStamina += maxStaminaBonus;
+            if (increaseCurrentResources)
+                playerMovement.currentStamina = Mathf.Min(playerMovement.maxStamina, playerMovement.currentStamina + maxStaminaBonus);
+            else
+                playerMovement.currentStamina = Mathf.Clamp(playerMovement.currentStamina, 0f, playerMovement.maxStamina);
+
+            appliedMaxStaminaBonus = maxStaminaBonus;
+        }
+
+        if (healthRegenBonus > 0f)
+        {
+            playerMovement.healthRegenPerSecond += healthRegenBonus;
+            appliedHealthRegenBonus = healthRegenBonus;
+        }
+
+        if (speedBonus > 0f)
+        {
+            appliedSpeedMultiplier = 1f + speedBonus;
+            playerMovement.walkSpeed *= appliedSpeedMultiplier;
+            playerMovement.runSpeed *= appliedSpeedMultiplier;
+        }
+    }
+
+    void RemoveAppliedStats()
+    {
+        ResolveReferences();
+
+        if (playerMovement == null)
+            return;
+
+        if (appliedSpeedMultiplier > 0f && !Mathf.Approximately(appliedSpeedMultiplier, 1f))
+        {
+            playerMovement.walkSpeed /= appliedSpeedMultiplier;
+            playerMovement.runSpeed /= appliedSpeedMultiplier;
+            appliedSpeedMultiplier = 1f;
+        }
+
+        if (appliedMaxHealthBonus > 0f)
+        {
+            playerMovement.maxHealth = Mathf.Max(1f, playerMovement.maxHealth - appliedMaxHealthBonus);
+            playerMovement.currentHealth = Mathf.Clamp(playerMovement.currentHealth, 0f, playerMovement.maxHealth);
+            appliedMaxHealthBonus = 0f;
+        }
+
+        if (appliedMaxStaminaBonus > 0f)
+        {
+            playerMovement.maxStamina = Mathf.Max(1f, playerMovement.maxStamina - appliedMaxStaminaBonus);
+            playerMovement.currentStamina = Mathf.Clamp(playerMovement.currentStamina, 0f, playerMovement.maxStamina);
+            appliedMaxStaminaBonus = 0f;
+        }
+
+        if (appliedHealthRegenBonus > 0f)
+        {
+            playerMovement.healthRegenPerSecond = Mathf.Max(0f, playerMovement.healthRegenPerSecond - appliedHealthRegenBonus);
+            appliedHealthRegenBonus = 0f;
+        }
+    }
+
+    void ResetRuntimeBonuses()
+    {
+        DamageBonus = 0f;
+        AnimalDamageBonus = 0f;
+        ResourceBonusChance = 0f;
+        BonusDefense = 0f;
+        IgnoreDamageChance = 0f;
+        AttackCooldownMultiplier = 1f;
+    }
+
+    void NotifyHudChanged()
+    {
+        AncestralPowerHUD.RefreshAll();
+    }
+}
+
+public class AncestralPowerHUD : MonoBehaviour
+{
+    public Vector2 panelAnchorPosition = new Vector2(360f, -72f);
+    public Vector2 panelSize = new Vector2(326f, 176f);
+    public int visiblePowerRows = 10;
+
+    const int PowersPerRow = 5;
+    const float PowerIconSize = 50f;
+    const float PowerSlotGap = 6f;
+
+    static readonly List<AncestralPowerHUD> instances = new List<AncestralPowerHUD>();
+
+    readonly List<GameObject> rowObjects = new List<GameObject>();
+    readonly List<TextMeshProUGUI> rowTexts = new List<TextMeshProUGUI>();
+    readonly List<Image> rowMarkers = new List<Image>();
+    readonly List<Image> rowIcons = new List<Image>();
+
+    PlayerMovement trackedPlayer;
+    AncestralPowerService powerService;
+    Canvas canvas;
+    RectTransform rootRect;
+    CanvasGroup canvasGroup;
+    TextMeshProUGUI titleText;
+    TextMeshProUGUI countText;
+    TextMeshProUGUI emptyText;
+    float nextRefreshTime;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    static void Bootstrap()
+    {
+        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+            return;
+
+        if (FindFirstObjectByType<AncestralPowerHUD>() != null)
+            return;
+
+        GameObject hudObject = new GameObject("Ancestral Power HUD");
+        DontDestroyOnLoad(hudObject);
+        hudObject.AddComponent<AncestralPowerHUD>();
+    }
+
+    public static void RefreshAll()
+    {
+        for (int i = 0; i < instances.Count; i++)
+        {
+            if (instances[i] != null)
+                instances[i].Refresh();
+        }
+    }
+
+    void OnEnable()
+    {
+        if (!instances.Contains(this))
+            instances.Add(this);
+    }
+
+    void OnDisable()
+    {
+        instances.Remove(this);
+    }
+
+    void Start()
+    {
+        ResolveReferences();
+        EnsureUI();
+        Refresh();
+    }
+
+    void Update()
+    {
+        ResolveReferences();
+        EnsureUI();
+
+        if (Time.unscaledTime >= nextRefreshTime)
+        {
+            nextRefreshTime = Time.unscaledTime + 0.25f;
+            Refresh();
+        }
+    }
+
+    void ResolveReferences()
+    {
+        PlayerMovement currentPlayer = LanMultiplayerManager.FindGameplayPlayer();
+        if (currentPlayer == null)
+            currentPlayer = SceneObjectCache.Find<PlayerMovement>(gameObject.scene, true);
+        if (currentPlayer == null)
+            currentPlayer = FindFirstObjectByType<PlayerMovement>();
+
+        if (trackedPlayer == currentPlayer && powerService != null)
+            return;
+
+        trackedPlayer = currentPlayer;
+        powerService = trackedPlayer != null ? AncestralPowerService.GetOrCreate(trackedPlayer) : null;
+    }
+
+    void EnsureUI()
+    {
+        if (canvas == null)
+        {
+            canvas = gameObject.GetComponent<Canvas>();
+            if (canvas == null)
+                canvas = gameObject.AddComponent<Canvas>();
+
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 90;
+
+            CanvasScaler scaler = gameObject.GetComponent<CanvasScaler>();
+            if (scaler == null)
+                scaler = gameObject.AddComponent<CanvasScaler>();
+
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+        }
+
+        if (rootRect == null)
+        {
+            GameObject rootObject = new GameObject("AncestralPowerPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup), typeof(Outline));
+            rootObject.transform.SetParent(transform, false);
+
+            rootRect = rootObject.GetComponent<RectTransform>();
+            rootRect.anchorMin = new Vector2(0f, 1f);
+            rootRect.anchorMax = new Vector2(0f, 1f);
+            rootRect.pivot = new Vector2(0f, 1f);
+
+            Image background = rootObject.GetComponent<Image>();
+            background.color = new Color(0.06f, 0.055f, 0.035f, 0.78f);
+            background.raycastTarget = false;
+
+            Outline outline = rootObject.GetComponent<Outline>();
+            outline.effectColor = new Color(0.75f, 0.61f, 0.28f, 0.82f);
+            outline.effectDistance = new Vector2(2f, -2f);
+
+            canvasGroup = rootObject.GetComponent<CanvasGroup>();
+            canvasGroup.blocksRaycasts = false;
+            canvasGroup.interactable = false;
+        }
+
+        rootRect.anchoredPosition = panelAnchorPosition;
+        rootRect.sizeDelta = panelSize;
+
+        titleText = EnsureText(rootRect, "PowerTitle", new Vector2(18f, -14f), new Vector2(160f, 30f), 24f, FontStyles.Bold, TextAlignmentOptions.Left);
+        countText = EnsureText(rootRect, "PowerCount", new Vector2(panelSize.x - 106f, -15f), new Vector2(88f, 30f), 22f, FontStyles.Bold, TextAlignmentOptions.Right);
+        emptyText = EnsureText(rootRect, "PowerEmpty", new Vector2(18f, -76f), new Vector2(panelSize.x - 36f, 48f), 17f, FontStyles.Italic, TextAlignmentOptions.Left);
+
+        titleText.text = "Poderes";
+        titleText.color = new Color(1f, 0.91f, 0.62f, 1f);
+
+        countText.color = new Color(0.78f, 1f, 0.67f, 1f);
+        emptyText.color = new Color(0.88f, 0.82f, 0.68f, 0.86f);
+        emptyText.text = "Nenhum poder coletado";
+        emptyText.raycastTarget = false;
+
+        EnsureRows(Mathf.Max(1, visiblePowerRows));
+    }
+
+    TextMeshProUGUI EnsureText(Transform parent, string objectName, Vector2 anchoredPosition, Vector2 size, float fontSize, FontStyles fontStyle, TextAlignmentOptions alignment)
+    {
+        Transform existing = parent.Find(objectName);
+        GameObject textObject;
+        TextMeshProUGUI text;
+
+        if (existing != null)
+        {
+            textObject = existing.gameObject;
+            text = textObject.GetComponent<TextMeshProUGUI>();
+        }
+        else
+        {
+            textObject = new GameObject(objectName, typeof(RectTransform), typeof(TextMeshProUGUI));
+            textObject.transform.SetParent(parent, false);
+            text = textObject.GetComponent<TextMeshProUGUI>();
+        }
+
+        RectTransform rect = text.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = anchoredPosition;
+        rect.sizeDelta = size;
+
+        text.fontSize = fontSize;
+        text.fontStyle = fontStyle;
+        text.alignment = alignment;
+        text.margin = Vector4.zero;
+        text.textWrappingMode = TextWrappingModes.NoWrap;
+        text.overflowMode = TextOverflowModes.Ellipsis;
+        text.raycastTarget = false;
+        return text;
+    }
+
+    void EnsureRows(int rowCount)
+    {
+        for (int i = rowObjects.Count; i < rowCount; i++)
+        {
+            GameObject rowObject = new GameObject($"PowerRow{i + 1}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            rowObject.transform.SetParent(rootRect, false);
+
+            RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+            rowRect.anchorMin = new Vector2(0f, 1f);
+            rowRect.anchorMax = new Vector2(0f, 1f);
+            rowRect.pivot = new Vector2(0f, 1f);
+
+            Image rowBackground = rowObject.GetComponent<Image>();
+            rowBackground.color = new Color(0.18f, 0.14f, 0.07f, 0.34f);
+            rowBackground.raycastTarget = false;
+
+            GameObject markerObject = new GameObject("TierMarker", typeof(RectTransform), typeof(Image));
+            markerObject.transform.SetParent(rowObject.transform, false);
+            RectTransform markerRect = markerObject.GetComponent<RectTransform>();
+            markerRect.anchorMin = new Vector2(0f, 0.5f);
+            markerRect.anchorMax = new Vector2(0f, 0.5f);
+            markerRect.pivot = new Vector2(0.5f, 0.5f);
+            markerRect.anchoredPosition = new Vector2(12f, 0f);
+            markerRect.sizeDelta = new Vector2(8f, 20f);
+
+            Image markerImage = markerObject.GetComponent<Image>();
+            markerImage.color = Color.white;
+            markerImage.enabled = false;
+            markerImage.raycastTarget = false;
+
+            GameObject iconObject = new GameObject("PowerIcon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            iconObject.transform.SetParent(rowObject.transform, false);
+            RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+            iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+            iconRect.pivot = new Vector2(0.5f, 0.5f);
+            iconRect.anchoredPosition = Vector2.zero;
+            iconRect.sizeDelta = new Vector2(PowerIconSize, PowerIconSize);
+
+            Image iconImage = iconObject.GetComponent<Image>();
+            iconImage.preserveAspect = true;
+            iconImage.raycastTarget = false;
+
+            TextMeshProUGUI rowText = EnsureText(rowObject.transform, "PowerText", new Vector2(50f, -4f), new Vector2(panelSize.x - 84f, 22f), 16f, FontStyles.Bold, TextAlignmentOptions.Left);
+            rowText.color = new Color(0.97f, 0.91f, 0.74f, 1f);
+            rowText.gameObject.SetActive(false);
+
+            rowObjects.Add(rowObject);
+            rowMarkers.Add(markerImage);
+            rowIcons.Add(iconImage);
+            rowTexts.Add(rowText);
+        }
+
+        float firstX = 18f;
+        float firstY = -54f;
+        float slotSize = PowerIconSize + 4f;
+
+        for (int i = 0; i < rowObjects.Count; i++)
+        {
+            int column = i % PowersPerRow;
+            int row = i / PowersPerRow;
+
+            RectTransform rowRect = rowObjects[i].GetComponent<RectTransform>();
+            rowRect.anchoredPosition = new Vector2(firstX + column * (slotSize + PowerSlotGap), firstY - row * (slotSize + PowerSlotGap));
+            rowRect.sizeDelta = new Vector2(slotSize, slotSize);
+
+            if (i < rowIcons.Count && rowIcons[i] != null)
+            {
+                RectTransform iconRect = rowIcons[i].GetComponent<RectTransform>();
+                iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+                iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+                iconRect.pivot = new Vector2(0.5f, 0.5f);
+                iconRect.anchoredPosition = Vector2.zero;
+                iconRect.sizeDelta = new Vector2(PowerIconSize, PowerIconSize);
+            }
+
+            if (i < rowMarkers.Count && rowMarkers[i] != null)
+                rowMarkers[i].enabled = false;
+
+            if (i < rowTexts.Count && rowTexts[i] != null)
+                rowTexts[i].gameObject.SetActive(false);
+        }
+    }
+
+    public void Refresh()
+    {
+        if (rootRect == null || titleText == null || countText == null)
+            return;
+
+        int powerCount = powerService != null ? powerService.ActivePowerCount : 0;
+        int powerLimit = powerService != null ? powerService.MaxActivePowers : 10;
+        countText.text = $"{powerCount} / {powerLimit}";
+
+        if (canvasGroup != null)
+            canvasGroup.alpha = powerCount > 0 ? 1f : 0.72f;
+
+        List<AncestralPowerDefinition> powers = powerService != null ? powerService.GetActivePowerDefinitions() : new List<AncestralPowerDefinition>();
+        int visibleRows = Mathf.Max(1, visiblePowerRows);
+        EnsureRows(visibleRows);
+
+        if (emptyText != null)
+            emptyText.gameObject.SetActive(powers.Count == 0);
+
+        for (int i = 0; i < rowObjects.Count; i++)
+        {
+            bool hasPower = i < powers.Count && i < visibleRows;
+            rowObjects[i].SetActive(hasPower);
+
+            if (!hasPower)
+                continue;
+
+            bool shouldCollapseRemaining = i == visibleRows - 1 && powers.Count > visibleRows;
+            if (shouldCollapseRemaining)
+            {
+                int hiddenCount = powers.Count - visibleRows + 1;
+                rowTexts[i].gameObject.SetActive(true);
+                rowTexts[i].text = $"+{hiddenCount}";
+                rowTexts[i].fontSize = 18f;
+                rowTexts[i].alignment = TextAlignmentOptions.Center;
+                if (i < rowIcons.Count)
+                    rowIcons[i].enabled = false;
+                continue;
+            }
+
+            AncestralPowerDefinition definition = powers[i];
+            rowTexts[i].gameObject.SetActive(false);
+
+            Color tierColor = GetTierColor(definition.tier);
+            Image rowBackground = rowObjects[i].GetComponent<Image>();
+            if (rowBackground != null)
+                rowBackground.color = new Color(tierColor.r, tierColor.g, tierColor.b, 0.18f);
+
+            if (i < rowIcons.Count)
+            {
+                Sprite icon = definition.GetIcon();
+                rowIcons[i].sprite = icon;
+                rowIcons[i].enabled = icon != null;
+                rowIcons[i].color = Color.white;
+            }
+        }
+    }
+
+    Color GetTierColor(AncestralTotemTier tier)
+    {
+        switch (tier)
+        {
+            case AncestralTotemTier.Rare:
+                return new Color(0.32f, 0.62f, 1f, 1f);
+            case AncestralTotemTier.Legendary:
+                return new Color(1f, 0.73f, 0.18f, 1f);
+            default:
+                return new Color(0.44f, 0.95f, 0.45f, 1f);
+        }
+    }
+}
+
+public class AncestralTotem : MonoBehaviour, IPlayerInteractable
+{
+    public AncestralTotemTier tier = AncestralTotemTier.Common;
+    public int enemiesPerEvent = 3;
+    public float enemySpawnRadius = 6f;
+    public float checkCompletionInterval = 0.35f;
+
+    [Header("Recompensa de XP")]
+    public int commonXpReward = 150;
+    public int rareXpReward = 350;
+    public int legendaryXpReward = 750;
+
+    readonly List<GameObject> summonedEnemies = new List<GameObject>();
+    PlayerMovement activatingPlayer;
+    bool isActive;
+    bool isCompleted;
+    bool visualBuilt;
+    float nextCompletionCheckTime;
+
+    public bool IsActive => isActive;
+    public bool IsCompleted => isCompleted;
+
+    public void Configure(AncestralTotemTier configuredTier)
+    {
+        tier = configuredTier;
+        BuildVisual();
+        EnsureCollider();
+    }
+
+    void Start()
+    {
+        if (!visualBuilt)
+            BuildVisual();
+
+        EnsureCollider();
+    }
+
+    public bool Interact(PlayerInteraction playerInteraction)
+    {
+        if (isCompleted)
+        {
+            MessageSystem.Instance?.ShowMessage("Este totem ja foi consumido.");
+            return true;
+        }
+
+        if (isActive)
+        {
+            MessageSystem.Instance?.ShowMessage("Derrote os inimigos invocados pelo totem.");
+            return true;
+        }
+
+        activatingPlayer = playerInteraction != null ? playerInteraction.GetComponent<PlayerMovement>() : null;
+        if (activatingPlayer == null)
+        {
+            MessageSystem.Instance?.ShowMessage("Player nao encontrado para ativar o totem.");
+            return true;
+        }
+
+        StartCoroutine(RunTotemEventRoutine());
+        return true;
+    }
+
+    IEnumerator RunTotemEventRoutine()
+    {
+        isActive = true;
+        MessageSystem.Instance?.ShowMessage($"{GetTierDisplayName()} ativado!");
+        PlayActivationBurst();
+
+        yield return new WaitForSeconds(0.35f);
+
+        int count = Mathf.Max(1, enemiesPerEvent);
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 spawnPosition = ResolveEnemySpawnPosition(i, count);
+            GameObject enemy = SpawnEnemyForTier(i, spawnPosition);
+            if (enemy != null)
+                summonedEnemies.Add(enemy);
+
+            PlaySummonBurst(spawnPosition);
+            yield return new WaitForSeconds(0.22f);
+        }
+
+        nextCompletionCheckTime = Time.time + checkCompletionInterval;
+        while (!isCompleted)
+        {
+            if (Time.time >= nextCompletionCheckTime)
+            {
+                nextCompletionCheckTime = Time.time + checkCompletionInterval;
+                CleanupSummonedEnemies();
+
+                if (summonedEnemies.Count == 0)
+                    CompleteEvent();
+            }
+
+            yield return null;
+        }
+    }
+
+    void CompleteEvent()
+    {
+        if (isCompleted)
+            return;
+
+        isCompleted = true;
+        isActive = false;
+
+        GrantCompletionExperience();
+        SpawnRewardPickup();
+        PlayerAnimationBridge.Trigger(activatingPlayer, PlayerAnimationBridge.VictoryTrigger);
+        MessageSystem.Instance?.ShowMessage("Totem destruido. Colete o buff ancestral.");
+        PlayActivationBurst();
+        StartCoroutine(DestroyTotemRoutine());
+    }
+
+    void GrantCompletionExperience()
+    {
+        if (activatingPlayer == null)
+            return;
+
+        int xpReward = GetXpReward();
+        if (xpReward <= 0)
+            return;
+
+        PlayerProgression progression = activatingPlayer.GetComponent<PlayerProgression>();
+        if (progression == null)
+            progression = activatingPlayer.gameObject.AddComponent<PlayerProgression>();
+
+        progression.AddExperience(xpReward, GetTierDisplayName());
+    }
+
+    int GetXpReward()
+    {
+        switch (tier)
+        {
+            case AncestralTotemTier.Rare:
+                return Mathf.Max(0, rareXpReward);
+
+            case AncestralTotemTier.Legendary:
+                return Mathf.Max(0, legendaryXpReward);
+
+            default:
+                return Mathf.Max(0, commonXpReward);
+        }
+    }
+
+    void SpawnRewardPickup()
+    {
+        Vector3 spawnPosition = transform.position + Vector3.up * 0.55f;
+        GameObject rewardObject = new GameObject($"Buff Ancestral {tier}");
+        rewardObject.transform.position = spawnPosition;
+
+        AncestralPowerPickup pickup = rewardObject.AddComponent<AncestralPowerPickup>();
+        pickup.Initialize(tier, activatingPlayer);
+    }
+
+    IEnumerator DestroyTotemRoutine()
+    {
+        Collider[] colliders = GetComponentsInChildren<Collider>();
+        for (int i = 0; i < colliders.Length; i++)
+            colliders[i].enabled = false;
+
+        Transform visual = transform.Find("Visual");
+        Vector3 startScale = visual != null ? visual.localScale : Vector3.one;
+        float duration = 0.65f;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            if (visual != null)
+                visual.localScale = Vector3.Lerp(startScale, Vector3.zero, t);
+
+            transform.position += Vector3.down * (Time.deltaTime * 0.35f);
+            yield return null;
+        }
+
+        Destroy(gameObject);
+    }
+
+    void CleanupSummonedEnemies()
+    {
+        for (int i = summonedEnemies.Count - 1; i >= 0; i--)
+        {
+            GameObject enemy = summonedEnemies[i];
+            if (enemy == null || IsEnemyDefeated(enemy))
+                summonedEnemies.RemoveAt(i);
+        }
+    }
+
+    bool IsEnemyDefeated(GameObject enemy)
+    {
+        WildBoar boar = enemy.GetComponent<WildBoar>();
+        if (boar != null)
+            return boar.IsDead || boar.CurrentHealth <= 0;
+
+        WildChicken chicken = enemy.GetComponent<WildChicken>();
+        if (chicken != null)
+            return chicken.IsDead || chicken.CurrentHealth <= 0;
+
+        EarthGolem golem = enemy.GetComponent<EarthGolem>();
+        if (golem != null)
+            return golem.IsDead || golem.CurrentHealth <= 0;
+
+        return false;
+    }
+
+    GameObject SpawnEnemyForTier(int index, Vector3 spawnPosition)
+    {
+        switch (tier)
+        {
+            case AncestralTotemTier.Legendary:
+                if (index == 0)
+                    return SpawnBoar(spawnPosition, "Javali Colossal Invocado", 1.65f, 2.25f, 1.2f, 1.25f);
+
+                return SpawnGolem(spawnPosition, "Golem de Terra Invocado", 1.1f, 1.45f, 1.18f, 1.22f);
+
+            case AncestralTotemTier.Rare:
+                if (index == 2)
+                    return SpawnGolem(spawnPosition, "Golem Menor Invocado", 0.72f, 0.65f, 1.12f, 1.16f);
+
+                return SpawnBoar(spawnPosition, "Javali Alfa Invocado", 1.25f, 1.45f, 1.12f, 1.16f);
+
+            default:
+                if (index == 0)
+                    return SpawnBoar(spawnPosition, "Javali Jovem Invocado", 0.82f, 0.72f, 1.04f, 1.08f);
+
+                return SpawnChicken(spawnPosition, "Galinha Selvagem Invocada", 1f, 1f, 1.08f);
+        }
+    }
+
+    GameObject SpawnBoar(Vector3 position, string objectName, float visualScale, float healthMultiplier, float speedMultiplier, float abilitySpeedMultiplier)
+    {
+        GameObject enemyObject = new GameObject(objectName);
+        enemyObject.transform.SetPositionAndRotation(position, Quaternion.LookRotation(GetFlatDirectionToPlayer(position), Vector3.up));
+        enemyObject.transform.localScale = Vector3.one * Mathf.Max(0.35f, visualScale);
+
+        WildBoar boar = enemyObject.AddComponent<WildBoar>();
+        boar.maxHealth = Mathf.Max(1, Mathf.RoundToInt(boar.maxHealth * healthMultiplier));
+        boar.patrolSpeed *= speedMultiplier;
+        boar.chaseSpeed *= speedMultiplier;
+        boar.chargeSpeed *= speedMultiplier;
+        boar.attackCooldown = Mathf.Max(0.6f, boar.attackCooldown / Mathf.Max(0.1f, abilitySpeedMultiplier));
+        boar.attackWindupDuration = Mathf.Max(0.12f, boar.attackWindupDuration / Mathf.Max(0.1f, abilitySpeedMultiplier));
+        boar.minDamage = Mathf.Max(1, Mathf.RoundToInt(boar.minDamage * healthMultiplier * 0.9f));
+        boar.maxDamage = Mathf.Max(boar.minDamage, Mathf.RoundToInt(boar.maxDamage * healthMultiplier * 0.9f));
+        boar.thickLeatherItemData = ThickLeatherItemRegistry.GetOrCreate();
+        boar.sharpTuskItemData = SharpTuskItemRegistry.GetOrCreate();
+        boar.boarMeatItemData = BoarMeatItemRegistry.GetOrCreate();
+        boar.trophyItemData = BoarTrophyItemRegistry.GetOrCreate();
+        boar.SetSpawnData(null, position);
+        boar.ForceTotemTarget(activatingPlayer);
+        AttachTotemAggressor(enemyObject, 0f, 0, false);
+        LanNetworkEntity.Ensure(boar, $"AncestralBoar|{tier}|{Time.frameCount}|{summonedEnemies.Count}");
+        return enemyObject;
+    }
+
+    GameObject SpawnChicken(Vector3 position, string objectName, float visualScale, float healthMultiplier, float speedMultiplier)
+    {
+        GameObject enemyObject = new GameObject(objectName);
+        enemyObject.transform.SetPositionAndRotation(position, Quaternion.LookRotation(GetFlatDirectionToPlayer(position), Vector3.up));
+        enemyObject.transform.localScale = Vector3.one * Mathf.Max(0.35f, visualScale);
+
+        WildChicken chicken = enemyObject.AddComponent<WildChicken>();
+        chicken.maxHealth = Mathf.Max(1, Mathf.RoundToInt(chicken.maxHealth * healthMultiplier));
+        chicken.moveSpeed *= speedMultiplier;
+        chicken.fleeSpeed *= speedMultiplier;
+        chicken.featherItemData = FeatherItemRegistry.GetOrCreate();
+        chicken.rawMeatItemData = RawChickenMeatItemRegistry.GetOrCreate();
+        chicken.SetSpawnData(null, position);
+        AttachTotemAggressor(enemyObject, Mathf.Max(chicken.fleeSpeed, 5.4f) * speedMultiplier, GetSummonedChickenDamage(), true);
+        LanNetworkEntity.Ensure(chicken, $"AncestralChicken|{tier}|{Time.frameCount}|{summonedEnemies.Count}");
+        return enemyObject;
+    }
+
+    GameObject SpawnGolem(Vector3 position, string objectName, float visualScaleMultiplier, float healthMultiplier, float speedMultiplier, float abilitySpeedMultiplier)
+    {
+        GameObject enemyObject = new GameObject(objectName);
+        enemyObject.transform.SetPositionAndRotation(position, Quaternion.LookRotation(GetFlatDirectionToPlayer(position), Vector3.up));
+
+        EarthGolem golem = enemyObject.AddComponent<EarthGolem>();
+        golem.suggestedLevel = tier == AncestralTotemTier.Rare ? 10 : 20;
+        golem.visualScale = Mathf.Max(0.8f, golem.visualScale * visualScaleMultiplier);
+        golem.maxHealth = Mathf.Max(1, Mathf.RoundToInt(golem.maxHealth * healthMultiplier));
+        golem.patrolSpeed *= speedMultiplier;
+        golem.chaseSpeed *= speedMultiplier;
+        golem.groundSlamCooldown = Mathf.Max(1.2f, golem.groundSlamCooldown / Mathf.Max(0.1f, abilitySpeedMultiplier));
+        golem.heavyPunchCooldown = Mathf.Max(1f, golem.heavyPunchCooldown / Mathf.Max(0.1f, abilitySpeedMultiplier));
+        golem.groundSlamWindupDuration = Mathf.Max(0.2f, golem.groundSlamWindupDuration / Mathf.Max(0.1f, abilitySpeedMultiplier));
+        golem.heavyPunchWindupDuration = Mathf.Max(0.12f, golem.heavyPunchWindupDuration / Mathf.Max(0.1f, abilitySpeedMultiplier));
+        golem.groundSlamDamage = Mathf.Max(1, Mathf.RoundToInt(golem.groundSlamDamage * healthMultiplier * 0.75f));
+        golem.heavyPunchDamage = Mathf.Max(1, Mathf.RoundToInt(golem.heavyPunchDamage * healthMultiplier * 0.75f));
+        golem.stoneFragmentItemData = StoneFragmentItemRegistry.GetOrCreate();
+        golem.resilientMossItemData = ResilientMossItemRegistry.GetOrCreate();
+        golem.ironOreItemData = IronItemRegistry.GetOrCreate();
+        golem.earthCoreItemData = EarthCoreItemRegistry.GetOrCreate();
+        golem.SetSpawnData(null, position);
+        golem.ForceTotemTarget(activatingPlayer);
+        AttachTotemAggressor(enemyObject, 0f, 0, false);
+        LanNetworkEntity.Ensure(golem, $"AncestralGolem|{tier}|{Time.frameCount}|{summonedEnemies.Count}");
+        return enemyObject;
+    }
+
+    void AttachTotemAggressor(GameObject enemyObject, float chaseSpeed, int contactDamage, bool directChase)
+    {
+        if (enemyObject == null || activatingPlayer == null)
+            return;
+
+        TotemSummonedAggressor aggressor = enemyObject.AddComponent<TotemSummonedAggressor>();
+        aggressor.Initialize(activatingPlayer, chaseSpeed, contactDamage, directChase);
+    }
+
+    int GetSummonedChickenDamage()
+    {
+        switch (tier)
+        {
+            case AncestralTotemTier.Legendary:
+                return 26;
+
+            case AncestralTotemTier.Rare:
+                return 18;
+
+            default:
+                return 12;
+        }
+    }
+
+    Vector3 ResolveEnemySpawnPosition(int index, int count)
+    {
+        float angle = count > 0 ? (360f / count) * index : 0f;
+        Vector3 direction = Quaternion.Euler(0f, angle, 0f) * transform.forward;
+        if (direction.sqrMagnitude < 0.001f)
+            direction = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+
+        Vector3 desired = transform.position + direction.normalized * enemySpawnRadius;
+        return ResolveGroundedPosition(desired);
+    }
+
+    Vector3 ResolveGroundedPosition(Vector3 desiredPosition)
+    {
+        Vector3 origin = desiredPosition + Vector3.up * 28f;
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 80f, ~0, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0)
+            return desiredPosition;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hitCollider = hits[i].collider;
+            if (hitCollider == null || hits[i].normal.y < 0.35f)
+                continue;
+
+            if (hitCollider.GetComponentInParent<PlayerMovement>() != null ||
+                hitCollider.GetComponentInParent<RemotePlayerReplica>() != null ||
+                hitCollider.GetComponentInParent<AncestralTotem>() != null ||
+                hitCollider.GetComponentInParent<EarthGolem>() != null ||
+                hitCollider.GetComponentInParent<WildBoar>() != null ||
+                hitCollider.GetComponentInParent<WildChicken>() != null ||
+                hitCollider.GetComponentInParent<Cow>() != null ||
+                hitCollider.GetComponentInParent<MiniKrug>() != null ||
+                hitCollider.GetComponentInParent<BossEnemy>() != null)
+                continue;
+
+            return hits[i].point;
+        }
+
+        return desiredPosition;
+    }
+
+    Vector3 GetFlatDirectionToPlayer(Vector3 position)
+    {
+        Vector3 direction = activatingPlayer != null
+            ? activatingPlayer.transform.position - position
+            : transform.position - position;
+
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.001f)
+            return transform.forward.sqrMagnitude > 0.001f ? transform.forward.normalized : Vector3.forward;
+
+        return direction.normalized;
+    }
+
+    void EnsureCollider()
+    {
+        CapsuleCollider capsule = GetComponent<CapsuleCollider>();
+        if (capsule == null)
+            capsule = gameObject.AddComponent<CapsuleCollider>();
+
+        capsule.center = new Vector3(0f, 1.05f, 0f);
+        capsule.height = 2.2f;
+        capsule.radius = 0.85f;
+        capsule.isTrigger = false;
+    }
+
+    void BuildVisual()
+    {
+        Transform oldVisual = transform.Find("Visual");
+        if (oldVisual != null)
+        {
+            if (Application.isPlaying)
+                Destroy(oldVisual.gameObject);
+            else
+                DestroyImmediate(oldVisual.gameObject);
+        }
+
+        GameObject visual = new GameObject("Visual");
+        visual.transform.SetParent(transform, false);
+        visual.transform.localPosition = Vector3.zero;
+
+        Color stoneColor = new Color(0.34f, 0.31f, 0.25f, 1f);
+        Color darkStoneColor = new Color(0.18f, 0.17f, 0.15f, 1f);
+        Color glowColor = new Color(0.25f, 0.95f, 0.38f, 1f);
+        Color runeColor = new Color(0.55f, 1f, 0.55f, 1f);
+
+        if (tier == AncestralTotemTier.Rare)
+        {
+            stoneColor = new Color(0.28f, 0.31f, 0.38f, 1f);
+            darkStoneColor = new Color(0.13f, 0.16f, 0.23f, 1f);
+            glowColor = new Color(0.25f, 0.58f, 1f, 1f);
+            runeColor = new Color(0.55f, 0.82f, 1f, 1f);
+        }
+        else if (tier == AncestralTotemTier.Legendary)
+        {
+            stoneColor = new Color(0.13f, 0.12f, 0.12f, 1f);
+            darkStoneColor = new Color(0.07f, 0.055f, 0.045f, 1f);
+            glowColor = new Color(1f, 0.72f, 0.1f, 1f);
+            runeColor = new Color(1f, 0.22f, 0.08f, 1f);
+        }
+
+        CreatePiece(PrimitiveType.Cylinder, visual.transform, new Vector3(0f, 0.18f, 0f), new Vector3(1.55f, 0.18f, 1.55f), Quaternion.identity, stoneColor, "Base");
+        CreatePiece(PrimitiveType.Cylinder, visual.transform, new Vector3(0f, 0.62f, 0f), new Vector3(0.72f, 0.45f, 0.72f), Quaternion.identity, darkStoneColor, "Pedra Central");
+        CreatePiece(PrimitiveType.Cylinder, visual.transform, new Vector3(0f, 1.15f, 0f), new Vector3(0.48f, 0.58f, 0.48f), Quaternion.identity, stoneColor, "Pilar");
+        CreatePiece(PrimitiveType.Cube, visual.transform, new Vector3(0f, 1.75f, 0f), new Vector3(1f, 0.34f, 1f), Quaternion.Euler(0f, 45f, 0f), darkStoneColor, "Topo");
+        CreatePiece(PrimitiveType.Cube, visual.transform, new Vector3(0f, 2.13f, 0f), new Vector3(0.42f, 0.58f, 0.42f), Quaternion.Euler(0f, 45f, 45f), glowColor, "Cristal");
+
+        for (int i = 0; i < 4; i++)
+        {
+            float angle = i * 90f;
+            Vector3 offset = Quaternion.Euler(0f, angle, 0f) * new Vector3(0f, 0f, 0.78f);
+            CreatePiece(PrimitiveType.Cube, visual.transform, new Vector3(offset.x, 1.18f, offset.z), new Vector3(0.08f, 0.5f, 0.05f), Quaternion.Euler(0f, angle, 0f), runeColor, "Runa");
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            float angle = 35f + i * 120f;
+            Vector3 offset = Quaternion.Euler(0f, angle, 0f) * new Vector3(0f, 0f, 0.98f);
+            CreatePiece(PrimitiveType.Cube, visual.transform, new Vector3(offset.x, 0.42f, offset.z), new Vector3(0.42f, 0.28f, 0.34f), Quaternion.Euler(12f, angle, -8f), stoneColor, "Pedra Lateral");
+        }
+
+        PointLight(visual.transform, glowColor);
+        CreateTotemParticles(visual.transform, glowColor);
+        visualBuilt = true;
+    }
+
+    void CreatePiece(PrimitiveType primitive, Transform parent, Vector3 localPosition, Vector3 localScale, Quaternion localRotation, Color color, string pieceName)
+    {
+        GameObject piece = GameObject.CreatePrimitive(primitive);
+        piece.name = pieceName;
+        piece.transform.SetParent(parent, false);
+        piece.transform.localPosition = localPosition;
+        piece.transform.localRotation = localRotation;
+        piece.transform.localScale = localScale;
+
+        Collider collider = piece.GetComponent<Collider>();
+        if (collider != null)
+        {
+            if (Application.isPlaying)
+                Destroy(collider);
+            else
+                DestroyImmediate(collider);
+        }
+
+        Renderer renderer = piece.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.sharedMaterial = CreateRuntimeMaterial(pieceName, color);
+    }
+
+    void PointLight(Transform parent, Color color)
+    {
+        GameObject lightObject = new GameObject("Totem Light");
+        lightObject.transform.SetParent(parent, false);
+        lightObject.transform.localPosition = new Vector3(0f, 1.85f, 0f);
+
+        Light light = lightObject.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.range = tier == AncestralTotemTier.Legendary ? 7f : 5f;
+        light.intensity = tier == AncestralTotemTier.Legendary ? 2.2f : 1.35f;
+        light.color = color;
+    }
+
+    void CreateTotemParticles(Transform parent, Color color)
+    {
+        GameObject particleObject = new GameObject("Totem Particles");
+        particleObject.transform.SetParent(parent, false);
+        particleObject.transform.localPosition = new Vector3(0f, 1.2f, 0f);
+
+        ParticleSystem particles = particleObject.AddComponent<ParticleSystem>();
+        particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        ParticleSystem.MainModule main = particles.main;
+        main.playOnAwake = false;
+        main.startLifetime = 1.35f;
+        main.startSpeed = 0.25f;
+        main.startSize = 0.08f;
+        main.startColor = color;
+        main.maxParticles = 40;
+
+        ParticleSystem.EmissionModule emission = particles.emission;
+        emission.rateOverTime = tier == AncestralTotemTier.Legendary ? 16f : 9f;
+
+        ParticleSystem.ShapeModule shape = particles.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.72f;
+        particles.Play();
+    }
+
+    void PlayActivationBurst()
+    {
+        PlaySummonBurst(transform.position + Vector3.up * 1.2f);
+    }
+
+    void PlaySummonBurst(Vector3 position)
+    {
+        GameObject burstObject = new GameObject("Ancestral Totem Burst");
+        burstObject.transform.position = position;
+        ParticleSystem particles = burstObject.AddComponent<ParticleSystem>();
+        particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        ParticleSystem.MainModule main = particles.main;
+        main.playOnAwake = false;
+        main.duration = 0.35f;
+        main.startLifetime = 0.55f;
+        main.startSpeed = 2.1f;
+        main.startSize = 0.12f;
+        main.startColor = GetTierGlowColor();
+
+        ParticleSystem.EmissionModule emission = particles.emission;
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 28) });
+
+        ParticleSystem.ShapeModule shape = particles.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.4f;
+
+        particles.Play();
+        Destroy(burstObject, 1.2f);
+    }
+
+    Color GetTierGlowColor()
+    {
+        if (tier == AncestralTotemTier.Rare)
+            return new Color(0.25f, 0.58f, 1f, 1f);
+
+        if (tier == AncestralTotemTier.Legendary)
+            return new Color(1f, 0.72f, 0.1f, 1f);
+
+        return new Color(0.25f, 0.95f, 0.38f, 1f);
+    }
+
+    string GetTierDisplayName()
+    {
+        switch (tier)
+        {
+            case AncestralTotemTier.Rare:
+                return "Totem Ancestral Raro";
+
+            case AncestralTotemTier.Legendary:
+                return "Totem Ancestral Lendario";
+
+            default:
+                return "Totem Ancestral Comum";
+        }
+    }
+
+    static Material CreateRuntimeMaterial(string name, Color color)
+    {
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        Material material = new Material(shader);
+        material.name = $"{name} Runtime";
+        material.color = color;
+
+        if (material.HasProperty("_EmissionColor"))
+        {
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", color * 0.55f);
+        }
+
+        return material;
+    }
+}
+
+public class TotemSummonedAggressor : MonoBehaviour
+{
+    PlayerMovement target;
+    WildChicken chicken;
+    WildBoar boar;
+    EarthGolem golem;
+    bool directChase;
+    float chaseSpeed;
+    int contactDamage;
+    float nextContactAttackTime;
+    float nextForcedTargetTime;
+
+    public void Initialize(PlayerMovement forcedTarget, float forcedChaseSpeed, int forcedContactDamage, bool useDirectChase)
+    {
+        target = forcedTarget;
+        chaseSpeed = Mathf.Max(0f, forcedChaseSpeed);
+        contactDamage = Mathf.Max(0, forcedContactDamage);
+        directChase = useDirectChase;
+        CacheComponents();
+        ApplyAggressionSettings(true);
+    }
+
+    void Awake()
+    {
+        CacheComponents();
+    }
+
+    void Start()
+    {
+        CacheComponents();
+        ResolveTarget();
+        ApplyAggressionSettings(true);
+    }
+
+    void Update()
+    {
+        ResolveTarget();
+        ApplyAggressionSettings(false);
+    }
+
+    void LateUpdate()
+    {
+        if (!directChase || chicken == null || chicken.IsDead)
+            return;
+
+        ResolveTarget();
+        if (target == null || GameState.IsPlayerDead)
+            return;
+
+        ChaseAndAttackTarget();
+    }
+
+    void CacheComponents()
+    {
+        if (chicken == null)
+            chicken = GetComponent<WildChicken>();
+
+        if (boar == null)
+            boar = GetComponent<WildBoar>();
+
+        if (golem == null)
+            golem = GetComponent<EarthGolem>();
+    }
+
+    void ResolveTarget()
+    {
+        if (target != null && target.gameObject.activeInHierarchy && !GameState.IsPlayerDead)
+            return;
+
+        target = LanMultiplayerManager.FindGameplayPlayer();
+    }
+
+    void ApplyAggressionSettings(bool immediate)
+    {
+        if (target == null || Time.time < nextForcedTargetTime)
+            return;
+
+        nextForcedTargetTime = Time.time + 0.35f;
+
+        if (boar != null && !boar.IsDead)
+            boar.ForceTotemTarget(target, immediate);
+
+        if (golem != null && !golem.IsDead)
+            golem.ForceTotemTarget(target, immediate);
+
+        if (chicken != null && directChase)
+        {
+            chicken.fleeDistance = 0f;
+            chicken.fleeDuration = 0f;
+            chicken.moveSpeed = Mathf.Max(chicken.moveSpeed, chaseSpeed * 0.75f);
+            chicken.fleeSpeed = Mathf.Max(chicken.fleeSpeed, chaseSpeed);
+            chicken.wanderRadius = Mathf.Max(chicken.wanderRadius, 28f);
+        }
+    }
+
+    void ChaseAndAttackTarget()
+    {
+        Vector3 toTarget = target.transform.position - transform.position;
+        toTarget.y = 0f;
+        float distance = toTarget.magnitude;
+
+        if (distance <= 0.001f)
+            return;
+
+        Vector3 direction = toTarget / distance;
+        float speed = Mathf.Max(1f, chaseSpeed > 0f ? chaseSpeed : chicken.fleeSpeed);
+
+        if (distance > 1.05f)
+        {
+            Vector3 nextPosition = transform.position + direction * speed * Time.deltaTime;
+            if (TryResolveGround(nextPosition, out Vector3 groundedPosition))
+                nextPosition = groundedPosition;
+
+            transform.position = nextPosition;
+        }
+
+        Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Mathf.Max(8f, chicken.rotationSpeed) * Time.deltaTime);
+
+        if (contactDamage <= 0 || distance > 1.45f || Time.time < nextContactAttackTime)
+            return;
+
+        nextContactAttackTime = Time.time + 0.8f;
+        target.TakeDamage(contactDamage);
+        target.ApplyKnockback(direction, 2.25f, 0.12f);
+    }
+
+    bool TryResolveGround(Vector3 position, out Vector3 groundedPosition)
+    {
+        Vector3 origin = position + Vector3.up * 16f;
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 44f, ~0, QueryTriggerInteraction.Ignore);
+        groundedPosition = position;
+
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hitCollider = hits[i].collider;
+            if (hitCollider == null || hits[i].normal.y < 0.35f)
+                continue;
+
+            if (hitCollider.GetComponentInParent<PlayerMovement>() != null ||
+                hitCollider.GetComponentInParent<RemotePlayerReplica>() != null ||
+                hitCollider.GetComponentInParent<WildChicken>() == chicken ||
+                hitCollider.GetComponentInParent<WildBoar>() == boar ||
+                hitCollider.GetComponentInParent<EarthGolem>() == golem)
+                continue;
+
+            groundedPosition = hits[i].point;
+            return true;
+        }
+
+        return false;
+    }
+}
+
+public class AncestralPowerPickup : MonoBehaviour
+{
+    public AncestralTotemTier tier = AncestralTotemTier.Common;
+    public float collectRadius = 1.65f;
+    public float hoverHeight = 1.05f;
+    public float bobHeight = 0.16f;
+    public float bobSpeed = 2.8f;
+    public float rotationSpeed = 80f;
+    public float collectDelay = 0.65f;
+
+    PlayerMovement preferredPlayer;
+    Transform visualRoot;
+    Transform spriteRoot;
+    TextMesh label;
+    Vector3 basePosition;
+    float phaseOffset;
+    float spawnTime;
+    float nextFailedCollectMessageTime;
+    bool collected;
+
+    public void Initialize(AncestralTotemTier pickupTier, PlayerMovement player)
+    {
+        tier = pickupTier;
+        preferredPlayer = player;
+        BuildVisual();
+        EnsureCollider();
+        SetupPosition();
+    }
+
+    void Start()
+    {
+        if (visualRoot == null)
+            BuildVisual();
+
+        EnsureCollider();
+        SetupPosition();
+    }
+
+    void Update()
+    {
+        if (collected)
+            return;
+
+        Animate();
+
+        if (Time.time < spawnTime + collectDelay)
+            return;
+
+        TryCollect();
+    }
+
+    void SetupPosition()
+    {
+        if (spawnTime <= 0f)
+        {
+            spawnTime = Time.time;
+            phaseOffset = Random.Range(0f, Mathf.PI * 2f);
+        }
+
+        basePosition = ResolveGroundPosition(transform.position) + Vector3.up * hoverHeight;
+        transform.position = basePosition;
+    }
+
+    void BuildVisual()
+    {
+        if (visualRoot != null)
+            return;
+
+        GameObject visualObject = new GameObject("Visual");
+        visualObject.transform.SetParent(transform, false);
+        visualObject.transform.localPosition = Vector3.zero;
+        visualRoot = visualObject.transform;
+
+        GameObject spriteObject = new GameObject("BuffSprite");
+        spriteObject.transform.SetParent(visualRoot, false);
+        spriteObject.transform.localPosition = Vector3.zero;
+        spriteObject.transform.localScale = Vector3.one * 0.72f;
+        spriteRoot = spriteObject.transform;
+
+        SpriteRenderer spriteRenderer = spriteObject.AddComponent<SpriteRenderer>();
+        spriteRenderer.sprite = CreateBuffSprite(GetTierColor());
+        spriteRenderer.color = Color.white;
+        spriteRenderer.sortingOrder = 20;
+
+        GameObject halo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        halo.name = "BuffGlow";
+        halo.transform.SetParent(visualRoot, false);
+        halo.transform.localPosition = Vector3.zero;
+        halo.transform.localScale = Vector3.one * 0.42f;
+
+        Collider haloCollider = halo.GetComponent<Collider>();
+        if (haloCollider != null)
+            Destroy(haloCollider);
+
+        Renderer haloRenderer = halo.GetComponent<Renderer>();
+        if (haloRenderer != null)
+            haloRenderer.sharedMaterial = CreatePickupMaterial(GetTierColor() * 0.85f);
+
+        GameObject labelObject = new GameObject("BuffLabel");
+        labelObject.transform.SetParent(visualRoot, false);
+        labelObject.transform.localPosition = new Vector3(0f, 0.58f, 0f);
+        label = labelObject.AddComponent<TextMesh>();
+        label.text = GetTierLabel();
+        label.characterSize = 0.13f;
+        label.anchor = TextAnchor.MiddleCenter;
+        label.alignment = TextAlignment.Center;
+        label.color = new Color(1f, 0.94f, 0.72f, 1f);
+
+        Light light = visualObject.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = GetTierColor();
+        light.range = tier == AncestralTotemTier.Legendary ? 5.2f : 3.6f;
+        light.intensity = tier == AncestralTotemTier.Legendary ? 1.8f : 1.15f;
+
+        CreateIdleParticles(visualObject.transform);
+    }
+
+    void EnsureCollider()
+    {
+        SphereCollider collider = GetComponent<SphereCollider>();
+        if (collider == null)
+            collider = gameObject.AddComponent<SphereCollider>();
+
+        collider.isTrigger = true;
+        collider.radius = collectRadius;
+        collider.center = Vector3.zero;
+    }
+
+    void Animate()
+    {
+        float bob = Mathf.Sin((Time.time * bobSpeed) + phaseOffset) * bobHeight;
+        transform.position = basePosition + Vector3.up * bob;
+
+        if (visualRoot != null)
+            visualRoot.Rotate(Vector3.up, rotationSpeed * Time.deltaTime, Space.World);
+
+        Camera camera = RuntimeCameraCache.Main;
+        if (camera != null)
+        {
+            if (spriteRoot != null)
+                spriteRoot.rotation = camera.transform.rotation;
+
+            if (label != null)
+                label.transform.rotation = camera.transform.rotation;
+        }
+    }
+
+    void TryCollect()
+    {
+        PlayerMovement player = ResolveCollector();
+        if (player == null)
+            return;
+
+        if (Vector3.Distance(transform.position, player.transform.position) > collectRadius)
+            return;
+
+        AncestralPowerService powerService = AncestralPowerService.GetOrCreate(player);
+        if (powerService == null)
+            return;
+
+        if (!powerService.GrantRandomPower(tier))
+        {
+            if (Time.time >= nextFailedCollectMessageTime)
+            {
+                nextFailedCollectMessageTime = Time.time + 1.2f;
+                MessageSystem.Instance?.ShowMessage("Nao foi possivel coletar este buff agora.");
+            }
+
+            return;
+        }
+
+        collected = true;
+        MessageSystem.Instance?.ShowMessage("Buff ancestral coletado.");
+        StartCoroutine(CollectRoutine());
+    }
+
+    PlayerMovement ResolveCollector()
+    {
+        if (preferredPlayer != null && preferredPlayer.gameObject.activeInHierarchy && !GameState.IsPlayerDead)
+            return preferredPlayer;
+
+        PlayerMovement gameplayPlayer = LanMultiplayerManager.FindGameplayPlayer();
+        if (gameplayPlayer != null && !GameState.IsPlayerDead)
+        {
+            preferredPlayer = gameplayPlayer;
+            return gameplayPlayer;
+        }
+
+        PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
+        for (int i = 0; i < players.Length; i++)
+        {
+            if (players[i] != null && players[i].isActiveAndEnabled)
+                return players[i];
+        }
+
+        return null;
+    }
+
+    IEnumerator CollectRoutine()
+    {
+        float duration = 0.32f;
+        float elapsed = 0f;
+        Vector3 startScale = visualRoot != null ? visualRoot.localScale : Vector3.one;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+
+            if (visualRoot != null)
+                visualRoot.localScale = Vector3.Lerp(startScale, Vector3.zero, t);
+
+            transform.position += Vector3.up * (Time.deltaTime * 1.6f);
+            yield return null;
+        }
+
+        Destroy(gameObject);
+    }
+
+    Vector3 ResolveGroundPosition(Vector3 position)
+    {
+        Vector3 rayOrigin = position + Vector3.up * 12f;
+        RaycastHit[] hits = Physics.RaycastAll(rayOrigin, Vector3.down, 40f, ~0, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0)
+            return position;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hitCollider = hits[i].collider;
+            if (hitCollider == null || hits[i].normal.y < 0.35f)
+                continue;
+
+            if (hitCollider.GetComponentInParent<PlayerMovement>() != null ||
+                hitCollider.GetComponentInParent<RemotePlayerReplica>() != null ||
+                hitCollider.GetComponentInParent<AncestralPowerPickup>() != null ||
+                hitCollider.GetComponentInParent<AncestralTotem>() != null ||
+                hitCollider.GetComponentInParent<WildChicken>() != null ||
+                hitCollider.GetComponentInParent<WildBoar>() != null ||
+                hitCollider.GetComponentInParent<EarthGolem>() != null)
+                continue;
+
+            return hits[i].point;
+        }
+
+        return position;
+    }
+
+    void CreateIdleParticles(Transform parent)
+    {
+        GameObject particleObject = new GameObject("BuffParticles");
+        particleObject.transform.SetParent(parent, false);
+        particleObject.transform.localPosition = Vector3.zero;
+
+        ParticleSystem particles = particleObject.AddComponent<ParticleSystem>();
+        particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        ParticleSystem.MainModule main = particles.main;
+        main.playOnAwake = false;
+        main.startLifetime = 0.8f;
+        main.startSpeed = 0.18f;
+        main.startSize = 0.045f;
+        main.startColor = GetTierColor();
+        main.maxParticles = 26;
+
+        ParticleSystem.EmissionModule emission = particles.emission;
+        emission.rateOverTime = tier == AncestralTotemTier.Legendary ? 14f : 9f;
+
+        ParticleSystem.ShapeModule shape = particles.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.36f;
+
+        particles.Play();
+    }
+
+    Color GetTierColor()
+    {
+        if (tier == AncestralTotemTier.Rare)
+            return new Color(0.25f, 0.62f, 1f, 1f);
+
+        if (tier == AncestralTotemTier.Legendary)
+            return new Color(1f, 0.72f, 0.12f, 1f);
+
+        return new Color(0.32f, 1f, 0.42f, 1f);
+    }
+
+    string GetTierLabel()
+    {
+        switch (tier)
+        {
+            case AncestralTotemTier.Rare:
+                return "Buff Raro";
+
+            case AncestralTotemTier.Legendary:
+                return "Buff Lendario";
+
+            default:
+                return "Buff Comum";
+        }
+    }
+
+    static Material CreatePickupMaterial(Color color)
+    {
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        Material material = new Material(shader);
+        material.name = "AncestralBuffPickupRuntime";
+        material.color = new Color(color.r, color.g, color.b, 0.48f);
+
+        if (material.HasProperty("_EmissionColor"))
+        {
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", color * 0.7f);
+        }
+
+        return material;
+    }
+
+    static Sprite CreateBuffSprite(Color color)
+    {
+        const int size = 64;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.name = "AncestralBuffSprite";
+        texture.filterMode = FilterMode.Point;
+
+        Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                Vector2 p = new Vector2(x, y);
+                float distance = Vector2.Distance(p, center);
+                float ring = Mathf.Abs(distance - 23f);
+                bool insideCore = distance < 11f;
+                bool inOuterRing = ring < 2.1f;
+                bool inCross = Mathf.Abs(x - center.x) < 2f || Mathf.Abs(y - center.y) < 2f;
+                bool inDiamond = Mathf.Abs(x - center.x) + Mathf.Abs(y - center.y) < 22f && distance > 14f;
+
+                Color pixel = Color.clear;
+                if (inOuterRing || insideCore || (inCross && distance < 25f) || (inDiamond && distance < 25f))
+                {
+                    float alpha = insideCore ? 0.95f : 0.78f;
+                    pixel = new Color(color.r, color.g, color.b, alpha);
+                }
+
+                texture.SetPixel(x, y, pixel);
+            }
+        }
+
+        texture.Apply();
+        return Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 64f);
     }
 }

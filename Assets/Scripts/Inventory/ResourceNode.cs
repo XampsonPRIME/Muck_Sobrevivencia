@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ResourceNode : MonoBehaviour
 {
+    static readonly List<ResourceNode> activeNodes = new List<ResourceNode>();
+
     public string itemName = "Toras";
     public Sprite icon;
 
@@ -25,11 +28,23 @@ public class ResourceNode : MonoBehaviour
 
     public int CurrentHealth => currentHealth;
     public bool IsDepleted => depleted;
+    public static IReadOnlyList<ResourceNode> ActiveNodes => activeNodes;
 
     bool depleted;
     Coroutine respawnRoutine;
     Renderer[] cachedRenderers;
     Collider[] cachedColliders;
+
+    void OnEnable()
+    {
+        if (!activeNodes.Contains(this))
+            activeNodes.Add(this);
+    }
+
+    void OnDisable()
+    {
+        activeNodes.Remove(this);
+    }
 
     void Start()
     {
@@ -45,6 +60,12 @@ public class ResourceNode : MonoBehaviour
 
         bool usingEmptyHand = allowEmptyHand && currentTool == ToolType.None;
         bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
+
+        if (!usingCorrectTool && !usingEmptyHand)
+        {
+            MessageSystem.Instance?.ShowMessage(GetToolMessage());
+            return;
+        }
 
         // Ferramenta errada continua bloqueada. Mao vazia agora funciona com rendimento baixo.
         if (!usingCorrectTool && !usingEmptyHand)
@@ -168,11 +189,42 @@ public class ResourceNode : MonoBehaviour
         int maxAmount = usingCorrectTool ? maxDrop : emptyHandMaxDrop;
         int amount = Random.Range(minAmount, maxAmount + 1);
 
-        inventory.AddItem(itemName, amount, itemData);
+        AncestralPowerService powers = inventory != null ? inventory.GetComponent<AncestralPowerService>() : null;
+        if (powers != null && powers.TryRollBonusResource())
+            amount += 1;
 
-        if (MessageSystem.Instance != null)
+        if (ShouldSpawnOakWoodPickup())
         {
-            MessageSystem.Instance.ShowMessage($"+{amount} {itemName}");
+            SpawnOakWoodPickups(amount);
+            return;
+        }
+
+        if (inventory == null || !inventory.AddItem(itemName, amount, itemData))
+        {
+            MessageSystem.Instance?.ShowMessage("Inventario cheio");
+            return;
+        }
+
+        Sprite pickupIcon = itemData != null ? itemData.icon : null;
+        PickupMessageSystem.Show(itemName, amount, transform.position + Vector3.up * 1.05f, pickupIcon);
+    }
+
+    bool ShouldSpawnOakWoodPickup()
+    {
+        return requiredTool == ToolType.Axe && OakWoodDropVisualFactory.IsOakWood(itemName);
+    }
+
+    void SpawnOakWoodPickups(int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        Item oakWoodItem = itemData != null ? itemData : OakWoodItemRegistry.GetOrCreate();
+        for (int i = 0; i < amount; i++)
+        {
+            Vector2 circle = Random.insideUnitCircle * 0.9f;
+            Vector3 spawnPosition = transform.position + new Vector3(circle.x, 1.35f + i * 0.04f, circle.y);
+            OakWoodDropVisualFactory.Spawn(spawnPosition, oakWoodItem, ~0, 1.25f);
         }
     }
 

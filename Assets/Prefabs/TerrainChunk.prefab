@@ -168,24 +168,24 @@ MonoBehaviour:
   maxPedrasPerChunk: 3
   minPedraDistance: 5
   pedraYOffset: 0.08
-  treeDensity: 0.12
-  maxTreesPerChunk: 22
-  forestTreeHeightMultiplier: 1.45
-  forestTreeWidthMultiplier: 1.12
-  mushroomDensity: 0.03
+  treeDensity: 0.004
+  maxTreesPerChunk: 1
+  forestTreeHeightMultiplier: 1.15
+  forestTreeWidthMultiplier: 1.02
+  mushroomDensity: 0.012
   rockClusterCount: 3
-  generationYieldInterval: 120
-  forestGrassDensity: 1
-  maxForestGrassPerChunk: 2200
-  forestGrassMinDistance: 0.12
-  forestGrassSampleStep: 2
-  forestGrassExtraCoverage: 0.8
+  generationYieldInterval: 60
+  forestGrassDensity: 0.25
+  maxForestGrassPerChunk: 420
+  forestGrassMinDistance: 0.35
+  forestGrassSampleStep: 5
+  forestGrassExtraCoverage: 0.15
   forestGrassWidthRange: {x: 1.2, y: 1.8}
   forestGrassHeightRange: {x: 0.42, y: 0.62}
   forestGrassSpawnJitter: 0.42
   forestGrassYOffset: 0.02
   forestGrassRoadPadding: 1.6
-  forestGrassRenderDistance: 72
+  forestGrassRenderDistance: 30
   forestGrassWindStrength: 0.08
   forestGrassWindSpeed: 1.65
   forestGrassBendStrength: 0.1
@@ -206,8 +206,8 @@ MonoBehaviour:
   riverChunkOverlap: 6
   riverSurfaceSmoothing: 0.7
   riverMaxSegmentGap: 4.5
-  minDistanceBetweenObjects: 7
-  minTreeDistance: 6.2
+  minDistanceBetweenObjects: 10
+  minTreeDistance: 28
   groundPickupRespawnDelayRange: {x: 120, y: 240}
   woodRespawnDelayRange: {x: 180, y: 300}
   stoneResourceRespawnDelayRange: {x: 180, y: 300}
@@ -233,4 +233,4 @@ MonoBehaviour:
   terrainMaterial: {fileID: 2100000, guid: 844e863c162944f55903c7e958ca6bb7, type: 2}
   safeRadius: 12
   forwardSafeDistance: 8
-  rockDensity: 0.5
+  rockDensity: 0.25

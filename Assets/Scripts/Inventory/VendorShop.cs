@@ -134,6 +134,12 @@ public class VendorShop : MonoBehaviour
             return false;
         }
 
+        if (!inventory.CanFitItem(new InventoryItem(offer.itemPrefab.itemName, 1, offer.itemPrefab)))
+        {
+            message = "Inventario cheio.";
+            return false;
+        }
+
         if (!inventory.TrySpendGold(buyPrice))
         {
             message = "Nao foi possivel gastar o gold.";

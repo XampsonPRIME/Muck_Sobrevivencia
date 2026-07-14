@@ -4,6 +4,8 @@ using UnityEngine.UI;
 
 public class GoldHUD : MonoBehaviour
 {
+    static readonly bool ShowGameplayInfoPanel = false;
+
     public Vector2 panelAnchorPosition = new Vector2(28f, -72f);
     public Vector2 panelSize = new Vector2(320f, 240f);
 
@@ -37,8 +39,12 @@ public class GoldHUD : MonoBehaviour
     {
         cycle = DayNightCycle.Instance ?? SceneObjectCache.Find<DayNightCycle>(gameObject.scene, true);
         ResolvePlayerReferences();
-        EnsureUI();
         HideOriginalClockTexts();
+        HideGameplayInfoPanel();
+        if (!ShowGameplayInfoPanel)
+            return;
+
+        EnsureUI();
         Refresh();
     }
 
@@ -48,14 +54,25 @@ public class GoldHUD : MonoBehaviour
 
         ResolvePlayerReferences();
 
-        EnsureUI();
-
         HideOriginalClockTexts();
+        if (!ShowGameplayInfoPanel)
+        {
+            HideGameplayInfoPanel();
+            return;
+        }
+
+        EnsureUI();
         Refresh();
     }
 
     void EnsureUI()
     {
+        if (!ShowGameplayInfoPanel)
+        {
+            HideGameplayInfoPanel();
+            return;
+        }
+
         Canvas canvas = ResolveCanvas();
         if (canvas == null)
             return;
@@ -203,8 +220,22 @@ public class GoldHUD : MonoBehaviour
             cycle.hourText.gameObject.SetActive(false);
     }
 
+    void HideGameplayInfoPanel()
+    {
+        if (rootRect != null)
+            rootRect.gameObject.SetActive(false);
+
+        Canvas canvas = ResolveCanvas();
+        Transform existingRoot = canvas != null ? canvas.transform.Find("HudInfoPanel") : null;
+        if (existingRoot != null && existingRoot.gameObject.activeSelf)
+            existingRoot.gameObject.SetActive(false);
+    }
+
     public void Refresh()
     {
+        if (!ShowGameplayInfoPanel)
+            return;
+
         if (dayValueText == null || hourValueText == null || goldValueText == null || levelValueText == null || xpValueText == null)
             return;
 

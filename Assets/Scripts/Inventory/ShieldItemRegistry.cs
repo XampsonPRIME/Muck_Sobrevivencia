@@ -18,7 +18,15 @@ public static class ShieldItemRegistry
 
         shieldItem = itemObject.AddComponent<Item>();
         shieldItem.itemName = ItemName;
-        shieldItem.itemType = ItemType.Tool;
+        shieldItem.itemType = ItemType.Equipment;
+        shieldItem.category = InventoryCategory.Armor;
+        shieldItem.rarity = ItemRarity.Common;
+        shieldItem.description = "Escudo simples para reduzir dano recebido.";
+        shieldItem.weight = 4f;
+        shieldItem.maxStack = Item.EquipmentStackLimit;
+        shieldItem.equipmentSlot = EquipmentSlotType.Shield;
+        shieldItem.defense = 8;
+        shieldItem.durability = 120;
         shieldItem.toolType = ToolType.None;
         shieldItem.toolDamage = 0;
         shieldItem.buyPrice = 0;

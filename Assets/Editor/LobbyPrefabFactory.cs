@@ -32,7 +32,7 @@ public static class LobbyPrefabFactory
         Image overlayImage = overlayObject.AddComponent<Image>();
         overlayImage.color = new Color(0.03f, 0.04f, 0.06f, 0.92f);
 
-        CreateLabel(overlayObject.transform, "Title", "Marped Survivor", new Vector2(900f, 120f), new Vector2(0f, 140f), 72f, new Color(1f, 0.96f, 0.82f, 1f), FontStyles.Bold);
+        CreateLabel(overlayObject.transform, "Title", "Elarion: Relics of the Forgotten", new Vector2(1400f, 120f), new Vector2(0f, 140f), 64f, new Color(1f, 0.96f, 0.82f, 1f), FontStyles.Bold);
         CreateLabel(overlayObject.transform, "Subtitle", "Sobreviva, evolua e enfrente criaturas cada vez mais fortes.", new Vector2(920f, 100f), new Vector2(0f, 56f), 30f, new Color(0.84f, 0.9f, 0.98f, 1f), FontStyles.Normal);
 
         GameObject mainMenuRoot = CreateUiObject("MainMenuRoot", overlayObject.transform);

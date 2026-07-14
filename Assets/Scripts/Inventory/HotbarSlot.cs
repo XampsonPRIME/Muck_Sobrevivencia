@@ -5,8 +5,18 @@ using UnityEngine.EventSystems;
 
 public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
 {
+    const float RuntimeSlotSize = 68f;
+    const float RuntimeIconSize = 54f;
+    const float RuntimeAmountSize = 30f;
+    static readonly Color EmptySlotColor = new Color(0.035f, 0.032f, 0.028f, 0.72f);
+    static readonly Color FilledSlotColor = new Color(0.075f, 0.06f, 0.04f, 0.86f);
+    static readonly Color SelectedSlotColor = new Color(0.34f, 0.2f, 0.06f, 0.96f);
+    static readonly Color NormalOutlineColor = new Color(0.18f, 0.13f, 0.08f, 0.95f);
+    static readonly Color SelectedOutlineColor = new Color(1f, 0.72f, 0.22f, 1f);
+
     public Image icon;
     public TextMeshProUGUI amountText;
+    TextMeshProUGUI keyText;
 
     string itemName;
     int amount;
@@ -27,6 +37,21 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
     public bool isBottle;
     public bool bottleIsFilled;
     public bool isSelected = false;
+
+    void Awake()
+    {
+        ConfigureRuntimeVisuals();
+    }
+
+    void OnEnable()
+    {
+        ConfigureRuntimeVisuals();
+    }
+
+    void LateUpdate()
+    {
+        ConfigureRuntimeVisuals();
+    }
 
     public void OnPointerClick(PointerEventData eventData)
     {
@@ -127,15 +152,20 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         isBottle = false;
         bottleIsFilled = false;
         isSelected = false;
+        ConfigureRuntimeVisuals();
     }
 
     void UpdateUI()
     {
+        ConfigureRuntimeVisuals();
         amountText.text = amount > 1 ? amount.ToString() : "";
     }
 
     void ApplyItemData(Item sourceItem)
     {
+        if (sourceItem != null)
+            sourceItem.ApplyDefinition();
+
         itemData = sourceItem;
         itemType = sourceItem != null ? sourceItem.itemType : ItemType.Resource;
         toolType = sourceItem != null ? sourceItem.toolType : ToolType.None;
@@ -204,7 +234,7 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         if (icon == null)
             return;
 
-        Sprite sprite = itemData.icon != null ? itemData.icon : null;
+        Sprite sprite = itemData != null ? itemData.GetDisplayIcon() : null;
 
         if (isBottle && itemData.icon != null)
         {
@@ -215,6 +245,97 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
 
         icon.sprite = sprite;
         icon.enabled = sprite != null;
+        icon.preserveAspect = true;
+        ConfigureRuntimeVisuals();
+    }
+
+    void ConfigureRuntimeVisuals()
+    {
+        RectTransform slotRect = GetComponent<RectTransform>();
+        if (slotRect != null)
+            slotRect.sizeDelta = new Vector2(RuntimeSlotSize, RuntimeSlotSize);
+
+        Image background = GetComponent<Image>();
+        if (background == null)
+            background = gameObject.AddComponent<Image>();
+        background.color = isSelected ? SelectedSlotColor : (IsEmpty() ? EmptySlotColor : FilledSlotColor);
+        background.raycastTarget = true;
+
+        Outline outline = GetComponent<Outline>();
+        if (outline == null)
+            outline = gameObject.AddComponent<Outline>();
+        outline.effectColor = isSelected ? SelectedOutlineColor : NormalOutlineColor;
+        outline.effectDistance = isSelected ? new Vector2(3f, -3f) : new Vector2(1f, -1f);
+
+        if (icon != null)
+        {
+            RectTransform iconRect = icon.GetComponent<RectTransform>();
+            if (iconRect != null)
+            {
+                iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+                iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+                iconRect.pivot = new Vector2(0.5f, 0.5f);
+                iconRect.anchoredPosition = Vector2.zero;
+                iconRect.sizeDelta = new Vector2(RuntimeIconSize, RuntimeIconSize);
+            }
+
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+        }
+
+        if (amountText != null)
+        {
+            RectTransform amountRect = amountText.GetComponent<RectTransform>();
+            if (amountRect != null)
+            {
+                amountRect.anchorMin = new Vector2(1f, 0f);
+                amountRect.anchorMax = new Vector2(1f, 0f);
+                amountRect.pivot = new Vector2(1f, 0f);
+                amountRect.anchoredPosition = new Vector2(-5f, 4f);
+                amountRect.sizeDelta = new Vector2(RuntimeAmountSize, RuntimeAmountSize);
+            }
+
+            amountText.fontSize = 22f;
+            amountText.fontStyle = FontStyles.Bold;
+            amountText.alignment = TextAlignmentOptions.BottomRight;
+            amountText.raycastTarget = false;
+        }
+
+        EnsureKeyLabel();
+    }
+
+    void EnsureKeyLabel()
+    {
+        if (keyText == null)
+        {
+            Transform existing = transform.Find("KeyLabel");
+            if (existing != null)
+                keyText = existing.GetComponent<TextMeshProUGUI>();
+
+            if (keyText == null)
+            {
+                GameObject keyObject = new GameObject("KeyLabel", typeof(RectTransform));
+                keyObject.transform.SetParent(transform, false);
+                keyText = keyObject.AddComponent<TextMeshProUGUI>();
+            }
+        }
+
+        if (keyText == null)
+            return;
+
+        RectTransform keyRect = keyText.GetComponent<RectTransform>();
+        keyRect.anchorMin = new Vector2(0f, 1f);
+        keyRect.anchorMax = new Vector2(0f, 1f);
+        keyRect.pivot = new Vector2(0f, 1f);
+        keyRect.anchoredPosition = new Vector2(5f, -4f);
+        keyRect.sizeDelta = new Vector2(28f, 22f);
+
+        keyText.text = (transform.GetSiblingIndex() + 1).ToString();
+        keyText.fontSize = 15f;
+        keyText.fontStyle = FontStyles.Bold;
+        keyText.alignment = TextAlignmentOptions.TopLeft;
+        keyText.color = isSelected ? new Color(1f, 0.92f, 0.58f, 1f) : new Color(0.72f, 0.66f, 0.56f, 0.92f);
+        keyText.raycastTarget = false;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -222,7 +343,7 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         if (IsEmpty() || itemData == null) return;
 
         DragDropController.BeginDrag(
-            itemData.icon,
+            itemData.GetDisplayIcon(),
             new DragPayload
             {
                 sourceType = DragSourceType.Hotbar,
@@ -270,8 +391,10 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         if (inventory == null) return;
 
         string nameToReturn = itemData != null ? itemData.itemName : itemName;
-        inventory.AddItem(nameToReturn, 1, itemData);
-        RemoveOne();
+        if (inventory.AddItem(nameToReturn, 1, itemData))
+            RemoveOne();
+        else
+            MessageSystem.Instance?.ShowMessage("Inventario cheio");
     }
 
     void SwapWithHotbarSlot(HotbarSlot other)
@@ -300,10 +423,12 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
 
         if (IsEmpty())
         {
-            SetItem(invItem.itemName, invItem.icon, invItem, invAmount);
-            inventory.RemoveItem(invItem.itemName, invAmount);
+            if (!inventory.RemoveItem(invItem.itemName, invAmount))
+                return;
 
-            InventoryUI ui = FindFirstObjectByType<InventoryUI>();
+            SetItem(invItem.itemName, invItem.icon, invItem, invAmount);
+
+            InventoryUI ui = SceneObjectCache.Find<InventoryUI>(true);
             if (ui != null) ui.Refresh();
             return;
         }
@@ -315,11 +440,7 @@ public class HotbarSlot : MonoBehaviour, IPointerClickHandler, IBeginDragHandler
         SetItem(invItem.itemName, invItem.icon, invItem, invAmount);
 
         InventoryItem invCurrent = inventorySlot.CurrentItem;
-        invCurrent.itemName = hotbarName;
-        invCurrent.quantity = hotbarAmount;
-        invCurrent.itemData = hotbarItem;
-        invCurrent.itemType = hotbarItem.itemType;
-        invCurrent.toolType = hotbarItem.toolType;
+        invCurrent.CopyFrom(new InventoryItem(hotbarName, hotbarAmount, hotbarItem));
 
         inventorySlot.Setup(invCurrent);
     }

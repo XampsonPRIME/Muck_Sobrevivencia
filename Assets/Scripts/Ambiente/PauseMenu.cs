@@ -3,7 +3,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 public class PauseMenu : MonoBehaviour
@@ -64,7 +63,7 @@ public class PauseMenu : MonoBehaviour
             return;
         }
 
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
         ResolvePlayer();
         LoadSettings();
         BuildUI();
@@ -76,7 +75,7 @@ public class PauseMenu : MonoBehaviour
         ResolvePlayer();
         UpdateSessionInfo();
 
-        if (GameState.IsInLobby || GameState.IsPlayerDead)
+        if (GameState.IsInLobby || GameState.IsWorldLoading || GameState.IsPlayerDead)
         {
             if (GameState.IsPaused)
                 ResumeGame();
@@ -84,7 +83,7 @@ public class PauseMenu : MonoBehaviour
             return;
         }
 
-        if (GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.LastUiCloseFrame == Time.frameCount)
+        if (GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsBestiaryOpen || GameState.IsQuestJournalOpen || GameState.IsDemoGuideOpen || GameState.LastUiCloseFrame == Time.frameCount)
             return;
 
         if (pauseAction.WasPressedThisFrame())
@@ -99,7 +98,7 @@ public class PauseMenu : MonoBehaviour
 
     void HandlePausePressed()
     {
-        if (GameState.IsInventoryOpen)
+        if (GameState.IsInventoryOpen || GameState.IsBestiaryOpen || GameState.IsQuestJournalOpen)
             return;
 
         if (!GameState.IsPaused)
@@ -135,7 +134,7 @@ public class PauseMenu : MonoBehaviour
         SetMenuVisible(false);
         ClearResetConfirmation();
 
-        if (!GameState.IsInLobby && !GameState.IsInventoryOpen)
+        if (!GameState.IsInLobby && !GameState.IsWorldLoading && !GameState.IsInventoryOpen && !GameState.IsBestiaryOpen && !GameState.IsQuestJournalOpen)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -233,16 +232,6 @@ public class PauseMenu : MonoBehaviour
     {
         DisplaySettingsManager.SetFullscreen(!DisplaySettingsManager.IsFullscreen);
         RefreshDisplaySettingsUi();
-    }
-
-    void EnsureEventSystem()
-    {
-        if (EventSystem.current != null || FindFirstObjectByType<EventSystem>() != null)
-            return;
-
-        GameObject eventSystemObject = new GameObject("EventSystem");
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<InputSystemUIInputModule>();
     }
 
     void HandleMouseFallbackClick()

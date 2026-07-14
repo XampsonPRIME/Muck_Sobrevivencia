@@ -38,7 +38,7 @@ public class CraftingNpc : MonoBehaviour
 
     void TryShowProximityMessage()
     {
-        if (GameState.IsPaused || GameState.IsInLobby || GameState.IsPlayerDead || GameState.IsInventoryOpen || GameState.IsVendorOpen || GameState.IsCraftingOpen)
+        if (GameState.IsPaused || GameState.IsInLobby || GameState.IsWorldLoading || GameState.IsPlayerDead || GameState.IsInventoryOpen || GameState.IsVendorOpen || GameState.IsCraftingOpen)
             return;
 
         if (Time.time < nextMessageTime)
@@ -48,7 +48,8 @@ public class CraftingNpc : MonoBehaviour
         if (player == null)
             return;
 
-        if (Vector3.Distance(transform.position, player.transform.position) > talkDistance)
+        float sqrTalkDistance = talkDistance * talkDistance;
+        if ((transform.position - player.transform.position).sqrMagnitude > sqrTalkDistance)
             return;
 
         nextMessageTime = Time.time + messageCooldown;
@@ -83,10 +84,11 @@ public class CraftingNpc : MonoBehaviour
 
     void UpdateNameLabelFacing()
     {
-        if (nameText == null || Camera.main == null)
+        Camera camera = RuntimeCameraCache.Main;
+        if (nameText == null || camera == null)
             return;
 
         Transform labelTransform = nameText.transform;
-        labelTransform.rotation = Quaternion.LookRotation(labelTransform.position - Camera.main.transform.position);
+        labelTransform.rotation = Quaternion.LookRotation(labelTransform.position - camera.transform.position);
     }
 }

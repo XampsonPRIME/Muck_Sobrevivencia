@@ -86,6 +86,7 @@ public class DayNightCycle : MonoBehaviour
         }
 
         timeOfDay = Mathf.Repeat(startHour / 24f, 1f);
+        ConfigureDistantStars();
         ApplyCycleVisuals();
     }
 
@@ -101,6 +102,38 @@ public class DayNightCycle : MonoBehaviour
         }
 
         ApplyCycleVisuals();
+    }
+
+    void ConfigureDistantStars()
+    {
+        if (stars == null)
+            return;
+
+        var main = stars.main;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(18f, 32f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0f, 0.015f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.035f, 0.095f);
+        main.maxParticles = Mathf.Max(main.maxParticles, 1800);
+
+        var shape = stars.shape;
+        shape.enabled = true;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = Mathf.Max(shape.radius, 170f);
+        shape.radiusThickness = 0.2f;
+
+        UpdateDistantStarsPosition();
+    }
+
+    void UpdateDistantStarsPosition()
+    {
+        if (stars == null)
+            return;
+
+        Transform focus = LanMultiplayerManager.FindWorldFocusTransform();
+        Vector3 focusPosition = focus != null ? focus.position : Vector3.zero;
+        stars.transform.position = focusPosition + Vector3.up * 115f;
     }
 
     void ApplyCycleVisuals()
@@ -155,9 +188,10 @@ public class DayNightCycle : MonoBehaviour
         // ⭐ estrelas
         if (stars != null)
         {
+            UpdateDistantStarsPosition();
             float starVisibility = 1f - sunIntensity;
             var emission = stars.emission;
-            emission.rateOverTime = starVisibility * 1000f;
+            emission.rateOverTime = starVisibility * 650f;
         }
 
         if (enchantedForestDust != null)

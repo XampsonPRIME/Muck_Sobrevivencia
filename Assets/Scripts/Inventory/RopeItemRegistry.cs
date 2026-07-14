@@ -19,6 +19,11 @@ public static class RopeItemRegistry
         ropeItem = itemObject.AddComponent<Item>();
         ropeItem.itemName = ItemName;
         ropeItem.itemType = ItemType.Resource;
+        ropeItem.category = InventoryCategory.Resources;
+        ropeItem.rarity = ItemRarity.Common;
+        ropeItem.description = "Fibra trancada usada em receitas de ferramentas e armas.";
+        ropeItem.weight = 0.1f;
+        ropeItem.maxStack = Item.ResourceStackLimit;
         ropeItem.toolType = ToolType.None;
         ropeItem.toolDamage = 0;
         ropeItem.buyPrice = 0;

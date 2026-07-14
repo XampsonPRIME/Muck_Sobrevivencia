@@ -85,8 +85,8 @@ MonoBehaviour:
   spawnScale: {x: 1.18, y: 1.18, z: 1.18}
   maxHealth: 15
   healthBonusPerLevel: 4
-  contactDamage: 12
-  contactDamageBonusPerLevel: 1.8
+  contactDamage: 16
+  contactDamageBonusPerLevel: 2.8
   attackRange: 1.35
   attackCooldown: 1.15
   moveSpeed: 3.2

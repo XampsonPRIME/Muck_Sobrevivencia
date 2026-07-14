@@ -85,12 +85,12 @@ MonoBehaviour:
   bossLevel: 1
   minimumPlayerLevel: 1
   healthBonusPerLevel: 45
-  contactDamageBonusPerLevel: 5
+  contactDamageBonusPerLevel: 8
   moveSpeedBonusPerLevel: 0.08
   goldBonusPerLevel: 7
   xpBonusPerLevel: 45
   maxHealth: 20
-  contactDamage: 42
+  contactDamage: 58
   attackRange: 2.6
   attackCooldown: 1.15
   moveSpeed: 3.1
@@ -99,7 +99,7 @@ MonoBehaviour:
   detectionRange: 22
   targetRefreshInterval: 0.25
   enableAreaAttack: 1
-  areaAttackDamage: 58
+  areaAttackDamage: 86
   areaAttackRadius: 5.6
   areaAttackTriggerRange: 8.5
   areaAttackCooldown: 6.25

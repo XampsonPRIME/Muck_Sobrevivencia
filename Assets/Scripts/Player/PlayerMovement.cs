@@ -12,10 +12,13 @@ public class PlayerMovement : MonoBehaviour
     const string AmbientMusicClipName = "Forest_Whispering";
 
     public static bool IsCombatMusicActive { get; private set; }
+    public static Vector3 DefaultFreshStartPosition => DemoWorldProgression.ResolveFreshPlayerSpawn();
+    public static Quaternion DefaultFreshStartRotation => DemoWorldProgression.ResolveFreshPlayerRotation();
 
     [Header("Movimento")]
     public float walkSpeed = 4f;
     public float runSpeed = 8f;
+    [Range(0.2f, 1f)] public float rangedAimSpeedMultiplier = 0.65f;
     public float jumpForce = 6f;
     public float gravity = -9.8f;
 
@@ -40,7 +43,7 @@ public class PlayerMovement : MonoBehaviour
     public float lowStaminaSpeedMultiplier = 0.45f;
 
     [Header("Vida")]
-    public float maxHealth = 500f;
+    public float maxHealth = 150f;
     public float currentHealth;
     public float healthRegenPerSecond = 4f;
     public float healthRegenDelay = 6f;
@@ -80,8 +83,11 @@ public class PlayerMovement : MonoBehaviour
     public float spawnRayHeight = 40f;
     public float spawnRayDistance = 120f;
     public float spawnGroundPadding = 0.08f;
-    public float spawnAirDropHeight = 10f;
+    public float spawnAirDropHeight = 1f;
     public LayerMask spawnGroundMask = ~0;
+
+    [Header("Debug")]
+    public bool debugImmortal;
 
     [Header("Audio")]
     public AudioSource sfxSource;
@@ -109,6 +115,12 @@ public class PlayerMovement : MonoBehaviour
     Vector2 lookInput;
 
     float yVelocity;
+    bool fallAnimationPlayed;
+    bool verticalPositionLocked;
+    float lockedVerticalPosition;
+    Vector3 externalVelocity;
+    float externalVelocityTimer;
+    float stunEndTime;
     float xRotation;
     float yRotation;
     bool isRunning;
@@ -118,6 +130,8 @@ public class PlayerMovement : MonoBehaviour
     bool criticalHungerWarningShown;
     bool lowThirstWarningShown;
     bool criticalThirstWarningShown;
+    bool rangedAimActive;
+    float rangedAimMultiplier = 1f;
     float respawnInvulnerabilityEndTime;
     float lastDamageTime = float.NegativeInfinity;
     Vector3 spawnPosition;
@@ -131,13 +145,16 @@ public class PlayerMovement : MonoBehaviour
     GameObject playerModel;
     Vector3 playerModelStartLocalPosition;
 
+    public Animator VisualAnimator => anim;
+
     void Awake()
     {
         controller = GetComponent<CharacterController>();
         controls = new PlayerControls();
         anim = GetComponentInChildren<Animator>();
         toggleCameraAction = new InputAction("ToggleCamera", binding: "<Keyboard>/c");
-        damageTestAction = new InputAction("DamageTest", binding: "<Keyboard>/h");
+        if (Debug.isDebugBuild || Application.isEditor)
+            damageTestAction = new InputAction("DamageTest", binding: "<Keyboard>/h");
         respawnAction = new InputAction("Respawn", binding: "<Keyboard>/r");
 
         currentStamina = maxStamina;
@@ -145,10 +162,15 @@ public class PlayerMovement : MonoBehaviour
         currentHunger = maxHunger;
         currentThirst = maxThirst;
 
-        playerModel = anim.gameObject;
-        playerModelStartLocalPosition = playerModel.transform.localPosition;
+        if (anim != null)
+        {
+            playerModel = anim.gameObject;
+            playerModelStartLocalPosition = playerModel.transform.localPosition;
+        }
+
         inventory = GetComponent<Inventory>();
-        hotbar = GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
+        hotbar = GetComponent<Hotbar>() ?? SceneObjectCache.Find<Hotbar>(gameObject.scene, true);
+        EnsureCameraHolder();
         spawnPosition = ResolveSafeSpawnPosition(transform.position);
         spawnRotation = transform.rotation;
         EnsureSfxSource();
@@ -160,14 +182,14 @@ public class PlayerMovement : MonoBehaviour
     {
         controls.Enable();
         toggleCameraAction.Enable();
-        damageTestAction.Enable();
+        damageTestAction?.Enable();
         respawnAction.Enable();
     }
 
     void OnDisable()
     {
         respawnAction.Disable();
-        damageTestAction.Disable();
+        damageTestAction?.Disable();
         toggleCameraAction.Disable();
         controls.Disable();
     }
@@ -186,7 +208,7 @@ public class PlayerMovement : MonoBehaviour
     {
         HandleCombatMusic();
 
-        if (GameState.IsInLobby)
+        if (GameState.IsInLobby || GameState.IsWorldLoading)
         {
             moveInput = Vector2.zero;
             lookInput = Vector2.zero;
@@ -202,7 +224,7 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        if (GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen)
+        if (GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen || GameState.IsBestiaryOpen || GameState.IsQuestJournalOpen || GameState.IsDemoGuideOpen)
         {
             moveInput = Vector2.zero;
             lookInput = Vector2.zero;
@@ -223,6 +245,12 @@ public class PlayerMovement : MonoBehaviour
         lookInput = controls.Player.Look.ReadValue<Vector2>();
         isRunning = controls.Player.Run.IsPressed() && !sprintLocked;
 
+        if (IsStunned)
+        {
+            moveInput = Vector2.zero;
+            isRunning = false;
+        }
+
         if (toggleCameraAction.WasPressedThisFrame())
         {
             thirdPerson = !thirdPerson;
@@ -237,7 +265,7 @@ public class PlayerMovement : MonoBehaviour
         HandleThirst();
         HandleHealthRegeneration();
 
-        if (damageTestAction.WasPressedThisFrame())
+        if (damageTestAction != null && damageTestAction.WasPressedThisFrame())
         {
             TakeDamage(10f);
         }
@@ -248,6 +276,40 @@ public class PlayerMovement : MonoBehaviour
     void LateUpdate()
     {
         ApplyCameraPose();
+        EnforceGameplayCursorState();
+    }
+
+    void EnforceGameplayCursorState()
+    {
+        if (!Application.isFocused || !ShouldLockCursorForGameplay())
+            return;
+
+        bool needsLock = Cursor.lockState != CursorLockMode.Locked;
+        bool needsHide = Cursor.visible;
+
+        if (needsLock)
+            Cursor.lockState = CursorLockMode.Locked;
+
+        if (needsHide)
+            Cursor.visible = false;
+
+    }
+
+    bool ShouldLockCursorForGameplay()
+    {
+        return !GameState.IsInLobby &&
+               !GameState.IsWorldLoading &&
+               !GameState.IsPaused &&
+               !GameState.IsPlayerDead &&
+               !GameState.IsInventoryOpen &&
+               !GameState.IsBestiaryOpen &&
+               !GameState.IsQuestJournalOpen &&
+               !GameState.IsVendorOpen &&
+               !GameState.IsCraftingOpen &&
+               !GameState.IsDebugChatOpen &&
+               !GameState.IsDemoGuideOpen &&
+               !GameState.IsMapOpen &&
+               !GameState.IsPowerSelectionOpen;
     }
 
     public void ApplySavedState(Vector3 position, Quaternion rotation, bool savedThirdPerson, float savedHealth, float savedStamina, float savedHunger, float savedThirst)
@@ -281,17 +343,40 @@ public class PlayerMovement : MonoBehaviour
 
     public bool TryGetSafeSpawnPosition(Vector3 desiredPosition, out Vector3 safePosition)
     {
+        Physics.SyncTransforms();
+
         if (TryGetGroundedSpawnPosition(desiredPosition, out safePosition))
             return true;
 
         Vector3 fallbackPosition = transform.position;
-        return TryGetGroundedSpawnPosition(fallbackPosition, out safePosition);
+        if (TryGetGroundedSpawnPosition(fallbackPosition, out safePosition))
+            return true;
+
+        Vector3 defaultFreshStartPosition = DefaultFreshStartPosition;
+        if (TryGetGroundedSpawnPosition(defaultFreshStartPosition, out safePosition))
+            return true;
+
+        Vector3 recordedSpawnPosition = spawnPosition;
+        if (TryGetGroundedSpawnPosition(recordedSpawnPosition, out safePosition))
+            return true;
+
+        return TryGetGroundedSpawnPosition(Vector3.zero, out safePosition);
     }
 
     public bool WarpToSafePosition(Vector3 desiredPosition, Quaternion rotation)
     {
+        return WarpToSafePosition(desiredPosition, rotation, false);
+    }
+
+    public bool WarpToSafePosition(Vector3 desiredPosition, Quaternion rotation, bool allowAirFallback)
+    {
         if (!TryGetSafeSpawnPosition(desiredPosition, out Vector3 safePosition))
-            return false;
+        {
+            if (!allowAirFallback)
+                return false;
+
+            safePosition = ResolveAirFallbackSpawnPosition(desiredPosition);
+        }
 
         if (controller != null)
             controller.enabled = false;
@@ -313,20 +398,132 @@ public class PlayerMovement : MonoBehaviour
         return true;
     }
 
+    Vector3 ResolveAirFallbackSpawnPosition(Vector3 desiredPosition)
+    {
+        Vector3 fallback = desiredPosition;
+
+        if (!IsFiniteVector(fallback) || fallback.sqrMagnitude < 0.001f)
+            fallback = DefaultFreshStartPosition;
+
+        float emergencyLift = Mathf.Max(GetGroundedSpawnLift(), Mathf.Max(1f, spawnAirDropHeight));
+        float minimumHeight = Mathf.Max(DemoWorldProgression.FreshSpawnHeight, emergencyLift + 8f);
+        fallback.y = Mathf.Max(fallback.y, minimumHeight);
+        return fallback;
+    }
+
+    bool IsFiniteVector(Vector3 value)
+    {
+        return !float.IsNaN(value.x) &&
+               !float.IsNaN(value.y) &&
+               !float.IsNaN(value.z) &&
+               !float.IsInfinity(value.x) &&
+               !float.IsInfinity(value.y) &&
+               !float.IsInfinity(value.z);
+    }
+
+    public void TeleportExact(Vector3 position, Quaternion rotation, bool updateRespawnPoint = true)
+    {
+        if (controller != null)
+            controller.enabled = false;
+
+        transform.SetPositionAndRotation(position, rotation);
+
+        if (controller != null)
+            controller.enabled = true;
+
+        if (updateRespawnPoint)
+        {
+            spawnPosition = position;
+            spawnRotation = rotation;
+        }
+
+        yVelocity = 0f;
+        externalVelocity = Vector3.zero;
+        externalVelocityTimer = 0f;
+        moveInput = Vector2.zero;
+        lookInput = Vector2.zero;
+        isRunning = false;
+        yRotation = transform.eulerAngles.y;
+        xRotation = thirdPerson ? thirdPersonPitch : 0f;
+        ApplyCameraPose();
+    }
+
+    public void SetVerticalPositionLock(bool locked, float worldY = 0f)
+    {
+        verticalPositionLocked = locked;
+        if (locked)
+            lockedVerticalPosition = worldY;
+
+        yVelocity = 0f;
+    }
+
     public void ResetToFreshStart()
+    {
+        ResetToFreshStart(DefaultFreshStartPosition, DefaultFreshStartRotation);
+    }
+
+    public void PrepareFreshStartForWorldGeneration()
+    {
+        ResetToFreshStart(DefaultFreshStartPosition, DefaultFreshStartRotation, false);
+    }
+
+    public void ResetToFreshStart(Vector3 desiredPosition, Quaternion rotation)
+    {
+        ResetToFreshStart(desiredPosition, rotation, true);
+    }
+
+    void ResetToFreshStart(Vector3 desiredPosition, Quaternion rotation, bool resolveGround)
     {
         GameState.IsPlayerDead = false;
         GameState.IsInventoryOpen = false;
+        GameState.IsVendorOpen = false;
+        GameState.IsCraftingOpen = false;
+        GameState.IsDebugChatOpen = false;
+        GameState.IsBestiaryOpen = false;
+        GameState.IsQuestJournalOpen = false;
+        GameState.IsMapOpen = false;
+        GameState.IsPowerSelectionOpen = false;
 
-        ApplySavedState(
-            spawnPosition,
-            spawnRotation,
-            false,
-            maxHealth,
-            maxStamina,
-            maxHunger,
-            maxThirst
-        );
+        AncestralPowerService powers = GetComponent<AncestralPowerService>();
+        if (powers != null)
+            powers.ClearPowers(false);
+
+        verticalPositionLocked = false;
+
+        if (resolveGround)
+        {
+            ApplySavedState(
+                desiredPosition,
+                rotation,
+                false,
+                maxHealth,
+                maxStamina,
+                maxHunger,
+                maxThirst
+            );
+        }
+        else
+        {
+            thirdPerson = false;
+
+            if (controller != null)
+                controller.enabled = false;
+
+            transform.SetPositionAndRotation(desiredPosition, rotation);
+
+            if (controller != null)
+                controller.enabled = true;
+
+            currentHealth = maxHealth;
+            currentStamina = maxStamina;
+            currentHunger = maxHunger;
+            currentThirst = maxThirst;
+            spawnPosition = desiredPosition;
+            spawnRotation = rotation;
+            yRotation = transform.eulerAngles.y;
+            xRotation = 0f;
+            ApplyCameraPose();
+        }
 
         lowHungerWarningShown = false;
         criticalHungerWarningShown = false;
@@ -344,7 +541,7 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleHunger()
     {
-        if (GameState.IsPlayerDead)
+        if (GameState.IsPlayerDead || GameState.IsPowerSelectionOpen)
             return;
 
         bool isMoving = moveInput.sqrMagnitude > 0.01f;
@@ -368,6 +565,12 @@ public class PlayerMovement : MonoBehaviour
     {
         currentHunger += amount;
         currentHunger = Mathf.Clamp(currentHunger, 0, maxHunger);
+    }
+
+    public void SetRangedAimMovement(bool active, float speedMultiplier)
+    {
+        rangedAimActive = active;
+        rangedAimMultiplier = Mathf.Clamp(speedMultiplier, 0.2f, 1f);
     }
 
     void HandleLowHungerWarning()
@@ -400,7 +603,7 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleThirst()
     {
-        if (GameState.IsPlayerDead)
+        if (GameState.IsPlayerDead || GameState.IsPowerSelectionOpen)
             return;
 
         bool isMoving = moveInput.sqrMagnitude > 0.01f;
@@ -442,7 +645,7 @@ public class PlayerMovement : MonoBehaviour
 
     void HandleHealthRegeneration()
     {
-        if (GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInLobby || GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen)
+        if (GameState.IsPlayerDead || GameState.IsPaused || GameState.IsInLobby || GameState.IsWorldLoading || GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsDebugChatOpen || GameState.IsBestiaryOpen || GameState.IsQuestJournalOpen)
             return;
 
         if (currentHealth >= maxHealth || healthRegenPerSecond <= 0f)
@@ -468,11 +671,32 @@ public class PlayerMovement : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
-        if (GameState.IsPlayerDead)
+        if (GameState.IsPlayerDead || GameState.IsWorldLoading || GameState.IsPowerSelectionOpen)
+            return;
+
+        if (debugImmortal)
             return;
 
         if (Time.time < respawnInvulnerabilityEndTime)
             return;
+
+        AncestralPowerService powers = GetComponent<AncestralPowerService>();
+        if (powers != null && powers.TryIgnoreIncomingDamage())
+        {
+            MessageSystem.Instance?.ShowMessage("Guardiao Imortal bloqueou o dano.");
+            return;
+        }
+
+        PlayerEquipment equipment = GetComponent<PlayerEquipment>();
+        if (equipment != null)
+            amount = Mathf.Max(1f, amount - equipment.GetTotalDefense() * 0.35f);
+
+        if (powers != null && powers.BonusDefense > 0f)
+            amount = Mathf.Max(1f, amount - powers.BonusDefense * 0.35f);
+
+        BearerPowerController bearerController = GetComponent<BearerPowerController>();
+        if (bearerController != null)
+            amount = bearerController.ModifyIncomingDamage(amount);
 
         lastDamageTime = Time.time;
         currentHealth -= amount;
@@ -482,6 +706,36 @@ public class PlayerMovement : MonoBehaviour
             currentHealth = 0;
             Die();
         }
+    }
+
+    public void ApplyKnockback(Vector3 direction, float force, float duration)
+    {
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.001f)
+            return;
+
+        externalVelocity = direction.normalized * Mathf.Max(0f, force);
+        externalVelocityTimer = Mathf.Max(0.05f, duration);
+    }
+
+    public bool IsStunned => Time.time < stunEndTime;
+
+    public void ApplyStun(float duration)
+    {
+        if (duration <= 0f || GameState.IsPlayerDead)
+            return;
+
+        stunEndTime = Mathf.Max(stunEndTime, Time.time + duration);
+        moveInput = Vector2.zero;
+        isRunning = false;
+    }
+
+    public void MoveByAbility(Vector3 displacement)
+    {
+        if (controller == null || !controller.enabled || GameState.IsPlayerDead)
+            return;
+
+        controller.Move(displacement);
     }
 
     public void PlayAttackSound()
@@ -514,16 +768,35 @@ public class PlayerMovement : MonoBehaviour
         LoadCombatMusicClip();
     }
 
+    public void OverrideVisualAnimator(Animator replacementAnimator)
+    {
+        if (replacementAnimator == null)
+            return;
+
+        anim = replacementAnimator;
+        playerModel = replacementAnimator.gameObject;
+        playerModelStartLocalPosition = playerModel.transform.localPosition;
+        HandleModelVisibility();
+        ApplyWaterVisuals();
+    }
+
     void Die()
     {
+        PlayerAnimationBridge.Trigger(anim, PlayerAnimationBridge.DieTrigger);
         GameState.IsPlayerDead = true;
         GameState.IsInventoryOpen = false;
         GameState.IsVendorOpen = false;
         GameState.IsCraftingOpen = false;
+        GameState.IsBestiaryOpen = false;
+        GameState.IsQuestJournalOpen = false;
         moveInput = Vector2.zero;
         lookInput = Vector2.zero;
         isRunning = false;
         yVelocity = 0f;
+
+        AncestralPowerService powers = GetComponent<AncestralPowerService>();
+        if (powers != null)
+            powers.ClearPowers(true);
 
         List<InventoryItem> droppedItems = inventory != null ? inventory.CreateSnapshot() : null;
         if (droppedItems != null && droppedItems.Count > 0)
@@ -532,14 +805,13 @@ public class PlayerMovement : MonoBehaviour
         inventory?.ClearAll();
         hotbar?.ClearAll();
 
-        InventoryUI inventoryUi = FindFirstObjectByType<InventoryUI>();
+        InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(true);
         if (inventoryUi != null)
             inventoryUi.Refresh();
 
         PlayDeathSound();
         ShowDeathMessage();
 
-        Debug.Log("Player morreu");
     }
 
     void EnsureSfxSource()
@@ -599,6 +871,7 @@ public class PlayerMovement : MonoBehaviour
 
         bool shouldPlayCombatMusic =
             !GameState.IsInLobby &&
+            !GameState.IsWorldLoading &&
             !GameState.IsPaused &&
             !GameState.IsPlayerDead &&
             Time.unscaledTime < combatMusicUntilTime;
@@ -727,6 +1000,8 @@ public class PlayerMovement : MonoBehaviour
         GameState.IsInventoryOpen = false;
         GameState.IsVendorOpen = false;
         GameState.IsCraftingOpen = false;
+        GameState.IsBestiaryOpen = false;
+        GameState.IsQuestJournalOpen = false;
 
         currentHealth = maxHealth;
         currentHunger = maxHunger;
@@ -834,7 +1109,7 @@ public class PlayerMovement : MonoBehaviour
     void HandleStamina()
     {
         bool isMoving = moveInput.sqrMagnitude > 0.01f;
-        bool canRun = currentStamina > 0.01f && !sprintLocked;
+        bool canRun = currentStamina > 0.01f && !sprintLocked && !IsRunningBlockedByInventoryWeight();
 
         if (isRunning && isMoving && canRun)
         {
@@ -860,15 +1135,38 @@ public class PlayerMovement : MonoBehaviour
 
     void Move()
     {
-        bool grounded = controller.isGrounded;
+        if (verticalPositionLocked)
+        {
+            yVelocity = 0f;
+        }
+        else
+        {
+            bool grounded = controller.isGrounded;
 
-        if (grounded && yVelocity < 0f)
-            yVelocity = -2f;
+            if (grounded && yVelocity < 0f)
+                yVelocity = -2f;
 
-        if (grounded && controls.Player.Jump.WasPressedThisFrame())
-            yVelocity = jumpForce;
+            if (grounded)
+                fallAnimationPlayed = false;
 
-        yVelocity += gravity * Time.deltaTime;
+            if (grounded && !IsStunned && controls.Player.Jump.WasPressedThisFrame())
+            {
+                yVelocity = jumpForce;
+                bool runningJump = isRunning &&
+                                   moveInput.sqrMagnitude > 0.01f &&
+                                   currentStamina > 0.01f &&
+                                   !sprintLocked &&
+                                   !IsRunningBlockedByInventoryWeight();
+                PlayerAnimationBridge.Trigger(anim, runningJump ? PlayerAnimationBridge.RunJumpTrigger : PlayerAnimationBridge.JumpTrigger);
+            }
+            else if (!grounded && yVelocity < -3f && !fallAnimationPlayed)
+            {
+                fallAnimationPlayed = true;
+                PlayerAnimationBridge.Trigger(anim, PlayerAnimationBridge.FallTrigger);
+            }
+
+            yVelocity += gravity * Time.deltaTime;
+        }
 
         Quaternion yawRotationOnly = Quaternion.Euler(0f, yRotation, 0f);
         Vector3 forward = yawRotationOnly * Vector3.forward;
@@ -876,7 +1174,7 @@ public class PlayerMovement : MonoBehaviour
         Vector3 move = (forward * moveInput.y) + (right * moveInput.x);
 
         bool isMoving = moveInput.sqrMagnitude > 0.01f;
-        bool canRun = currentStamina > 0.01f && !sprintLocked;
+        bool canRun = currentStamina > 0.01f && !sprintLocked && !IsRunningBlockedByInventoryWeight();
         float speed = (isRunning && isMoving && canRun) ? runSpeed : walkSpeed;
 
         if (isInWater)
@@ -885,16 +1183,70 @@ public class PlayerMovement : MonoBehaviour
         if (currentStamina <= maxStamina * lowStaminaThresholdPercent)
             speed *= lowStaminaSpeedMultiplier;
 
+        if (rangedAimActive)
+            speed *= rangedAimMultiplier;
+
+        speed *= GetInventoryWeightSpeedMultiplier();
+        speed *= 1f + GetEquipmentMoveSpeedBonus();
+        BearerPowerController bearerController = GetComponent<BearerPowerController>();
+        if (bearerController != null)
+            speed *= bearerController.MovementSpeedMultiplier;
+
         Vector3 velocity = move.normalized * speed;
-        velocity.y = yVelocity;
+        velocity += externalVelocity;
+        velocity.y = verticalPositionLocked ? 0f : yVelocity;
 
         controller.Move(velocity * Time.deltaTime);
+
+        if (verticalPositionLocked && Mathf.Abs(transform.position.y - lockedVerticalPosition) > 0.001f)
+        {
+            controller.enabled = false;
+            Vector3 lockedPosition = transform.position;
+            lockedPosition.y = lockedVerticalPosition;
+            transform.position = lockedPosition;
+            controller.enabled = true;
+        }
+
+        DecayExternalVelocity();
 
         if (anim != null)
         {
             float animSpeed = (isRunning && isMoving) ? 1f : moveInput.magnitude * 0.5f;
-            anim.SetFloat("Speed", animSpeed);
+            anim.SetFloat(PlayerAnimationBridge.SpeedParameter, animSpeed);
+            PlayerAnimationBridge.SetFloatIfPresent(anim, PlayerAnimationBridge.DirectionXParameter, moveInput.x);
         }
+    }
+
+    void DecayExternalVelocity()
+    {
+        if (externalVelocity.sqrMagnitude <= 0.001f)
+        {
+            externalVelocity = Vector3.zero;
+            externalVelocityTimer = 0f;
+            return;
+        }
+
+        externalVelocityTimer -= Time.deltaTime;
+        if (externalVelocityTimer <= 0f)
+            externalVelocity = Vector3.MoveTowards(externalVelocity, Vector3.zero, 28f * Time.deltaTime);
+    }
+
+    bool IsRunningBlockedByInventoryWeight()
+    {
+        Inventory inventory = GetComponent<Inventory>();
+        return inventory != null && inventory.IsRunBlockedByWeight();
+    }
+
+    float GetInventoryWeightSpeedMultiplier()
+    {
+        Inventory inventory = GetComponent<Inventory>();
+        return inventory != null ? inventory.GetMovementSpeedMultiplier() : 1f;
+    }
+
+    float GetEquipmentMoveSpeedBonus()
+    {
+        PlayerEquipment equipment = GetComponent<PlayerEquipment>();
+        return equipment != null ? equipment.GetMoveSpeedBonus() : 0f;
     }
 
     void Look()
@@ -917,6 +1269,7 @@ public class PlayerMovement : MonoBehaviour
     void ApplyCameraPose()
     {
         transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
+        EnsureCameraHolder();
 
         if (cameraHolder == null)
             return;
@@ -927,6 +1280,29 @@ public class PlayerMovement : MonoBehaviour
 
         cameraHolder.localPosition = poseOffset;
         cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+    }
+
+    void EnsureCameraHolder()
+    {
+        if (cameraHolder != null &&
+            cameraHolder.IsChildOf(transform) &&
+            cameraHolder.GetComponentInChildren<Camera>(true) != null)
+        {
+            return;
+        }
+
+        Camera ownedCamera = GetComponentInChildren<Camera>(true);
+        if (ownedCamera != null)
+        {
+            Transform parent = ownedCamera.transform.parent;
+            cameraHolder = parent != null && parent.IsChildOf(transform)
+                ? parent
+                : ownedCamera.transform;
+            return;
+        }
+
+        if (cameraHolder != null && !cameraHolder.IsChildOf(transform))
+            cameraHolder.SetParent(transform, false);
     }
 
     void UpdateWaterState()
@@ -971,12 +1347,14 @@ public class PlayerMovement : MonoBehaviour
         if (TryGetGroundedSpawnPosition(fallbackPosition, out groundedPosition))
             return groundedPosition;
 
+        if (TryGetGroundedSpawnPosition(Vector3.zero, out groundedPosition))
+            return groundedPosition;
+
+        float emergencyLift = Mathf.Max(GetGroundedSpawnLift(), Mathf.Max(0.5f, spawnAirDropHeight));
         float emergencyHeight = Mathf.Max(
-            desiredPosition.y + spawnAirDropHeight,
-            transform.position.y + spawnAirDropHeight,
-            spawnPosition.y + spawnAirDropHeight,
-            spawnRayHeight + spawnAirDropHeight,
-            60f
+            desiredPosition.y + emergencyLift,
+            transform.position.y + emergencyLift,
+            spawnPosition.y + emergencyLift
         );
 
         return new Vector3(desiredPosition.x, emergencyHeight, desiredPosition.z);
@@ -984,7 +1362,6 @@ public class PlayerMovement : MonoBehaviour
 
     bool TryGetGroundedSpawnPosition(Vector3 desiredPosition, out Vector3 groundedPosition)
     {
-        float controllerHeight = controller != null ? controller.height : 2f;
         Vector3 rayOrigin = desiredPosition + Vector3.up * spawnRayHeight;
         RaycastHit[] hits = Physics.RaycastAll(
             rayOrigin,
@@ -994,7 +1371,10 @@ public class PlayerMovement : MonoBehaviour
             QueryTriggerInteraction.Ignore
         );
 
-        float closestDistance = float.MaxValue;
+        float closestTerrainDistance = float.MaxValue;
+        float closestFallbackDistance = float.MaxValue;
+        Vector3 terrainPosition = desiredPosition;
+        Vector3 fallbackPosition = desiredPosition;
         groundedPosition = desiredPosition;
 
         for (int i = 0; i < hits.Length; i++)
@@ -1003,14 +1383,47 @@ public class PlayerMovement : MonoBehaviour
             if (!IsValidSpawnGroundHit(hit))
                 continue;
 
-            if (hit.distance < closestDistance)
+            Vector3 candidatePosition = hit.point + Vector3.up * GetGroundedSpawnLift();
+            bool isProceduralTerrain =
+                hit.collider.GetComponentInParent<TerrainChunk>() != null ||
+                hit.collider.GetComponentInParent<ProceduralTerrain>() != null;
+
+            if (isProceduralTerrain && hit.distance < closestTerrainDistance)
             {
-                closestDistance = hit.distance;
-                groundedPosition = hit.point + Vector3.up * (controllerHeight * 0.5f + spawnGroundPadding + spawnAirDropHeight);
+                closestTerrainDistance = hit.distance;
+                terrainPosition = candidatePosition;
+            }
+            else if (!isProceduralTerrain && hit.distance < closestFallbackDistance)
+            {
+                closestFallbackDistance = hit.distance;
+                fallbackPosition = candidatePosition;
             }
         }
 
-        return closestDistance < float.MaxValue;
+        if (closestTerrainDistance < float.MaxValue)
+        {
+            groundedPosition = terrainPosition;
+            return true;
+        }
+
+        if (closestFallbackDistance < float.MaxValue)
+        {
+            groundedPosition = fallbackPosition;
+            return true;
+        }
+
+        return false;
+    }
+
+    float GetGroundedSpawnLift()
+    {
+        if (controller != null)
+        {
+            float bottomOffset = controller.center.y - controller.height * 0.5f;
+            return Mathf.Max(spawnGroundPadding, -bottomOffset + spawnGroundPadding);
+        }
+
+        return 1f + spawnGroundPadding;
     }
 
     bool IsValidSpawnGroundHit(RaycastHit hit)
@@ -1026,7 +1439,13 @@ public class PlayerMovement : MonoBehaviour
         if (hitTransform == transform || hitTransform.IsChildOf(transform))
             return false;
 
+        if (hitCollider.GetComponentInParent<DistantMountains>() != null)
+            return false;
+
         if (hitCollider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (hitCollider.GetComponentInParent<WildChicken>() != null)
             return false;
 
         if (hitCollider.GetComponentInParent<MiniKrug>() != null)

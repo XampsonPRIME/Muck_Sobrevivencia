@@ -12,9 +12,14 @@ public class BossSpawnPoint : MonoBehaviour
     public float groundRayDistance = 120f;
     public LayerMask groundMask = ~0;
     public Vector3 playerSpawnOffset = new Vector3(0f, 0f, -12f);
+    public bool activateOnlyInFinalRegion = true;
+    public float activationDistance = DemoWorldProgression.FinalBossActivationDistance;
 
     GameObject spawnedBoss;
     GameObject spawnedPlayer;
+    bool initialBossSpawnHandled;
+    float nextFinalRegionCheckTime;
+    const float FinalRegionCheckInterval = 0.5f;
 
     void OnEnable()
     {
@@ -28,13 +33,47 @@ public class BossSpawnPoint : MonoBehaviour
 
     void Start()
     {
+        DemoWorldProgression.ApplyLandmarkLayout(gameObject.scene);
+        UpdateFinalLandmarkVisibility();
+
         if (ensurePlayerOnStart)
             SpawnPlayerIfNeeded();
+
+        TryHandleInitialBossSpawn();
+    }
+
+    void Update()
+    {
+        if (Time.time < nextFinalRegionCheckTime)
+            return;
+
+        nextFinalRegionCheckTime = Time.time + FinalRegionCheckInterval;
+        UpdateFinalLandmarkVisibility();
+        TryHandleInitialBossSpawn();
+    }
+
+    void TryHandleInitialBossSpawn()
+    {
+        if (initialBossSpawnHandled || GameState.IsInLobby || !HasReadyGameplaySession())
+            return;
+
+        if (!CanActivateFinalBoss())
+            return;
+
+        initialBossSpawnHandled = true;
 
         if (!spawnOnStart || bossPrefab == null || !ShouldRunAuthority())
             return;
 
         SpawnBoss();
+    }
+
+    bool HasReadyGameplaySession()
+    {
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance ?? FindFirstObjectByType<LanMultiplayerManager>();
+        return manager == null ||
+               manager.Mode != LanMultiplayerManager.SessionMode.None &&
+               manager.IsSessionReady;
     }
 
     public void SpawnBoss()
@@ -89,6 +128,9 @@ public class BossSpawnPoint : MonoBehaviour
         if (!respawnEveryDay || bossPrefab == null || !ShouldRunAuthority())
             return;
 
+        if (!CanActivateFinalBoss())
+            return;
+
         if (spawnedBoss != null)
             return;
 
@@ -97,6 +139,37 @@ public class BossSpawnPoint : MonoBehaviour
             manager.ClearDestroyedEntity(BuildBossEntityId());
 
         SpawnBoss();
+    }
+
+    void UpdateFinalLandmarkVisibility()
+    {
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer() ?? FindFirstObjectByType<PlayerMovement>();
+        if (player == null)
+        {
+            DemoWorldProgression.UpdateLandmarkVisibility(gameObject.scene, PlayerMovement.DefaultFreshStartPosition);
+            return;
+        }
+
+        DemoWorldProgression.UpdateLandmarkVisibility(gameObject.scene, player.transform.position);
+    }
+
+    bool CanActivateFinalBoss()
+    {
+        if (!activateOnlyInFinalRegion)
+            return true;
+
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer() ?? FindFirstObjectByType<PlayerMovement>();
+        if (player == null)
+            return false;
+
+        Vector3 playerPosition = player.transform.position;
+        if (!DemoWorldProgression.HasReachedFinalBossRegion(playerPosition))
+            return false;
+
+        Vector2 playerPlanar = new Vector2(playerPosition.x, playerPosition.z);
+        Vector2 bossPlanar = new Vector2(transform.position.x, transform.position.z);
+        float requiredDistance = Mathf.Max(1f, activationDistance);
+        return Vector2.Distance(playerPlanar, bossPlanar) <= requiredDistance;
     }
 
     bool ShouldRunAuthority()
@@ -117,15 +190,11 @@ public class BossSpawnPoint : MonoBehaviour
         if (playerPrefab == null || spawnedPlayer != null || FindFirstObjectByType<PlayerMovement>() != null)
             return;
 
-        Vector3 desiredPosition = transform.position + playerSpawnOffset;
+        Vector3 desiredPosition = PlayerMovement.DefaultFreshStartPosition;
+        Quaternion desiredRotation = PlayerMovement.DefaultFreshStartRotation;
         Vector3 groundedPosition = GetGroundedPositionOrFallback(desiredPosition);
-        spawnedPlayer = Instantiate(playerPrefab, groundedPosition + Vector3.up * 0.5f, Quaternion.identity);
+        spawnedPlayer = Instantiate(playerPrefab, groundedPosition + Vector3.up * 0.5f, desiredRotation);
         spawnedPlayer.name = playerPrefab.name;
-
-        Vector3 lookDirection = transform.position - spawnedPlayer.transform.position;
-        lookDirection.y = 0f;
-        if (lookDirection.sqrMagnitude > 0.001f)
-            spawnedPlayer.transform.rotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
     }
 
     string BuildBossEntityId()

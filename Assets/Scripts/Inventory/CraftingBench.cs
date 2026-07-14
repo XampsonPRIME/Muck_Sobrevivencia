@@ -11,7 +11,9 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         Pickaxe,
         Furnace,
         Shield,
-        Rope
+        Rope,
+        Bow,
+        Arrows
     }
 
     [SerializeField] string inputItemNamePrefix = "Madeira";
@@ -33,7 +35,7 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         if (playerInteraction == null || playerInteraction.inventory == null)
             return false;
 
-        CraftingBenchUI ui = CraftingBenchUI.Instance ?? FindFirstObjectByType<CraftingBenchUI>();
+        CraftingBenchUI ui = CraftingBenchUI.Instance ?? SceneObjectCache.Find<CraftingBenchUI>(true);
         if (ui == null)
         {
             GameObject uiObject = new GameObject("CraftingBenchUI");
@@ -71,6 +73,8 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
 
         int amountToCreate = Mathf.Max(1, outputAmount) * clampedCraftCount;
         string outputName = outputItem != null ? outputItem.itemName : fallbackOutputItemName;
+        if (!CanReceiveCraftResult(inventory, outputName, amountToCreate, outputItem, out message))
+            return false;
 
         inventory.RemoveItem(woodItem.itemName, amountToConsume);
         hotbar?.RemoveInventoryItem(woodItem, amountToConsume);
@@ -98,6 +102,12 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         if (recipe == Recipe.Rope)
             return TryCraftRope(inventory, hotbar, craftCount, out message);
 
+        if (recipe == Recipe.Bow)
+            return TryCraftBow(inventory, hotbar, craftCount, out message);
+
+        if (recipe == Recipe.Arrows)
+            return TryCraftArrows(inventory, hotbar, craftCount, out message);
+
         return TryCraftSticks(inventory, hotbar, craftCount, out message);
     }
 
@@ -119,6 +129,9 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         }
 
         Item furnaceItem = FurnaceItemRegistry.GetOrCreate();
+        if (!CanReceiveCraftResult(inventory, furnaceItem.itemName, amount, furnaceItem, out message))
+            return false;
+
         ConsumeItem(inventory, hotbar, "Pedras", 10 * amount);
         inventory.AddItem(furnaceItem.itemName, amount, furnaceItem);
         hotbar?.TryAddInventoryItem(new InventoryItem(furnaceItem.itemName, amount, furnaceItem));
@@ -152,6 +165,9 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         }
 
         Item shieldItem = ShieldItemRegistry.GetOrCreate();
+        if (!CanReceiveCraftResult(inventory, shieldItem.itemName, amount, shieldItem, out message))
+            return false;
+
         ConsumeItem(inventory, hotbar, RefinedIronItemRegistry.ItemName, 4 * amount);
         inventory.RemoveItem(woodItem.itemName, 3 * amount);
         hotbar?.RemoveInventoryItem(woodItem, 3 * amount);
@@ -185,6 +201,9 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         }
 
         Item ropeItem = RopeItemRegistry.GetOrCreate();
+        if (!CanReceiveCraftResult(inventory, ropeItem.itemName, amount, ropeItem, out message))
+            return false;
+
         ConsumeItem(inventory, hotbar, WheatItemRegistry.ItemName, 4 * amount);
 
         inventory.AddItem(ropeItem.itemName, amount, ropeItem);
@@ -224,6 +243,9 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
             return false;
         }
 
+        if (!CanReceiveCraftResult(inventory, craftedItem.itemName, amount, craftedItem, out message))
+            return false;
+
         ConsumeItem(inventory, hotbar, "Graveto", 3 * amount);
         ConsumeItem(inventory, hotbar, "Pedras", 2 * amount);
         ConsumeItem(inventory, hotbar, RustyMetalItemRegistry.ItemName, amount);
@@ -236,6 +258,83 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
             inventoryUi.Refresh();
 
         message = $"+{amount} {craftedItem.itemName}";
+        return true;
+    }
+
+    public bool TryCraftArrows(Inventory inventory, Hotbar hotbar, int craftCount, out string message)
+    {
+        message = "Craft indisponivel.";
+
+        if (inventory == null)
+        {
+            message = "Inventario nao encontrado.";
+            return false;
+        }
+
+        int amount = Mathf.Max(1, craftCount);
+        if (!HasItem(inventory, FeatherItemRegistry.ItemName, amount) ||
+            !HasItem(inventory, "Graveto", amount) ||
+            !HasItem(inventory, "Pedras", amount))
+        {
+            message = "Voce precisa de pena, graveto e pedra para fazer flechas.";
+            return false;
+        }
+
+        Item arrowItem = ArrowItemRegistry.GetOrCreate();
+        int arrowAmount = 2 * amount;
+        if (!CanReceiveCraftResult(inventory, arrowItem.itemName, arrowAmount, arrowItem, out message))
+            return false;
+
+        ConsumeItem(inventory, hotbar, FeatherItemRegistry.ItemName, amount);
+        ConsumeItem(inventory, hotbar, "Graveto", amount);
+        ConsumeItem(inventory, hotbar, "Pedras", amount);
+
+        inventory.AddItem(arrowItem.itemName, arrowAmount, arrowItem);
+
+        InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
+        if (inventoryUi != null)
+            inventoryUi.Refresh();
+
+        message = $"+{arrowAmount} {arrowItem.itemName}";
+        return true;
+    }
+
+    public bool TryCraftBow(Inventory inventory, Hotbar hotbar, int craftCount, out string message)
+    {
+        message = "Craft indisponivel.";
+
+        if (inventory == null)
+        {
+            message = "Inventario nao encontrado.";
+            return false;
+        }
+
+        int amount = Mathf.Max(1, craftCount);
+        InventoryItem woodItem = FindWoodItem(inventory);
+        if (woodItem == null ||
+            woodItem.quantity < 5 * amount ||
+            !HasItem(inventory, RopeItemRegistry.ItemName, 3 * amount))
+        {
+            message = "Voce precisa de 5 madeiras e 3 cordas para fazer um arco.";
+            return false;
+        }
+
+        Item bowItem = SimpleBowItemRegistry.GetOrCreate();
+        if (!CanReceiveCraftResult(inventory, bowItem.itemName, amount, bowItem, out message))
+            return false;
+
+        inventory.RemoveItem(woodItem.itemName, 5 * amount);
+        hotbar?.RemoveInventoryItem(woodItem, 5 * amount);
+        ConsumeItem(inventory, hotbar, RopeItemRegistry.ItemName, 3 * amount);
+
+        inventory.AddItem(bowItem.itemName, amount, bowItem);
+        hotbar?.TryAddInventoryItem(new InventoryItem(bowItem.itemName, amount, bowItem));
+
+        InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
+        if (inventoryUi != null)
+            inventoryUi.Refresh();
+
+        message = $"+{amount} {bowItem.itemName}";
         return true;
     }
 
@@ -268,6 +367,22 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         if (recipe == Recipe.Rope)
             return GetItemQuantity(inventory, WheatItemRegistry.ItemName) / 4;
 
+        if (recipe == Recipe.Bow)
+        {
+            InventoryItem woodItem = FindWoodItem(inventory);
+            int wood = woodItem != null ? woodItem.quantity / 5 : 0;
+            int rope = GetItemQuantity(inventory, RopeItemRegistry.ItemName) / 3;
+            return Mathf.Min(wood, rope);
+        }
+
+        if (recipe == Recipe.Arrows)
+        {
+            int feathers = GetItemQuantity(inventory, FeatherItemRegistry.ItemName);
+            int sticks = GetItemQuantity(inventory, "Graveto");
+            int stones = GetItemQuantity(inventory, "Pedras");
+            return Mathf.Min(feathers, sticks, stones);
+        }
+
         return GetAvailableStickCraftCount(inventory);
     }
 
@@ -294,7 +409,10 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
 
     public int GetRecipeOutputAmount(Recipe recipe)
     {
-        return UsesBasicToolRecipe(recipe) || recipe == Recipe.Furnace || recipe == Recipe.Shield || recipe == Recipe.Rope ? 1 : GetOutputAmount();
+        if (recipe == Recipe.Arrows)
+            return 2;
+
+        return UsesBasicToolRecipe(recipe) || recipe == Recipe.Furnace || recipe == Recipe.Shield || recipe == Recipe.Rope || recipe == Recipe.Bow ? 1 : GetOutputAmount();
     }
 
     public string GetInputLabel()
@@ -426,6 +544,21 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         return GetItemQuantity(inventory, itemName) >= Mathf.Max(1, amount);
     }
 
+    bool CanReceiveCraftResult(Inventory inventory, string itemName, int amount, Item itemData, out string message)
+    {
+        message = "Inventario cheio.";
+
+        if (inventory == null || string.IsNullOrWhiteSpace(itemName) || amount <= 0)
+            return false;
+
+        InventoryItem result = new InventoryItem(itemName, amount, itemData);
+        if (inventory.CanFitItem(result))
+            return true;
+
+        message = "Inventario cheio. Libere espaco antes de craftar.";
+        return false;
+    }
+
     void ConsumeItem(Inventory inventory, Hotbar hotbar, string itemName, int amount)
     {
         InventoryItem item = FindItem(inventory, itemName);
@@ -457,6 +590,10 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
                 return ShieldItemRegistry.GetOrCreate();
             case Recipe.Rope:
                 return RopeItemRegistry.GetOrCreate();
+            case Recipe.Bow:
+                return SimpleBowItemRegistry.GetOrCreate();
+            case Recipe.Arrows:
+                return ArrowItemRegistry.GetOrCreate();
             default:
                 return outputItem;
         }

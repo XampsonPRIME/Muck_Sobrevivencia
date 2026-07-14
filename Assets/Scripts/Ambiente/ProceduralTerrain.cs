@@ -72,7 +72,7 @@ public class ProceduralTerrain : MonoBehaviour
     public GameObject pedraPrefab;
     public float pedraDensity = 0.025f;
 
-    public float treeDensity = 0.02f;
+    public float treeDensity = 0.003f;
     public float mushroomDensity = 0.03f;
 
     [Header("Respawn de Recursos")]
@@ -80,7 +80,7 @@ public class ProceduralTerrain : MonoBehaviour
     public Vector2 woodRespawnDelayRange = new Vector2(180f, 300f);
     public Vector2 stoneResourceRespawnDelayRange = new Vector2(180f, 300f);
 
-    public int treeStep = 6;
+    public int treeStep = 20;
 
     [Header("🪨 Rochas")]
     public GameObject rockSmallPrefab;
@@ -342,14 +342,15 @@ public class ProceduralTerrain : MonoBehaviour
 
                     float offset = selected.yOffset;
 
-                    GameObject t = Instantiate(
-                        selected.prefab,
+                    GameObject t = MeshyOakTreeRuntimeFactory.Spawn(
                         pos + Vector3.up * offset,
                         Quaternion.Euler(0, Random.Range(0, 360), 0),
-                        transform
+                        transform,
+                        selected.prefab
                     );
 
                     t.transform.localScale *= Random.Range(0.9f, 1.2f);
+                    t.transform.position += Vector3.down * MeshyOakTreeRuntimeFactory.GroundSinkDepth;
                     ConfigureResourceRespawn(t, woodRespawnDelayRange);
                 }
 
@@ -383,6 +384,7 @@ public class ProceduralTerrain : MonoBehaviour
                         Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
                         transform
                     );
+                    pedra.transform.localScale *= Random.Range(1.15f, 1.45f);
                     ConfigurePickupRespawn(pedra);
                 }
             }

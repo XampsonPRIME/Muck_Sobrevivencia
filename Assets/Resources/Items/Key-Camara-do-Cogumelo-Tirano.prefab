@@ -154,10 +154,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bdf76ccc4082a134a8dd2206da289a08, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Item
+  definition: {fileID: 0}
   itemName: Key-Camara-do-Cogumelo-Tirano
   icon: {fileID: 21300000, guid: 06fe95bf7f0d89445acce93053bc3b67, type: 3}
   itemType: 0
+  category: 8
+  rarity: 0
+  description: 
+  weight: 0.1
+  maxStack: 0
   toolType: 0
   toolDamage: 0
+  equipmentSlot: 0
+  defense: 0
+  durability: 0
+  moveSpeedBonus: 0
   buyPrice: 0
   sellPrice: 0

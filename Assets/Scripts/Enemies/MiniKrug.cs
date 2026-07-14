@@ -1,7 +1,5 @@
 using System.Collections;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class MiniKrug : MonoBehaviour
 {
@@ -11,7 +9,7 @@ public class MiniKrug : MonoBehaviour
     [Header("Progressao")]
     public int enemyLevel = 1;
     public int healthBonusPerLevel = 2;
-    public float contactDamageBonusPerLevel = 1.5f;
+    public float contactDamageBonusPerLevel = 2.5f;
     public float moveSpeedBonusPerLevel = 0.08f;
     public int goldBonusPerLevel = 1;
     public int xpBonusPerLevel = 6;
@@ -20,7 +18,7 @@ public class MiniKrug : MonoBehaviour
     public int maxHealth = 2;
 
     [Header("Combate")]
-    public float contactDamage = 8f;
+    public float contactDamage = 15f;
     public float attackRange = 1.25f;
     public float attackHitPadding = 0.65f;
     public float attackCooldown = 1f;
@@ -61,7 +59,6 @@ public class MiniKrug : MonoBehaviour
     int currentHealth;
     float nextAttackTime;
     float nextTargetRefreshTime;
-    float healthUiHideTime;
     int baseMaxHealth;
     float baseContactDamage;
     float baseMoveSpeed;
@@ -78,13 +75,16 @@ public class MiniKrug : MonoBehaviour
     PlayerMovement lastAttacker;
     MiniKrugSpawnPoint spawnPoint;
     System.Action<MiniKrug> deathCallback;
-    Canvas worldCanvas;
-    Image healthFillImage;
-    TextMeshProUGUI healthText;
+    MobHealthBar healthBar;
     MiniKrugLegacyAnimationDriver animationDriver;
     MiniKrugZombieAnimatorDriver zombieAnimationDriver;
     Coroutine destroyRoutine;
     GameObject visualOverrideInstance;
+    Transform proceduralVisualRoot;
+    Vector3 proceduralVisualBaseLocalPosition;
+    Quaternion proceduralVisualBaseLocalRotation;
+    bool proceduralVisualBaseCached;
+    float proceduralWalkUntil;
     bool isPendingDestroy;
 
     void Awake()
@@ -108,20 +108,14 @@ public class MiniKrug : MonoBehaviour
 
     void Update()
     {
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
+        if (healthBar == null)
             EnsureCombatUI();
 
         if (isPendingDestroy)
-        {
-            UpdateUIFacing();
             return;
-        }
 
         if (ShouldUseNetworkAuthority())
-        {
-            UpdateUIFacing();
             return;
-        }
 
         if (Time.time >= nextTargetRefreshTime || targetTransform == null)
             RefreshTarget();
@@ -129,13 +123,16 @@ public class MiniKrug : MonoBehaviour
         bool targetInEngageRange = IsTargetInsideEngageRange();
         bool canAggressivelyEngageTarget = targetInEngageRange || ShouldIgnoreEngageRangeBecauseOfNight();
 
+        bool moved = false;
         if (pursueTarget && canAggressivelyEngageTarget)
-            FollowTarget();
+            moved = FollowTarget();
         else
             FaceTarget();
 
+        if (!moved)
+            UpdateProceduralWalk(false, Vector3.zero);
+
         TryAttackPlayer(canAggressivelyEngageTarget);
-        UpdateUIFacing();
     }
 
     public void SetSpawnData(MiniKrugSpawnPoint owner)
@@ -152,7 +149,7 @@ public class MiniKrug : MonoBehaviour
     {
         ApplyLevelScaling(level);
         currentHealth = Mathf.Clamp(currentHealth <= 0 ? maxHealth : currentHealth, 0, maxHealth);
-        UpdateHealthUI(worldCanvas != null && worldCanvas.gameObject.activeSelf);
+        UpdateHealthUI(healthBar != null && healthBar.IsVisible);
     }
 
     public void RefreshBaseStats()
@@ -164,7 +161,7 @@ public class MiniKrug : MonoBehaviour
         if (currentHealth > 0)
             currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
 
-        UpdateHealthUI(worldCanvas != null && worldCanvas.gameObject.activeSelf);
+        UpdateHealthUI(healthBar != null && healthBar.IsVisible);
     }
 
     public void Hit(int damage, PlayerMovement attacker)
@@ -172,7 +169,7 @@ public class MiniKrug : MonoBehaviour
         if (isPendingDestroy)
             return;
 
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
+        if (healthBar == null)
             EnsureCombatUI();
 
         int finalDamage = Mathf.Max(1, damage);
@@ -198,7 +195,7 @@ public class MiniKrug : MonoBehaviour
             return;
         }
 
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
+        if (healthBar == null)
             EnsureCombatUI();
 
         int finalDamage = Mathf.Max(1, damage);
@@ -231,12 +228,15 @@ public class MiniKrug : MonoBehaviour
         if (destroyed)
             BeginDeathSequence();
         else if ((networkPosition - previousPosition).sqrMagnitude > 0.0025f)
+        {
             PlayMoveAnimationFor(0.22f);
+            UpdateProceduralWalk(true, networkRotation * Vector3.forward);
+        }
     }
 
     public void PlayLocalHitFeedback(int damage)
     {
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
+        if (healthBar == null)
             EnsureCombatUI();
 
         ShowDamagePopup(Mathf.Max(1, damage));
@@ -244,16 +244,16 @@ public class MiniKrug : MonoBehaviour
         UpdateHealthUI(true);
     }
 
-    void FollowTarget()
+    bool FollowTarget()
     {
         if (targetTransform == null)
-            return;
+            return false;
 
         Vector3 toTarget = targetTransform.position - transform.position;
         toTarget.y = 0f;
 
         if (toTarget.sqrMagnitude <= 0.0001f)
-            return;
+            return false;
 
         Vector3 direction = toTarget.normalized;
         Vector3 nextPos = transform.position + direction * moveSpeed * Time.deltaTime;
@@ -265,6 +265,9 @@ public class MiniKrug : MonoBehaviour
 
         Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+        PlayMoveAnimationFor(0.18f);
+        UpdateProceduralWalk(true, direction);
+        return true;
     }
 
     void TryAttackPlayer(bool targetInEngageRange)
@@ -442,6 +445,7 @@ public class MiniKrug : MonoBehaviour
         if (isPendingDestroy)
             return;
 
+        BestiaryService.Instance?.RecordDefeat(BestiaryDatabase.MiniKrugId);
         AwardExperienceIfKilledByPlayer();
         DropGoldIfKilledByPlayer();
         TryDropDungeonKey();
@@ -506,125 +510,33 @@ public class MiniKrug : MonoBehaviour
 
     void EnsureCombatUI()
     {
-        if (worldCanvas != null)
+        if (healthBar != null)
             return;
 
-        GameObject canvasObject = new GameObject("CombatUI");
-        canvasObject.transform.SetParent(transform, false);
-        canvasObject.transform.localPosition = uiWorldOffset;
+        if (healthBar == null)
+            healthBar = GetComponentInChildren<MobHealthBar>(true);
 
-        worldCanvas = canvasObject.AddComponent<Canvas>();
-        worldCanvas.renderMode = RenderMode.WorldSpace;
-        worldCanvas.worldCamera = Camera.main;
+        if (healthBar == null)
+            healthBar = gameObject.AddComponent<MobHealthBar>();
 
-        CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-        scaler.dynamicPixelsPerUnit = 30f;
-        canvasObject.AddComponent<GraphicRaycaster>();
-
-        RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
-        canvasRect.sizeDelta = new Vector2(1.8f, 0.7f);
-        canvasObject.transform.localScale = Vector3.one * 0.01f;
-
-        GameObject bgObject = CreateUiObject("HealthBg", canvasObject.transform);
-        Image bgImage = bgObject.AddComponent<Image>();
-        bgImage.color = new Color(0.08f, 0.08f, 0.08f, 0.9f);
-        RectTransform bgRect = bgObject.GetComponent<RectTransform>();
-        bgRect.anchorMin = new Vector2(0.2f, 0.55f);
-        bgRect.anchorMax = new Vector2(0.8f, 0.8f);
-        bgRect.offsetMin = Vector2.zero;
-        bgRect.offsetMax = Vector2.zero;
-
-        GameObject fillObject = CreateUiObject("HealthFill", bgObject.transform);
-        healthFillImage = fillObject.AddComponent<Image>();
-        healthFillImage.color = new Color(0.82f, 0.18f, 0.14f, 1f);
-        RectTransform fillRect = fillObject.GetComponent<RectTransform>();
-        fillRect.anchorMin = Vector2.zero;
-        fillRect.anchorMax = Vector2.one;
-        fillRect.offsetMin = Vector2.zero;
-        fillRect.offsetMax = Vector2.zero;
-        healthFillImage.type = Image.Type.Filled;
-        healthFillImage.fillMethod = Image.FillMethod.Horizontal;
-        healthFillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
-
-        GameObject textObject = CreateUiObject("HealthText", canvasObject.transform);
-        healthText = textObject.AddComponent<TextMeshProUGUI>();
-        healthText.alignment = TextAlignmentOptions.Center;
-        healthText.fontSize = 18f;
-        healthText.color = Color.white;
-        RectTransform textRect = textObject.GetComponent<RectTransform>();
-        textRect.anchorMin = new Vector2(0f, 0f);
-        textRect.anchorMax = new Vector2(1f, 0.5f);
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-        textRect.anchoredPosition = new Vector2(0f, 2f);
-
-        canvasObject.SetActive(false);
+        healthBar.Configure(uiWorldOffset, healthUiVisibleDuration, damagePopupLifetime, damagePopupRiseSpeed, new Vector2(1.8f, 0.7f), 0.01f);
     }
 
     void UpdateHealthUI(bool visible)
     {
-        if (worldCanvas == null || healthFillImage == null || healthText == null)
-            return;
-
-        float normalizedHealth = maxHealth > 0 ? Mathf.Clamp01((float)currentHealth / maxHealth) : 0f;
-        healthFillImage.fillAmount = normalizedHealth;
-        healthFillImage.color = Color.Lerp(new Color(0.7f, 0.08f, 0.08f), new Color(0.2f, 0.9f, 0.25f), normalizedHealth);
-        healthText.text = $"{Mathf.Max(0, currentHealth)}/{maxHealth}";
-        worldCanvas.gameObject.SetActive(visible);
+        EnsureCombatUI();
+        healthBar.SetHealth(currentHealth, maxHealth, visible);
     }
 
     void ShowHealthUITemporarily()
     {
-        healthUiHideTime = Time.time + healthUiVisibleDuration;
         UpdateHealthUI(true);
-    }
-
-    void UpdateUIFacing()
-    {
-        if (worldCanvas == null)
-            return;
-
-        Camera activeCamera = Camera.main;
-        if (activeCamera != null)
-        {
-            worldCanvas.worldCamera = activeCamera;
-            Vector3 direction = worldCanvas.transform.position - activeCamera.transform.position;
-            if (direction.sqrMagnitude > 0.001f)
-                worldCanvas.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-        }
-
-        if (worldCanvas.gameObject.activeSelf && Time.time > healthUiHideTime)
-            worldCanvas.gameObject.SetActive(false);
     }
 
     void ShowDamagePopup(int damage)
     {
-        if (worldCanvas == null)
-            return;
-
-        GameObject popupObject = CreateUiObject($"Damage_{damage}", worldCanvas.transform);
-        popupObject.transform.localPosition = new Vector3(Random.Range(-0.12f, 0.12f), 0.22f, 0f);
-
-        TextMeshProUGUI popupText = popupObject.AddComponent<TextMeshProUGUI>();
-        popupText.text = damage.ToString();
-        popupText.alignment = TextAlignmentOptions.Center;
-        popupText.fontSize = 24f;
-        popupText.fontStyle = FontStyles.Bold;
-        popupText.color = new Color(1f, 0.93f, 0.35f, 1f);
-
-        RectTransform rect = popupObject.GetComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(90f, 40f);
-
-        DamagePopup popup = popupObject.AddComponent<DamagePopup>();
-        popup.Initialize(damagePopupLifetime, damagePopupRiseSpeed);
-    }
-
-    GameObject CreateUiObject(string objectName, Transform parent)
-    {
-        GameObject uiObject = new GameObject(objectName);
-        uiObject.transform.SetParent(parent, false);
-        uiObject.AddComponent<RectTransform>();
-        return uiObject;
+        EnsureCombatUI();
+        healthBar.ShowDamage(currentHealth, maxHealth, damage);
     }
 
     void EnsureMainCollider()
@@ -720,6 +632,8 @@ public class MiniKrug : MonoBehaviour
         visualOverrideInstance.transform.localPosition = Vector3.zero;
         visualOverrideInstance.transform.localRotation = Quaternion.identity;
         visualOverrideInstance.transform.localScale = Vector3.one * zombieVisualScale;
+        proceduralVisualRoot = visualOverrideInstance.transform;
+        proceduralVisualBaseCached = false;
 
         ResolveAnimationDrivers();
         PlayIdleAnimation();
@@ -751,6 +665,71 @@ public class MiniKrug : MonoBehaviour
 
             collider.enabled = false;
         }
+    }
+
+    Transform ResolveProceduralVisualRoot()
+    {
+        if (visualOverrideInstance != null)
+            return visualOverrideInstance.transform;
+
+        if (proceduralVisualRoot != null)
+            return proceduralVisualRoot;
+
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || renderer.transform == transform || !renderer.enabled)
+                continue;
+
+            Transform candidate = renderer.transform;
+            while (candidate.parent != null && candidate.parent != transform)
+                candidate = candidate.parent;
+
+            proceduralVisualRoot = candidate;
+            proceduralVisualBaseCached = false;
+            return proceduralVisualRoot;
+        }
+
+        return null;
+    }
+
+    void CacheProceduralVisualBase(Transform visualRoot)
+    {
+        if (visualRoot == null || proceduralVisualBaseCached)
+            return;
+
+        proceduralVisualBaseLocalPosition = visualRoot.localPosition;
+        proceduralVisualBaseLocalRotation = visualRoot.localRotation;
+        proceduralVisualBaseCached = true;
+    }
+
+    void UpdateProceduralWalk(bool moving, Vector3 direction)
+    {
+        Transform visualRoot = ResolveProceduralVisualRoot();
+        if (visualRoot == null)
+            return;
+
+        CacheProceduralVisualBase(visualRoot);
+        if (!proceduralVisualBaseCached)
+            return;
+
+        if (moving)
+            proceduralWalkUntil = Time.time + 0.16f;
+
+        bool active = moving || Time.time < proceduralWalkUntil;
+        if (!active)
+        {
+            visualRoot.localPosition = Vector3.Lerp(visualRoot.localPosition, proceduralVisualBaseLocalPosition, Time.deltaTime * 12f);
+            visualRoot.localRotation = Quaternion.Slerp(visualRoot.localRotation, proceduralVisualBaseLocalRotation, Time.deltaTime * 12f);
+            return;
+        }
+
+        float phase = Time.time * 9.5f;
+        float bob = Mathf.Abs(Mathf.Sin(phase)) * 0.075f;
+        float sway = Mathf.Sin(phase) * 4f;
+        visualRoot.localPosition = proceduralVisualBaseLocalPosition + Vector3.up * bob;
+        visualRoot.localRotation = proceduralVisualBaseLocalRotation * Quaternion.Euler(0f, 0f, sway);
     }
 
     void PlayIdleAnimation()

@@ -535,7 +535,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MiniKrug
   maxHealth: 6
-  contactDamage: 8
+  contactDamage: 15
   attackRange: 1.25
   attackHitPadding: 0.65
   attackCooldown: 1

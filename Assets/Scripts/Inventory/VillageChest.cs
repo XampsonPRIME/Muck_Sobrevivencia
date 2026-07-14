@@ -40,7 +40,7 @@ public class VillageChest : MonoBehaviour, IPlayerInteractable
         collected = true;
         UpdateOpenedVisual();
 
-        MessageSystem.Instance?.ShowMessage($"+{amount} {item.itemName}");
+        PickupMessageSystem.Show(item.itemName, amount, transform.position + Vector3.up * 1.15f, item.icon);
         return true;
     }
 
