@@ -224,26 +224,26 @@ public class DemoPolishRuntime : MonoBehaviour
 
     void BuildHelpPanel(Transform parent)
     {
-        GameObject panel = CreatePanel("DemoHelpPanel", parent, new Vector2(0f, 0f), new Vector2(820f, 560f), new Color(0.04f, 0.045f, 0.055f, 0.94f));
+        GameObject panel = CreatePanel("DemoHelpPanel", parent, new Vector2(0f, 0f), new Vector2(900f, 660f), new Color(0.025f, 0.035f, 0.065f, 0.97f));
         helpGroup = panel.AddComponent<CanvasGroup>();
 
         TextMeshProUGUI title = CreateText("Title", panel.transform, "Guia rapido da demo", 36, FontStyles.Bold, TextAlignmentOptions.Center);
-        title.rectTransform.anchoredPosition = new Vector2(0f, 224f);
-        title.rectTransform.sizeDelta = new Vector2(760f, 54f);
+        title.rectTransform.anchoredPosition = new Vector2(0f, 274f);
+        title.rectTransform.sizeDelta = new Vector2(840f, 58f);
         title.color = new Color(1f, 0.88f, 0.5f, 1f);
 
         helpBodyText = CreateText("Body", panel.transform, string.Empty, 22, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        helpBodyText.rectTransform.anchoredPosition = new Vector2(0f, -14f);
-        helpBodyText.rectTransform.sizeDelta = new Vector2(730f, 410f);
+        helpBodyText.rectTransform.anchoredPosition = new Vector2(0f, -8f);
+        helpBodyText.rectTransform.sizeDelta = new Vector2(820f, 475f);
         helpBodyText.color = new Color(0.9f, 0.93f, 0.98f, 1f);
         helpBodyText.textWrappingMode = TextWrappingModes.Normal;
 
-        helpCloseButton = CreateButton("CloseButton", panel.transform, "FECHAR GUIA", new Vector2(0f, -232f), new Vector2(230f, 46f));
+        helpCloseButton = CreateButton("CloseButton", panel.transform, "FECHAR GUIA", new Vector2(0f, -282f), new Vector2(250f, 52f));
         helpCloseButton.onClick.AddListener(() => SetHelpVisible(false));
 
         TextMeshProUGUI footer = CreateText("Footer", panel.transform, "F1 ou ESC tambem fecham este guia", 18, FontStyles.Italic, TextAlignmentOptions.Center);
-        footer.rectTransform.anchoredPosition = new Vector2(0f, -286f);
-        footer.rectTransform.sizeDelta = new Vector2(740f, 34f);
+        footer.rectTransform.anchoredPosition = new Vector2(0f, -324f);
+        footer.rectTransform.sizeDelta = new Vector2(820f, 34f);
         footer.color = new Color(0.72f, 0.78f, 0.88f, 1f);
     }
 
