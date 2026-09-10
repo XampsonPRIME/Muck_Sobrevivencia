@@ -11,8 +11,6 @@ using UnityEngine.SceneManagement;
 
 public class LanMultiplayerManager : MonoBehaviour
 {
-    public static event Action BearerPowerAvailabilityChanged;
-
     static bool dedicatedProcessRequested;
     static bool dedicatedStartupConsumed;
     static int dedicatedStartupPort = 7777;
@@ -62,8 +60,6 @@ public class LanMultiplayerManager : MonoBehaviour
         public float animationSpeed;
         public bool thirdPerson;
         public bool isDead;
-        public int level;
-        public string bearerPowerId;
     }
 
     [Serializable]
@@ -112,7 +108,6 @@ public class LanMultiplayerManager : MonoBehaviour
         public int goldAmount;
         public int xpAmount;
         public bool unlockAreaMagic;
-        public string bestiaryCreatureId;
         public string message;
     }
 
@@ -123,7 +118,6 @@ public class LanMultiplayerManager : MonoBehaviour
         public string entityKind;
         public Vector3 position;
         public Quaternion rotation;
-        public int level;
         public int health;
         public bool destroyed;
     }
@@ -149,29 +143,6 @@ public class LanMultiplayerManager : MonoBehaviour
     {
         public string playerId;
         public float damage;
-    }
-
-    [Serializable]
-    class LanBearerPowerClaim
-    {
-        public string playerId;
-        public string powerId;
-    }
-
-    [Serializable]
-    class LanBearerPowerClaimResult
-    {
-        public string playerId;
-        public string powerId;
-        public bool accepted;
-        public string message;
-        public string[] claimedPowerIds;
-    }
-
-    [Serializable]
-    class LanBearerPowerSnapshot
-    {
-        public string[] claimedPowerIds;
     }
 
     class PeerConnection
@@ -210,9 +181,6 @@ public class LanMultiplayerManager : MonoBehaviour
     readonly Dictionary<string, PeerConnection> hostPeers = new Dictionary<string, PeerConnection>();
     readonly Dictionary<string, string> destroyedEntities = new Dictionary<string, string>();
     readonly Dictionary<string, LanEntityUpdate> pendingEntityUpdates = new Dictionary<string, LanEntityUpdate>();
-    readonly List<LanReward> pendingLocalRewards = new List<LanReward>();
-    readonly Dictionary<string, string> bearerPowerOwners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    readonly HashSet<string> claimedBearerPowerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     TcpListener hostListener;
     Thread acceptThread;
@@ -231,7 +199,6 @@ public class LanMultiplayerManager : MonoBehaviour
     int worldSeed;
     bool isApplyingRemoteSceneChange;
     MultiplayerSceneSetState pendingRemoteSceneSet;
-    LanWorldState pendingWorldState;
     float nextEnemySyncTime;
 
     const float StateSendInterval = 0.05f;
@@ -351,12 +318,7 @@ public class LanMultiplayerManager : MonoBehaviour
 
         FlushPendingEntityUpdates();
 
-        RemoveInvalidRemoteReplicas();
-        EnforceSingleSoloPlayer();
-
         ResolveLocalPlayer();
-        TryApplyPendingWorldState();
-        TryApplyPendingLocalRewards();
         TryFinalizeRemoteSceneChange();
 
         if (!IsSessionReady)
@@ -396,24 +358,15 @@ public class LanMultiplayerManager : MonoBehaviour
         ShutdownSession();
     }
 
-    public bool StartSolo(int? savedWorldSeed = null)
+    public bool StartSolo()
     {
         ShutdownSession();
-        MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
-        if (startupSceneSet != null)
-            MultiplayerSceneSetCatalog.ApplyToRuntime(startupSceneSet);
-
-        worldSeed = savedWorldSeed.HasValue && savedWorldSeed.Value != 0
-            ? savedWorldSeed.Value
-            : Environment.TickCount;
+        worldSeed = Environment.TickCount;
         SessionId = null;
         Mode = SessionMode.Solo;
         State = SessionState.Ready;
         StatusMessage = "Solo";
         LastErrorMessage = null;
-        bearerPowerOwners.Clear();
-        claimedBearerPowerIds.Clear();
-        BearerPowerAvailabilityChanged?.Invoke();
         return true;
     }
 
@@ -425,30 +378,6 @@ public class LanMultiplayerManager : MonoBehaviour
     public MultiplayerSceneSetState CaptureCurrentSceneSet()
     {
         return MultiplayerSceneSetCatalog.CaptureLoadedScenes();
-    }
-
-    public bool TravelToSceneSet(string sceneSetId, string fallbackSceneName = null)
-    {
-        MultiplayerSceneSetState targetSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, fallbackSceneName);
-        if (targetSceneSet == null)
-            return false;
-
-        if (Mode == SessionMode.Client)
-        {
-            StatusMessage = "A troca de mapa precisa ser feita pelo host.";
-            return false;
-        }
-
-        if (!MultiplayerSceneSetCatalog.ApplyToRuntime(targetSceneSet))
-            return false;
-
-        if (IsServerAuthority && IsMultiplayerActive)
-        {
-            BroadcastCurrentSceneSet();
-            UpdateDiscoveryAnnouncement();
-        }
-
-        return true;
     }
 
     public bool StartDedicatedServer(int port, int? savedWorldSeed = null, string sceneName = null, string sceneSetId = null)
@@ -472,11 +401,9 @@ public class LanMultiplayerManager : MonoBehaviour
             Mode = SessionMode.DedicatedServer;
             State = SessionState.Ready;
             LastErrorMessage = null;
-            MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
+            MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.ResolveStartupState(sceneSetId, sceneName);
             StatusMessage = $"Servidor dedicado ativo em {CurrentAddress}:{CurrentPort} [{SessionId}]";
             knownStates.Clear();
-            bearerPowerOwners.Clear();
-            claimedBearerPowerIds.Clear();
 
             hostListener = new TcpListener(IPAddress.Any, CurrentPort);
             hostListener.Start();
@@ -506,11 +433,13 @@ public class LanMultiplayerManager : MonoBehaviour
     public bool StartHost(int port, int? savedWorldSeed)
     {
         ShutdownSession();
-        MultiplayerSceneSetState startupSceneSet = MultiplayerSceneSetCatalog.GetDefaultStartupState();
-        if (startupSceneSet != null)
-            MultiplayerSceneSetCatalog.ApplyToRuntime(startupSceneSet);
-
         ResolveLocalPlayer();
+
+        if (localPlayer == null)
+        {
+            SetError("Player local nao encontrado para hospedar.");
+            return false;
+        }
 
         try
         {
@@ -525,9 +454,6 @@ public class LanMultiplayerManager : MonoBehaviour
             LastErrorMessage = null;
             StatusMessage = $"Host ativo em {CurrentAddress}:{CurrentPort} [{SessionId}]";
             knownStates.Clear();
-            bearerPowerOwners.Clear();
-            claimedBearerPowerIds.Clear();
-            BearerPowerAvailabilityChanged?.Invoke();
 
             hostListener = new TcpListener(IPAddress.Any, CurrentPort);
             hostListener.Start();
@@ -541,8 +467,7 @@ public class LanMultiplayerManager : MonoBehaviour
             acceptThread.Start();
 
             hasLastLocalPosition = false;
-            if (localPlayer != null)
-                SendLocalPlayerState();
+            SendLocalPlayerState();
             BroadcastWorldState();
             return true;
         }
@@ -574,7 +499,7 @@ public class LanMultiplayerManager : MonoBehaviour
             {
                 entityId = entity.EntityId,
                 entityKind = nameof(ResourceNode),
-                health = resourceNodes[i].IsDepleted ? resourceNodes[i].maxHealth : resourceNodes[i].CurrentHealth,
+                health = resourceNodes[i].CurrentHealth,
                 destroyed = false
             });
         }
@@ -599,81 +524,9 @@ public class LanMultiplayerManager : MonoBehaviour
             });
         }
 
-        WildChicken[] chickens = FindObjectsByType<WildChicken>(FindObjectsSortMode.None);
-        for (int i = 0; i < chickens.Length; i++)
-        {
-            if (chickens[i] == null || chickens[i].IsDead)
-                continue;
-
-            LanNetworkEntity entity = chickens[i].GetComponent<LanNetworkEntity>();
-            if (entity == null)
-                entity = LanNetworkEntity.Ensure(chickens[i]);
-
-            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
-                continue;
-
-            liveIds.Add(entity.EntityId);
-            results.Add(new LanSavedEntityState
-            {
-                entityId = entity.EntityId,
-                entityKind = nameof(WildChicken),
-                health = chickens[i].CurrentHealth,
-                destroyed = false
-            });
-        }
-
-        WildBoar[] boars = FindObjectsByType<WildBoar>(FindObjectsSortMode.None);
-        for (int i = 0; i < boars.Length; i++)
-        {
-            if (boars[i] == null || boars[i].IsDead)
-                continue;
-
-            LanNetworkEntity entity = boars[i].GetComponent<LanNetworkEntity>();
-            if (entity == null)
-                entity = LanNetworkEntity.Ensure(boars[i]);
-
-            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
-                continue;
-
-            liveIds.Add(entity.EntityId);
-            results.Add(new LanSavedEntityState
-            {
-                entityId = entity.EntityId,
-                entityKind = nameof(WildBoar),
-                health = boars[i].CurrentHealth,
-                destroyed = false
-            });
-        }
-
-        EarthGolem[] golems = FindObjectsByType<EarthGolem>(FindObjectsSortMode.None);
-        for (int i = 0; i < golems.Length; i++)
-        {
-            if (golems[i] == null || golems[i].IsDead)
-                continue;
-
-            LanNetworkEntity entity = golems[i].GetComponent<LanNetworkEntity>();
-            if (entity == null)
-                entity = LanNetworkEntity.Ensure(golems[i]);
-
-            if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
-                continue;
-
-            liveIds.Add(entity.EntityId);
-            results.Add(new LanSavedEntityState
-            {
-                entityId = entity.EntityId,
-                entityKind = nameof(EarthGolem),
-                health = golems[i].CurrentHealth,
-                destroyed = false
-            });
-        }
-
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
-            if (bosses[i] == null || bosses[i].IsPendingDestroy)
-                continue;
-
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(bosses[i]);
@@ -742,6 +595,12 @@ public class LanMultiplayerManager : MonoBehaviour
         ShutdownSession();
         ResolveLocalPlayer();
 
+        if (localPlayer == null)
+        {
+            SetError("Player local nao encontrado para conectar.");
+            return false;
+        }
+
         localPlayerId = CreatePlayerId();
         localPlayerName = BuildPlayerName();
         SessionId = null;
@@ -752,9 +611,6 @@ public class LanMultiplayerManager : MonoBehaviour
         LastErrorMessage = null;
         StatusMessage = $"Conectando em {CurrentAddress}:{CurrentPort}...";
         knownStates.Clear();
-        bearerPowerOwners.Clear();
-        claimedBearerPowerIds.Clear();
-        BearerPowerAvailabilityChanged?.Invoke();
 
         connectThread = new Thread(() => ConnectToHost(CurrentAddress, CurrentPort))
         {
@@ -773,10 +629,6 @@ public class LanMultiplayerManager : MonoBehaviour
         if (Instance != null && Instance.Mode == SessionMode.DedicatedServer)
             return null;
 
-        PlayerMovement cameraPlayer = FindMainCameraPlayer();
-        if (cameraPlayer != null)
-            return cameraPlayer;
-
         if (Instance != null && Instance.localPlayer != null && !IsReplica(Instance.localPlayer))
             return Instance.localPlayer;
 
@@ -785,15 +637,6 @@ public class LanMultiplayerManager : MonoBehaviour
         {
             if (player != null && !IsReplica(player))
                 return player;
-        }
-
-        PlayerMovement[] inactivePlayers = Resources.FindObjectsOfTypeAll<PlayerMovement>();
-        foreach (PlayerMovement player in inactivePlayers)
-        {
-            if (!IsValidLocalPlayerCandidate(player))
-                continue;
-
-            return player;
         }
 
         return null;
@@ -807,10 +650,6 @@ public class LanMultiplayerManager : MonoBehaviour
         if (Instance != null && Instance.Mode == SessionMode.DedicatedServer)
             return Array.Empty<PlayerMovement>();
 
-        PlayerMovement cameraPlayer = FindMainCameraPlayer();
-        if (cameraPlayer != null)
-            return new[] { cameraPlayer };
-
         PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
         List<PlayerMovement> filteredPlayers = new List<PlayerMovement>();
 
@@ -820,71 +659,12 @@ public class LanMultiplayerManager : MonoBehaviour
                 filteredPlayers.Add(player);
         }
 
-        PlayerMovement[] inactivePlayers = Resources.FindObjectsOfTypeAll<PlayerMovement>();
-        foreach (PlayerMovement player in inactivePlayers)
-        {
-            if (!IsValidLocalPlayerCandidate(player) || filteredPlayers.Contains(player))
-                continue;
-
-            filteredPlayers.Add(player);
-        }
-
         return filteredPlayers.ToArray();
     }
 
     public static bool IsReplica(Component component)
     {
-        return component != null && component.GetComponentInParent<RemotePlayerReplica>() != null;
-    }
-
-    static bool IsValidLocalPlayerCandidate(PlayerMovement player)
-    {
-        if (player == null || IsReplica(player))
-            return false;
-
-        GameObject playerObject = player.gameObject;
-        if (playerObject == null)
-            return false;
-
-        Scene scene = playerObject.scene;
-        if (!scene.IsValid() || !scene.isLoaded)
-            return false;
-
-        if ((playerObject.hideFlags & HideFlags.HideAndDontSave) != 0)
-            return false;
-
-        return true;
-    }
-
-    static PlayerMovement FindMainCameraPlayer()
-    {
-        Camera bestCamera = null;
-        Camera[] cameras = Camera.allCameras;
-        for (int i = 0; i < cameras.Length; i++)
-        {
-            Camera candidate = cameras[i];
-            if (candidate == null ||
-                !candidate.enabled ||
-                !candidate.gameObject.activeInHierarchy ||
-                !candidate.CompareTag("MainCamera"))
-            {
-                continue;
-            }
-
-            PlayerMovement candidatePlayer = candidate.GetComponentInParent<PlayerMovement>();
-            if (!IsValidLocalPlayerCandidate(candidatePlayer))
-                continue;
-
-            if (bestCamera == null || candidate.depth >= bestCamera.depth)
-                bestCamera = candidate;
-        }
-
-        Camera mainCamera = bestCamera != null ? bestCamera : Camera.main;
-        if (mainCamera == null)
-            return null;
-
-        PlayerMovement cameraPlayer = mainCamera.GetComponentInParent<PlayerMovement>();
-        return IsValidLocalPlayerCandidate(cameraPlayer) ? cameraPlayer : null;
+        return component != null && component.GetComponent<RemotePlayerReplica>() != null;
     }
 
     public static Transform FindWorldFocusTransform()
@@ -902,10 +682,6 @@ public class LanMultiplayerManager : MonoBehaviour
 
             return null;
         }
-
-        PlayerMovement cameraPlayer = FindMainCameraPlayer();
-        if (cameraPlayer != null)
-            return cameraPlayer.transform;
 
         if (Instance == null)
         {
@@ -934,14 +710,6 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
         }
 
-        PlayerMovement cameraPlayer = FindMainCameraPlayer();
-        if (cameraPlayer != null && localPlayer != cameraPlayer)
-        {
-            localPlayer = cameraPlayer;
-            lastLocalPosition = localPlayer.transform.position;
-            return;
-        }
-
         if (localPlayer != null && !IsReplica(localPlayer))
             return;
 
@@ -963,13 +731,6 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (Mode == SessionMode.Host)
         {
-            if (!string.IsNullOrWhiteSpace(state.bearerPowerId) &&
-                (!bearerPowerOwners.TryGetValue(state.bearerPowerId, out string ownerId) ||
-                 string.Equals(ownerId, state.playerId, StringComparison.Ordinal)))
-            {
-                RegisterBearerPowerOwner(state.playerId, state.bearerPowerId);
-            }
-
             BroadcastPacket(CreatePacket("state", state));
         }
         else if (Mode == SessionMode.Client && serverConnection != null)
@@ -1001,105 +762,8 @@ public class LanMultiplayerManager : MonoBehaviour
             lookPitch = lookPitch,
             animationSpeed = animationSpeed,
             thirdPerson = localPlayer.thirdPerson,
-            isDead = GameState.IsPlayerDead,
-            level = GetLocalPlayerLevel(),
-            bearerPowerId = localPlayer.GetComponent<BearerPowerService>()?.CurrentPowerId
+            isDead = GameState.IsPlayerDead
         };
-    }
-
-    public bool IsBearerPowerClaimed(string powerId)
-    {
-        if (string.IsNullOrWhiteSpace(powerId))
-            return false;
-
-        if (Mode == SessionMode.Client)
-            return claimedBearerPowerIds.Contains(powerId);
-
-        return bearerPowerOwners.ContainsKey(powerId);
-    }
-
-    public void CaptureBearerPowerOwnership(List<string> powerIds, List<string> playerIds)
-    {
-        if (powerIds == null || playerIds == null)
-            return;
-
-        powerIds.Clear();
-        playerIds.Clear();
-
-        foreach (KeyValuePair<string, string> ownership in bearerPowerOwners)
-        {
-            powerIds.Add(ownership.Key);
-            playerIds.Add(ownership.Value);
-        }
-    }
-
-    public void RestoreBearerPowerOwnership(IReadOnlyList<string> powerIds, IReadOnlyList<string> playerIds)
-    {
-        if (!IsServerAuthority)
-            return;
-
-        bearerPowerOwners.Clear();
-        claimedBearerPowerIds.Clear();
-
-        int savedCount = Mathf.Min(powerIds?.Count ?? 0, playerIds?.Count ?? 0);
-        for (int i = 0; i < savedCount; i++)
-        {
-            if (BearerPowerCatalog.Find(powerIds[i]) != null && !string.IsNullOrWhiteSpace(playerIds[i]))
-                RegisterBearerPowerOwner(playerIds[i], powerIds[i]);
-        }
-
-        ResolveLocalPlayer();
-        BearerPowerService localPower = localPlayer != null ? localPlayer.GetComponent<BearerPowerService>() : null;
-        if (localPower != null && localPower.HasPower)
-        {
-            string ownerId = string.IsNullOrWhiteSpace(localPlayerId) ? "host" : localPlayerId;
-            if (!bearerPowerOwners.TryGetValue(localPower.CurrentPowerId, out string savedOwner) ||
-                string.Equals(savedOwner, ownerId, StringComparison.Ordinal))
-            {
-                RegisterBearerPowerOwner(ownerId, localPower.CurrentPowerId);
-            }
-            else
-            {
-                localPower.LoadState(string.Empty, false);
-                MessageSystem.Instance?.ShowMessage("Seu legado pertence a outro portador neste mundo.");
-            }
-        }
-
-        BroadcastBearerPowerSnapshot();
-    }
-
-    public void RequestBearerPowerClaim(string powerId)
-    {
-        BearerPowerDefinition definition = BearerPowerCatalog.Find(powerId);
-        if (definition == null)
-        {
-            MessageSystem.Instance?.ShowMessage("Legado desconhecido.");
-            return;
-        }
-
-        ResolveLocalPlayer();
-        if (localPlayer == null)
-            return;
-
-        if (Mode == SessionMode.Client)
-        {
-            if (serverConnection == null || !IsSessionReady)
-            {
-                MessageSystem.Instance?.ShowMessage("Aguardando o mundo responder...");
-                return;
-            }
-
-            SendPacket(serverConnection, CreatePacket("bearer_power_claim", new LanBearerPowerClaim
-            {
-                playerId = localPlayerId,
-                powerId = definition.stableId
-            }));
-            MessageSystem.Instance?.ShowMessage($"O legado {definition.displayName} esta respondendo...");
-            return;
-        }
-
-        string ownerId = string.IsNullOrWhiteSpace(localPlayerId) ? "solo" : localPlayerId;
-        ResolveBearerPowerClaim(ownerId, definition.stableId, null);
     }
 
     public bool TryHandleGameplayHit(Component target, PlayerMovement attacker, ToolType toolType, int damage)
@@ -1121,12 +785,6 @@ public class LanMultiplayerManager : MonoBehaviour
             return true;
         }
 
-        if (target is BossEnemy bossEnemy && !bossEnemy.CanBeChallengedBy(attacker))
-        {
-            MessageSystem.Instance?.ShowMessage(bossEnemy.BuildMinimumLevelMessage());
-            return true;
-        }
-
         if (Mode == SessionMode.Client)
         {
             if (serverConnection == null)
@@ -1140,7 +798,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 damage = Mathf.Max(1, damage),
                 toolType = (int)toolType
             }));
-            TriggerClientHitFeedback(target, Mathf.Max(1, damage));
             return true;
         }
 
@@ -1163,7 +820,7 @@ public class LanMultiplayerManager : MonoBehaviour
             case ToolType.Axe:
                 return "Use um machado para madeira.";
             case ToolType.Pickaxe:
-                return "Use uma picareta para minerar.";
+                return "Use uma picareta para pedra.";
             default:
                 return "Ferramenta inadequada.";
         }
@@ -1207,17 +864,10 @@ public class LanMultiplayerManager : MonoBehaviour
 
     void ApplyWorldState(LanWorldState state)
     {
-        if (Mode != SessionMode.Client || state == null)
+        if (Mode != SessionMode.Client || state == null || DayNightCycle.Instance == null)
             return;
-
-        if (DayNightCycle.Instance == null)
-        {
-            pendingWorldState = state;
-            return;
-        }
 
         DayNightCycle.Instance.LoadState(state.currentDay, state.normalizedTimeOfDay);
-        pendingWorldState = null;
     }
 
     void AcceptLoop()
@@ -1407,21 +1057,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 if (!isHostSide)
                     ApplyDamageLocally(JsonUtility.FromJson<LanDamageEvent>(packet.payload));
                 break;
-
-            case "bearer_power_claim":
-                if (isHostSide)
-                    HandleBearerPowerClaim(connection, packet.payload);
-                break;
-
-            case "bearer_power_result":
-                if (!isHostSide)
-                    ApplyBearerPowerClaimResult(JsonUtility.FromJson<LanBearerPowerClaimResult>(packet.payload));
-                break;
-
-            case "bearer_power_snapshot":
-                if (!isHostSide)
-                    ApplyBearerPowerSnapshot(JsonUtility.FromJson<LanBearerPowerSnapshot>(packet.payload));
-                break;
         }
     }
 
@@ -1450,7 +1085,6 @@ public class LanMultiplayerManager : MonoBehaviour
         foreach (KeyValuePair<string, LanPlayerState> state in knownStates)
             SendPacket(connection, CreatePacket("state", state.Value));
 
-        SendBearerPowerSnapshot(connection);
         SyncWorldEntitiesTo(connection);
         SyncEnemyStatesTo(connection);
         BroadcastWorldState();
@@ -1538,7 +1172,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = entityKind,
                 position = miniKrug != null ? miniKrug.transform.position : Vector3.zero,
                 rotation = miniKrug != null ? miniKrug.transform.rotation : Quaternion.identity,
-                level = miniKrug != null ? miniKrug.EnemyLevel : 1,
                 health = remainingHealth,
                 destroyed = destroyed
             }));
@@ -1549,7 +1182,6 @@ public class LanMultiplayerManager : MonoBehaviour
                     playerId = attackerPlayerId,
                     goldAmount = goldAmount,
                     xpAmount = xpAmount,
-                    bestiaryCreatureId = destroyed ? BestiaryDatabase.MiniKrugId : null,
                     message = $"+{goldAmount} gold"
                 });
 
@@ -1585,7 +1217,6 @@ public class LanMultiplayerManager : MonoBehaviour
                     itemName = rewardItemName,
                     prefabName = rewardPrefabName,
                     itemAmount = rewardAmount,
-                    bestiaryCreatureId = destroyed ? BestiaryDatabase.CowId : null,
                     message = $"+{rewardAmount} {rewardItemName}"
                 });
 
@@ -1598,16 +1229,7 @@ public class LanMultiplayerManager : MonoBehaviour
             if (cow == null)
                 return;
 
-            cow.ApplyNetworkHit(
-                damage,
-                out int meatAmount,
-                out string meatItemName,
-                out string meatPrefabName,
-                out int leatherAmount,
-                out string leatherItemName,
-                out string leatherPrefabName,
-                out int remainingHealth,
-                out bool destroyed);
+            cow.ApplyNetworkHit(damage, out int rewardAmount, out string rewardItemName, out string rewardPrefabName, out int remainingHealth, out bool destroyed);
             BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
             {
                 entityId = entityId,
@@ -1621,163 +1243,15 @@ public class LanMultiplayerManager : MonoBehaviour
             else
                 destroyedEntities.Remove(entityId);
 
-            bool bestiarySent = false;
-            if (meatAmount > 0)
-            {
+            if (rewardAmount > 0)
                 GrantReward(attackerPlayerId, new LanReward
                 {
                     playerId = attackerPlayerId,
-                    itemName = meatItemName,
-                    prefabName = meatPrefabName,
-                    itemAmount = meatAmount,
-                    bestiaryCreatureId = destroyed ? BestiaryDatabase.CowId : null,
-                    message = $"+{meatAmount} {meatItemName}"
+                    itemName = rewardItemName,
+                    prefabName = rewardPrefabName,
+                    itemAmount = rewardAmount,
+                    message = $"+{rewardAmount} {rewardItemName}"
                 });
-
-                bestiarySent = destroyed;
-            }
-
-            if (leatherAmount > 0)
-            {
-                GrantReward(attackerPlayerId, new LanReward
-                {
-                    playerId = attackerPlayerId,
-                    itemName = leatherItemName,
-                    prefabName = leatherPrefabName,
-                    itemAmount = leatherAmount,
-                    bestiaryCreatureId = destroyed && !bestiarySent ? BestiaryDatabase.CowId : null,
-                    message = $"+{leatherAmount} {leatherItemName}"
-                });
-
-                bestiarySent = bestiarySent || destroyed;
-            }
-
-            if (destroyed && !bestiarySent)
-            {
-                GrantReward(attackerPlayerId, new LanReward
-                {
-                    playerId = attackerPlayerId,
-                    bestiaryCreatureId = BestiaryDatabase.CowId
-                });
-            }
-
-            return;
-        }
-
-        if (entityKind == nameof(WildChicken))
-        {
-            WildChicken chicken = FindEntity<WildChicken>(entityId);
-            if (chicken == null)
-                return;
-
-            chicken.ApplyNetworkHit(damage, out int featherAmount, out int rawMeatAmount, out int remainingHealth, out bool destroyed);
-            BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
-            {
-                entityId = entityId,
-                entityKind = entityKind,
-                health = remainingHealth,
-                destroyed = destroyed
-            }));
-
-            if (destroyed)
-                destroyedEntities[entityId] = entityKind;
-            else
-                destroyedEntities.Remove(entityId);
-
-            if (featherAmount > 0)
-                GrantReward(attackerPlayerId, new LanReward
-                {
-                    playerId = attackerPlayerId,
-                    itemName = FeatherItemRegistry.ItemName,
-                    itemAmount = featherAmount,
-                    bestiaryCreatureId = destroyed ? BestiaryDatabase.WildChickenId : null,
-                    message = $"+{featherAmount} {FeatherItemRegistry.ItemName}"
-                });
-
-            if (rawMeatAmount > 0)
-                GrantReward(attackerPlayerId, new LanReward
-                {
-                    playerId = attackerPlayerId,
-                    itemName = RawChickenMeatItemRegistry.ItemName,
-                    itemAmount = rawMeatAmount,
-                    message = $"+{rawMeatAmount} {RawChickenMeatItemRegistry.ItemName}"
-                });
-
-            return;
-        }
-
-        if (entityKind == nameof(WildBoar))
-        {
-            WildBoar boar = FindEntity<WildBoar>(entityId);
-            if (boar == null)
-                return;
-
-            boar.ApplyNetworkHit(damage, out int leatherAmount, out int tuskAmount, out int meatAmount, out int trophyAmount, out int remainingHealth, out bool destroyed);
-            BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
-            {
-                entityId = entityId,
-                entityKind = entityKind,
-                health = remainingHealth,
-                destroyed = destroyed
-            }));
-
-            if (destroyed)
-                destroyedEntities[entityId] = entityKind;
-            else
-                destroyedEntities.Remove(entityId);
-
-            bool bestiarySent = false;
-            GrantBoarReward(attackerPlayerId, ThickLeatherItemRegistry.ItemName, leatherAmount, destroyed, ref bestiarySent);
-            GrantBoarReward(attackerPlayerId, SharpTuskItemRegistry.ItemName, tuskAmount, destroyed, ref bestiarySent);
-            GrantBoarReward(attackerPlayerId, BoarMeatItemRegistry.ItemName, meatAmount, destroyed, ref bestiarySent);
-            GrantBoarReward(attackerPlayerId, BoarTrophyItemRegistry.ItemName, trophyAmount, destroyed, ref bestiarySent);
-
-            if (destroyed && !bestiarySent)
-            {
-                GrantReward(attackerPlayerId, new LanReward
-                {
-                    playerId = attackerPlayerId,
-                    bestiaryCreatureId = BestiaryDatabase.WildBoarId
-                });
-            }
-
-            return;
-        }
-
-        if (entityKind == nameof(EarthGolem))
-        {
-            EarthGolem golem = FindEntity<EarthGolem>(entityId);
-            if (golem == null)
-                return;
-
-            golem.ApplyNetworkHit(damage, out int stoneAmount, out int mossAmount, out int ironAmount, out int coreAmount, out int remainingHealth, out bool destroyed);
-            BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
-            {
-                entityId = entityId,
-                entityKind = entityKind,
-                health = remainingHealth,
-                destroyed = destroyed
-            }));
-
-            if (destroyed)
-                destroyedEntities[entityId] = entityKind;
-            else
-                destroyedEntities.Remove(entityId);
-
-            bool bestiarySent = false;
-            GrantGolemReward(attackerPlayerId, StoneFragmentItemRegistry.ItemName, stoneAmount, destroyed, ref bestiarySent);
-            GrantGolemReward(attackerPlayerId, ResilientMossItemRegistry.ItemName, mossAmount, destroyed, ref bestiarySent);
-            GrantGolemReward(attackerPlayerId, IronItemRegistry.ItemName, ironAmount, destroyed, ref bestiarySent);
-            GrantGolemReward(attackerPlayerId, EarthCoreItemRegistry.ItemName, coreAmount, destroyed, ref bestiarySent);
-
-            if (destroyed && !bestiarySent)
-            {
-                GrantReward(attackerPlayerId, new LanReward
-                {
-                    playerId = attackerPlayerId,
-                    bestiaryCreatureId = BestiaryDatabase.EarthGolemId
-                });
-            }
 
             return;
         }
@@ -1787,17 +1261,6 @@ public class LanMultiplayerManager : MonoBehaviour
             BossEnemy boss = FindEntity<BossEnemy>(entityId);
             if (boss == null)
                 return;
-
-            int attackerLevel = GetPlayerLevel(attackerPlayerId);
-            if (!boss.CanBeChallengedByLevel(attackerLevel))
-            {
-                GrantReward(attackerPlayerId, new LanReward
-                {
-                    playerId = attackerPlayerId,
-                    message = boss.BuildMinimumLevelMessage()
-                });
-                return;
-            }
 
             boss.ApplyNetworkHit(damage, out int goldAmount, out int xpAmount, out bool unlockMagic, out int remainingHealth, out bool destroyed);
             BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
@@ -1820,46 +1283,9 @@ public class LanMultiplayerManager : MonoBehaviour
                     goldAmount = goldAmount,
                     xpAmount = xpAmount,
                     unlockAreaMagic = unlockMagic,
-                    bestiaryCreatureId = destroyed ? BestiaryDatabase.BossEnemyId : null,
                     message = unlockMagic ? "Magia ancestral desbloqueada!" : $"+{goldAmount} gold"
                 });
         }
-    }
-
-    void GrantBoarReward(string attackerPlayerId, string itemName, int amount, bool destroyed, ref bool bestiarySent)
-    {
-        if (amount <= 0)
-            return;
-
-        GrantReward(attackerPlayerId, new LanReward
-        {
-            playerId = attackerPlayerId,
-            itemName = itemName,
-            itemAmount = amount,
-            bestiaryCreatureId = destroyed && !bestiarySent ? BestiaryDatabase.WildBoarId : null,
-            message = $"+{amount} {itemName}"
-        });
-
-        if (destroyed)
-            bestiarySent = true;
-    }
-
-    void GrantGolemReward(string attackerPlayerId, string itemName, int amount, bool destroyed, ref bool bestiarySent)
-    {
-        if (amount <= 0)
-            return;
-
-        GrantReward(attackerPlayerId, new LanReward
-        {
-            playerId = attackerPlayerId,
-            itemName = itemName,
-            itemAmount = amount,
-            bestiaryCreatureId = destroyed && !bestiarySent ? BestiaryDatabase.EarthGolemId : null,
-            message = $"+{amount} {itemName}"
-        });
-
-        if (destroyed)
-            bestiarySent = true;
     }
 
     void ApplyEntityUpdate(LanEntityUpdate update)
@@ -1887,36 +1313,6 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
         }
 
-        if (update.entityKind == nameof(WildChicken))
-        {
-            WildChicken chicken = FindEntity<WildChicken>(update.entityId);
-            if (chicken != null)
-                chicken.ApplyNetworkState(update.health, update.destroyed);
-            else
-                pendingEntityUpdates[update.entityId] = update;
-            return;
-        }
-
-        if (update.entityKind == nameof(WildBoar))
-        {
-            WildBoar boar = FindEntity<WildBoar>(update.entityId);
-            if (boar != null)
-                boar.ApplyNetworkState(update.health, update.destroyed);
-            else
-                pendingEntityUpdates[update.entityId] = update;
-            return;
-        }
-
-        if (update.entityKind == nameof(EarthGolem))
-        {
-            EarthGolem golem = FindEntity<EarthGolem>(update.entityId);
-            if (golem != null)
-                golem.ApplyNetworkState(update.health, update.destroyed);
-            else
-                pendingEntityUpdates[update.entityId] = update;
-            return;
-        }
-
         if (update.entityKind == nameof(BossEnemy))
         {
             BossEnemy boss = FindEntity<BossEnemy>(update.entityId);
@@ -1939,7 +1335,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 miniKrug = CreateRemoteMiniKrug(state);
 
             if (miniKrug != null)
-                miniKrug.ApplyNetworkState(state.position, state.rotation, state.level, state.health, state.destroyed);
+                miniKrug.ApplyNetworkState(state.position, state.rotation, state.health, state.destroyed);
 
             return;
         }
@@ -1947,11 +1343,8 @@ public class LanMultiplayerManager : MonoBehaviour
         if (state.entityKind == nameof(BossEnemy))
         {
             BossEnemy boss = FindEntity<BossEnemy>(state.entityId);
-            if (boss == null && !state.destroyed)
-                boss = CreateRemoteBossEnemy(state);
-
             if (boss != null)
-                boss.ApplyNetworkState(state.position, state.rotation, state.level, state.health, state.destroyed);
+                boss.ApplyNetworkState(state.position, state.rotation, state.health, state.destroyed);
         }
     }
 
@@ -1961,33 +1354,24 @@ public class LanMultiplayerManager : MonoBehaviour
             return;
 
         ResolveLocalPlayer();
-        if (localPlayer == null)
-        {
-            QueueLocalReward(reward);
-            return;
-        }
-
-        Inventory inventory = localPlayer.GetComponent<Inventory>();
-        Hotbar hotbar = localPlayer.GetComponent<Hotbar>();
-        PlayerProgression progression = localPlayer.GetComponent<PlayerProgression>() ?? localPlayer.gameObject.AddComponent<PlayerProgression>();
-        PlayerMagic magic = localPlayer.GetComponent<PlayerMagic>();
-
-        bool needsInventory = (reward.itemAmount > 0 || reward.goldAmount > 0) && inventory == null;
-        if (needsInventory)
-        {
-            QueueLocalReward(reward);
-            return;
-        }
+        Inventory inventory = localPlayer != null ? localPlayer.GetComponent<Inventory>() : null;
+        Hotbar hotbar = localPlayer != null ? localPlayer.GetComponent<Hotbar>() : null;
+        PlayerProgression progression = localPlayer != null ? localPlayer.GetComponent<PlayerProgression>() : null;
+        PlayerMagic magic = localPlayer != null ? localPlayer.GetComponent<PlayerMagic>() : null;
 
         if (reward.itemAmount > 0 && inventory != null)
         {
             Item item = ResolveItem(reward.itemName, reward.prefabName);
             if (item != null)
-                SpawnRewardPickup(item, reward.itemAmount);
+            {
+                inventory.AddItem(reward.itemName, reward.itemAmount, item);
+                if (hotbar != null && (item.itemType == ItemType.Tool || item.itemType == ItemType.Consumable))
+                    hotbar.AddInventoryItem(new InventoryItem(reward.itemName, reward.itemAmount, item));
+            }
         }
 
         if (reward.goldAmount > 0 && inventory != null)
-            SpawnRewardPickup(GoldItemRegistry.GetOrCreate(), reward.goldAmount);
+            inventory.AddItem("Gold", reward.goldAmount, GoldItemRegistry.GetOrCreate());
 
         if (reward.xpAmount > 0 && progression != null)
             progression.AddExperience(reward.xpAmount);
@@ -2000,28 +1384,12 @@ public class LanMultiplayerManager : MonoBehaviour
             magic?.UnlockAreaMagic();
         }
 
-        if (!string.IsNullOrWhiteSpace(reward.bestiaryCreatureId))
-            BestiaryService.Instance?.RecordDefeat(reward.bestiaryCreatureId);
-
         if (!string.IsNullOrWhiteSpace(reward.message))
             MessageSystem.Instance?.ShowMessage(reward.message);
 
-        RefreshClientHud();
-    }
-
-    void SpawnRewardPickup(Item item, int amount)
-    {
-        if (item == null || amount <= 0 || localPlayer == null)
-            return;
-
-        Vector3 forward = localPlayer.transform.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 0.01f)
-            forward = Vector3.forward;
-
-        Vector2 scatter = UnityEngine.Random.insideUnitCircle * 0.75f;
-        Vector3 position = localPlayer.transform.position + forward.normalized * 1.8f + new Vector3(scatter.x, 0.85f, scatter.y);
-        WorldItemDropFactory.Spawn(position, item, amount, ~0, 0.75f);
+        InventoryUI inventoryUI = FindFirstObjectByType<InventoryUI>();
+        if (inventoryUI != null)
+            inventoryUI.Refresh();
     }
 
     void ApplyDamageLocally(LanDamageEvent damageEvent)
@@ -2042,24 +1410,6 @@ public class LanMultiplayerManager : MonoBehaviour
         if (isHostSide && !string.IsNullOrWhiteSpace(connection.playerId))
             state.playerId = connection.playerId;
 
-        if (isHostSide && !string.IsNullOrWhiteSpace(state.bearerPowerId))
-        {
-            if (!bearerPowerOwners.TryGetValue(state.bearerPowerId, out string ownerId))
-            {
-                RegisterBearerPowerOwner(state.playerId, state.bearerPowerId);
-            }
-            else if (!string.Equals(ownerId, state.playerId, StringComparison.Ordinal))
-            {
-                state.bearerPowerId = string.Empty;
-                SendBearerPowerClaimResult(
-                    connection,
-                    state.playerId,
-                    string.Empty,
-                    false,
-                    "Seu legado ja possui outro portador neste mundo.");
-            }
-        }
-
         knownStates[state.playerId] = state;
         UpsertServerPlayerTarget(state);
 
@@ -2068,177 +1418,6 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (isHostSide)
             BroadcastPacket(CreatePacket("state", state), connection.playerId);
-    }
-
-    void HandleBearerPowerClaim(PeerConnection connection, string payload)
-    {
-        LanBearerPowerClaim claim = JsonUtility.FromJson<LanBearerPowerClaim>(payload);
-        if (claim == null || connection == null)
-            return;
-
-        string playerId = !string.IsNullOrWhiteSpace(connection.playerId)
-            ? connection.playerId
-            : claim.playerId;
-        ResolveBearerPowerClaim(playerId, claim.powerId, connection);
-    }
-
-    void ResolveBearerPowerClaim(string playerId, string powerId, PeerConnection requestingConnection)
-    {
-        BearerPowerDefinition definition = BearerPowerCatalog.Find(powerId);
-        if (definition == null || string.IsNullOrWhiteSpace(playerId))
-        {
-            SendBearerPowerClaimResult(requestingConnection, playerId, powerId, false, "Este legado nao reconheceu o portador.");
-            return;
-        }
-
-        foreach (KeyValuePair<string, string> ownership in bearerPowerOwners)
-        {
-            if (string.Equals(ownership.Value, playerId, StringComparison.Ordinal) &&
-                !string.Equals(ownership.Key, definition.stableId, StringComparison.OrdinalIgnoreCase))
-            {
-                SendBearerPowerClaimResult(requestingConnection, playerId, definition.stableId, false, "Cada portador pode carregar apenas um legado.");
-                return;
-            }
-        }
-
-        if (bearerPowerOwners.TryGetValue(definition.stableId, out string currentOwner) &&
-            !string.Equals(currentOwner, playerId, StringComparison.Ordinal))
-        {
-            SendBearerPowerClaimResult(requestingConnection, playerId, definition.stableId, false, $"{definition.displayName} ja escolheu outro portador.");
-            return;
-        }
-
-        RegisterBearerPowerOwner(playerId, definition.stableId);
-
-        if (requestingConnection != null)
-        {
-            SendBearerPowerClaimResult(requestingConnection, playerId, definition.stableId, true, $"Voce absorveu {definition.displayName}.");
-        }
-        else
-        {
-            ResolveLocalPlayer();
-            BearerPowerService service = localPlayer != null
-                ? localPlayer.GetComponent<BearerPowerService>() ?? localPlayer.gameObject.AddComponent<BearerPowerService>()
-                : null;
-            service?.AcceptPower(definition.stableId);
-        }
-
-        BroadcastBearerPowerSnapshot();
-    }
-
-    void RegisterBearerPowerOwner(string playerId, string powerId)
-    {
-        if (string.IsNullOrWhiteSpace(playerId) || BearerPowerCatalog.Find(powerId) == null)
-            return;
-
-        if (bearerPowerOwners.TryGetValue(powerId, out string existingOwner) &&
-            string.Equals(existingOwner, playerId, StringComparison.Ordinal))
-        {
-            claimedBearerPowerIds.Add(powerId);
-            return;
-        }
-
-        bearerPowerOwners[powerId] = playerId;
-        claimedBearerPowerIds.Add(powerId);
-        BearerPowerAvailabilityChanged?.Invoke();
-    }
-
-    void SendBearerPowerClaimResult(PeerConnection connection, string playerId, string powerId, bool accepted, string message)
-    {
-        LanBearerPowerClaimResult result = new LanBearerPowerClaimResult
-        {
-            playerId = playerId,
-            powerId = powerId,
-            accepted = accepted,
-            message = message,
-            claimedPowerIds = BuildClaimedBearerPowerIds()
-        };
-
-        if (connection != null)
-        {
-            SendPacket(connection, CreatePacket("bearer_power_result", result));
-            return;
-        }
-
-        ApplyBearerPowerClaimResult(result);
-    }
-
-    void ApplyBearerPowerClaimResult(LanBearerPowerClaimResult result)
-    {
-        if (result == null)
-            return;
-
-        ReplaceClaimedBearerPowers(result.claimedPowerIds);
-
-        if (!string.IsNullOrWhiteSpace(result.message))
-            MessageSystem.Instance?.ShowMessage(result.message);
-
-        if (result.playerId != localPlayerId)
-            return;
-
-        ResolveLocalPlayer();
-        BearerPowerService service = localPlayer != null
-            ? localPlayer.GetComponent<BearerPowerService>() ?? localPlayer.gameObject.AddComponent<BearerPowerService>()
-            : null;
-
-        if (!result.accepted)
-        {
-            if (service != null && service.HasPower && string.IsNullOrWhiteSpace(result.powerId))
-                service.LoadState(string.Empty, false);
-            return;
-        }
-
-        service?.AcceptPower(result.powerId);
-    }
-
-    void SendBearerPowerSnapshot(PeerConnection connection)
-    {
-        if (connection == null)
-            return;
-
-        SendPacket(connection, CreatePacket("bearer_power_snapshot", new LanBearerPowerSnapshot
-        {
-            claimedPowerIds = BuildClaimedBearerPowerIds()
-        }));
-    }
-
-    void BroadcastBearerPowerSnapshot()
-    {
-        LanBearerPowerSnapshot snapshot = new LanBearerPowerSnapshot
-        {
-            claimedPowerIds = BuildClaimedBearerPowerIds()
-        };
-        BroadcastPacket(CreatePacket("bearer_power_snapshot", snapshot));
-        ApplyBearerPowerSnapshot(snapshot);
-    }
-
-    void ApplyBearerPowerSnapshot(LanBearerPowerSnapshot snapshot)
-    {
-        ReplaceClaimedBearerPowers(snapshot?.claimedPowerIds);
-    }
-
-    string[] BuildClaimedBearerPowerIds()
-    {
-        string[] ids = new string[bearerPowerOwners.Count];
-        int index = 0;
-        foreach (string powerId in bearerPowerOwners.Keys)
-            ids[index++] = powerId;
-        return ids;
-    }
-
-    void ReplaceClaimedBearerPowers(string[] powerIds)
-    {
-        claimedBearerPowerIds.Clear();
-        if (powerIds != null)
-        {
-            for (int i = 0; i < powerIds.Length; i++)
-            {
-                if (BearerPowerCatalog.Find(powerIds[i]) != null)
-                    claimedBearerPowerIds.Add(powerIds[i]);
-            }
-        }
-
-        BearerPowerAvailabilityChanged?.Invoke();
     }
 
     void HandleLeavePacket(string payload)
@@ -2254,20 +1433,10 @@ public class LanMultiplayerManager : MonoBehaviour
 
     void UpsertReplica(LanPlayerState state)
     {
-        if (state == null || string.IsNullOrWhiteSpace(state.playerId) || state.playerId == localPlayerId)
-            return;
-
-        if (!ShouldKeepRemoteReplica(state.playerId))
-        {
-            Debug.LogWarning($"Replica remota bloqueada: {state.playerId}. Modo={Mode}, Sessao={State}.");
-            RemoveReplica(state.playerId);
-            return;
-        }
-
         if (localPlayer == null)
             ResolveLocalPlayer();
 
-        if (localPlayer == null)
+        if (localPlayer == null || state == null)
             return;
 
         if (!remoteReplicas.TryGetValue(state.playerId, out RemotePlayerReplica replica) || replica == null)
@@ -2280,81 +1449,6 @@ public class LanMultiplayerManager : MonoBehaviour
         }
 
         replica.ApplyState(state);
-    }
-
-    public bool ShouldKeepRemoteReplica(string playerId)
-    {
-        if (string.IsNullOrWhiteSpace(playerId) || playerId == localPlayerId || !IsSessionReady)
-            return false;
-
-        return Mode switch
-        {
-            SessionMode.Client => true,
-            SessionMode.Host => hostPeers.ContainsKey(playerId),
-            _ => false
-        };
-    }
-
-    void RemoveInvalidRemoteReplicas()
-    {
-        List<string> staleIds = null;
-        foreach (KeyValuePair<string, RemotePlayerReplica> entry in remoteReplicas)
-        {
-            if (entry.Value != null && ShouldKeepRemoteReplica(entry.Key))
-                continue;
-
-            staleIds ??= new List<string>();
-            staleIds.Add(entry.Key);
-        }
-
-        if (staleIds != null)
-        {
-            for (int i = 0; i < staleIds.Count; i++)
-                RemoveReplica(staleIds[i]);
-        }
-
-        RemotePlayerReplica[] looseReplicas = FindObjectsByType<RemotePlayerReplica>(FindObjectsSortMode.None);
-        for (int i = 0; i < looseReplicas.Length; i++)
-        {
-            RemotePlayerReplica replica = looseReplicas[i];
-            if (replica == null || ShouldKeepRemoteReplica(replica.PlayerId))
-                continue;
-
-            if (!string.IsNullOrWhiteSpace(replica.PlayerId))
-                remoteReplicas.Remove(replica.PlayerId);
-
-            Debug.LogWarning($"Replica remota solta removida: {replica.PlayerId}. Modo={Mode}, Sessao={State}.");
-            Destroy(replica.gameObject);
-        }
-    }
-
-    void EnforceSingleSoloPlayer()
-    {
-        if (GameState.IsInLobby || Mode == SessionMode.DedicatedServer)
-            return;
-
-        PlayerMovement authoritativePlayer = FindMainCameraPlayer();
-        if (authoritativePlayer == null && localPlayer != null && !IsReplica(localPlayer))
-            authoritativePlayer = localPlayer;
-
-        if (authoritativePlayer == null)
-            return;
-
-        PlayerMovement[] players = FindObjectsByType<PlayerMovement>(FindObjectsSortMode.None);
-        for (int i = 0; i < players.Length; i++)
-        {
-            PlayerMovement candidate = players[i];
-            if (candidate == null || candidate == authoritativePlayer || IsReplica(candidate))
-                continue;
-
-            Debug.LogWarning(
-                $"Player duplicado removido: {candidate.name} em {candidate.transform.position}. " +
-                $"Player mantido: {authoritativePlayer.name} em {authoritativePlayer.transform.position}."
-            );
-            Destroy(candidate.gameObject);
-        }
-
-        localPlayer = authoritativePlayer;
     }
 
     void RemoveReplica(string playerId)
@@ -2529,9 +1623,6 @@ public class LanMultiplayerManager : MonoBehaviour
         MiniKrug[] miniKrugs = FindObjectsByType<MiniKrug>(FindObjectsSortMode.None);
         for (int i = 0; i < miniKrugs.Length; i++)
         {
-            if (miniKrugs[i] == null || miniKrugs[i].IsPendingDestroy)
-                continue;
-
             LanNetworkEntity entity = miniKrugs[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(miniKrugs[i]);
@@ -2542,7 +1633,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(MiniKrug),
                 position = miniKrugs[i].transform.position,
                 rotation = miniKrugs[i].transform.rotation,
-                level = miniKrugs[i].EnemyLevel,
                 health = miniKrugs[i].CurrentHealth,
                 destroyed = false
             }));
@@ -2551,9 +1641,6 @@ public class LanMultiplayerManager : MonoBehaviour
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
-            if (bosses[i] == null || bosses[i].IsPendingDestroy)
-                continue;
-
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(bosses[i]);
@@ -2564,7 +1651,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(BossEnemy),
                 position = bosses[i].transform.position,
                 rotation = bosses[i].transform.rotation,
-                level = bosses[i].BossLevel,
                 health = bosses[i].CurrentHealth,
                 destroyed = false
             }));
@@ -2598,33 +1684,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 if (cow != null)
                 {
                     cow.ApplyNetworkState(update.health, update.destroyed);
-                    applied = true;
-                }
-            }
-            else if (update.entityKind == nameof(WildChicken))
-            {
-                WildChicken chicken = FindEntity<WildChicken>(update.entityId);
-                if (chicken != null)
-                {
-                    chicken.ApplyNetworkState(update.health, update.destroyed);
-                    applied = true;
-                }
-            }
-            else if (update.entityKind == nameof(WildBoar))
-            {
-                WildBoar boar = FindEntity<WildBoar>(update.entityId);
-                if (boar != null)
-                {
-                    boar.ApplyNetworkState(update.health, update.destroyed);
-                    applied = true;
-                }
-            }
-            else if (update.entityKind == nameof(EarthGolem))
-            {
-                EarthGolem golem = FindEntity<EarthGolem>(update.entityId);
-                if (golem != null)
-                {
-                    golem.ApplyNetworkState(update.health, update.destroyed);
                     applied = true;
                 }
             }
@@ -2664,7 +1723,7 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityId = entity.EntityId,
                 entityKind = nameof(ResourceNode),
                 health = resourceNodes[i].CurrentHealth,
-                destroyed = resourceNodes[i].IsDepleted
+                destroyed = false
             }));
         }
 
@@ -2686,33 +1745,9 @@ public class LanMultiplayerManager : MonoBehaviour
             }));
         }
 
-        WildChicken[] chickens = FindObjectsByType<WildChicken>(FindObjectsSortMode.None);
-        for (int i = 0; i < chickens.Length; i++)
-        {
-            if (chickens[i] == null || chickens[i].IsDead)
-                continue;
-
-            LanNetworkEntity entity = chickens[i].GetComponent<LanNetworkEntity>();
-            if (entity == null)
-                continue;
-
-            liveIds.Add(entity.EntityId);
-
-            SendPacket(connection, CreatePacket("entity_update", new LanEntityUpdate
-            {
-                entityId = entity.EntityId,
-                entityKind = nameof(WildChicken),
-                health = chickens[i].CurrentHealth,
-                destroyed = false
-            }));
-        }
-
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
-            if (bosses[i] == null || bosses[i].IsPendingDestroy)
-                continue;
-
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 continue;
@@ -2751,9 +1786,6 @@ public class LanMultiplayerManager : MonoBehaviour
         MiniKrug[] miniKrugs = FindObjectsByType<MiniKrug>(FindObjectsSortMode.None);
         for (int i = 0; i < miniKrugs.Length; i++)
         {
-            if (miniKrugs[i] == null || miniKrugs[i].IsPendingDestroy)
-                continue;
-
             LanNetworkEntity entity = miniKrugs[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(miniKrugs[i]);
@@ -2764,7 +1796,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(MiniKrug),
                 position = miniKrugs[i].transform.position,
                 rotation = miniKrugs[i].transform.rotation,
-                level = miniKrugs[i].EnemyLevel,
                 health = miniKrugs[i].CurrentHealth,
                 destroyed = false
             }));
@@ -2773,9 +1804,6 @@ public class LanMultiplayerManager : MonoBehaviour
         BossEnemy[] bosses = FindObjectsByType<BossEnemy>(FindObjectsSortMode.None);
         for (int i = 0; i < bosses.Length; i++)
         {
-            if (bosses[i] == null || bosses[i].IsPendingDestroy)
-                continue;
-
             LanNetworkEntity entity = bosses[i].GetComponent<LanNetworkEntity>();
             if (entity == null)
                 entity = LanNetworkEntity.Ensure(bosses[i]);
@@ -2786,7 +1814,6 @@ public class LanMultiplayerManager : MonoBehaviour
                 entityKind = nameof(BossEnemy),
                 position = bosses[i].transform.position,
                 rotation = bosses[i].transform.rotation,
-                level = bosses[i].BossLevel,
                 health = bosses[i].CurrentHealth,
                 destroyed = false
             }));
@@ -2796,8 +1823,6 @@ public class LanMultiplayerManager : MonoBehaviour
     void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         ResolveLocalPlayer();
-        TryApplyPendingWorldState();
-        TryApplyPendingLocalRewards();
 
         if (Mode == SessionMode.Client && isApplyingRemoteSceneChange)
             TryFinalizeRemoteSceneChange();
@@ -2882,173 +1907,24 @@ public class LanMultiplayerManager : MonoBehaviour
         isApplyingRemoteSceneChange = false;
         pendingRemoteSceneSet = null;
         ClearRemoteReplicas();
-        TryApplyPendingWorldState();
-        TryApplyPendingLocalRewards();
         StatusMessage = $"Conectado em {CurrentAddress}:{CurrentPort}";
-    }
-
-    void TriggerClientHitFeedback(Component target, int damage)
-    {
-        if (target is ResourceNode resourceNode)
-        {
-            resourceNode.PlayHitFeedback();
-            return;
-        }
-
-        if (target is MiniKrug miniKrug)
-        {
-            miniKrug.PlayLocalHitFeedback(damage);
-            return;
-        }
-
-        if (target is WildChicken chicken)
-        {
-            chicken.PlayLocalHitFeedback(damage);
-            return;
-        }
-
-        if (target is WildBoar boar)
-        {
-            boar.PlayLocalHitFeedback(damage);
-            return;
-        }
-
-        if (target is EarthGolem golem)
-        {
-            golem.PlayLocalHitFeedback(damage);
-            return;
-        }
-
-        if (target is BossEnemy bossEnemy)
-            bossEnemy.PlayLocalHitFeedback(damage);
-    }
-
-    void TryApplyPendingWorldState()
-    {
-        if (Mode != SessionMode.Client || pendingWorldState == null || DayNightCycle.Instance == null)
-            return;
-
-        DayNightCycle.Instance.LoadState(pendingWorldState.currentDay, pendingWorldState.normalizedTimeOfDay);
-        pendingWorldState = null;
-    }
-
-    void QueueLocalReward(LanReward reward)
-    {
-        if (reward == null)
-            return;
-
-        pendingLocalRewards.Add(reward);
-    }
-
-    void TryApplyPendingLocalRewards()
-    {
-        if (Mode != SessionMode.Client || pendingLocalRewards.Count == 0)
-            return;
-
-        for (int i = pendingLocalRewards.Count - 1; i >= 0; i--)
-        {
-            LanReward reward = pendingLocalRewards[i];
-            pendingLocalRewards.RemoveAt(i);
-            ApplyRewardLocally(reward);
-        }
-    }
-
-    void RefreshClientHud()
-    {
-        InventoryUI inventoryUI = FindFirstObjectByType<InventoryUI>();
-        if (inventoryUI != null)
-            inventoryUI.Refresh();
-
-        GoldHUD goldHud = FindFirstObjectByType<GoldHUD>();
-        if (goldHud != null)
-            goldHud.Refresh();
-
-        LevelHUD levelHud = FindFirstObjectByType<LevelHUD>();
-        if (levelHud != null)
-            levelHud.Refresh();
     }
 
     MiniKrug CreateRemoteMiniKrug(LanEnemyState state)
     {
-        GameObject miniKrugPrefab = ForestMushroomMonsterFactory.IsForestMushroomEntity(state.entityId)
-            ? ForestMushroomMonsterFactory.LoadPrefab()
-            : Resources.Load<GameObject>("Enemies/MiniKrug");
+        GameObject miniKrugPrefab = Resources.Load<GameObject>("Enemies/MiniKrug");
         if (miniKrugPrefab == null)
             return null;
 
-        MiniKrug miniKrug;
+        GameObject miniKrugObject = Instantiate(miniKrugPrefab, state.position, state.rotation);
+        miniKrugObject.name = miniKrugPrefab.name;
+        LanNetworkEntity.Ensure(miniKrugObject.transform, state.entityId);
 
-        if (ForestMushroomMonsterFactory.IsForestMushroomEntity(state.entityId))
-        {
-            miniKrug = ForestMushroomMonsterFactory.CreateInstance(miniKrugPrefab, state.position, state.rotation);
-            if (miniKrug == null)
-                return null;
-
-            LanNetworkEntity.Ensure(miniKrug.transform, state.entityId);
-        }
-        else
-        {
-            GameObject miniKrugObject = Instantiate(miniKrugPrefab, state.position, state.rotation);
-            miniKrugObject.name = miniKrugPrefab.name;
-            LanNetworkEntity.Ensure(miniKrugObject.transform, state.entityId);
-            miniKrug = miniKrugObject.GetComponent<MiniKrug>();
-        }
+        MiniKrug miniKrug = miniKrugObject.GetComponent<MiniKrug>();
+        if (miniKrug == null)
+            miniKrug = miniKrugObject.AddComponent<MiniKrug>();
 
         return miniKrug;
-    }
-
-    BossEnemy CreateRemoteBossEnemy(LanEnemyState state)
-    {
-        if (!ForestMushroomBossFactory.IsForestMushroomBossEntity(state.entityId))
-            return null;
-
-        GameObject bossPrefab = ForestMushroomBossFactory.LoadPrefab();
-        if (bossPrefab == null)
-            return null;
-
-        BossEnemy boss = ForestMushroomBossFactory.CreateInstance(bossPrefab, state.position, state.rotation);
-        if (boss == null)
-            return null;
-
-        LanNetworkEntity.Ensure(boss.transform, state.entityId);
-        return boss;
-    }
-
-    public bool TryGetSuggestedEnemyLevel(Vector3 origin, out int level)
-    {
-        level = 1;
-        float bestDistance = float.MaxValue;
-        bool foundCandidate = false;
-
-        if (localPlayer != null && !GameState.IsPlayerDead)
-        {
-            float distance = (localPlayer.transform.position - origin).sqrMagnitude;
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                level = GetLocalPlayerLevel();
-                foundCandidate = true;
-            }
-        }
-
-        foreach (KeyValuePair<string, Transform> entry in serverPlayerTargets)
-        {
-            if (entry.Value == null)
-                continue;
-
-            if (knownStates.TryGetValue(entry.Key, out LanPlayerState state) && state != null && state.isDead)
-                continue;
-
-            float distance = (entry.Value.position - origin).sqrMagnitude;
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                level = GetPlayerLevel(entry.Key);
-                foundCandidate = true;
-            }
-        }
-
-        return foundCandidate;
     }
 
     public bool TryFindClosestEnemyTarget(Vector3 origin, out Transform targetTransform, out string targetPlayerId)
@@ -3108,73 +1984,6 @@ public class LanMultiplayerManager : MonoBehaviour
         }));
     }
 
-    public void ApplyEnemyAreaDamage(Vector3 origin, float radius, float damage)
-    {
-        if (radius <= 0f || damage <= 0f)
-            return;
-
-        float radiusSqr = radius * radius;
-
-        if (localPlayer != null && !GameState.IsPlayerDead)
-        {
-            Vector3 toLocalPlayer = localPlayer.transform.position - origin;
-            toLocalPlayer.y = 0f;
-            if (toLocalPlayer.sqrMagnitude <= radiusSqr)
-                localPlayer.TakeDamage(damage);
-        }
-
-        foreach (KeyValuePair<string, Transform> entry in serverPlayerTargets)
-        {
-            if (entry.Value == null)
-                continue;
-
-            if (knownStates.TryGetValue(entry.Key, out LanPlayerState state) && state != null && state.isDead)
-                continue;
-
-            Vector3 toRemotePlayer = entry.Value.position - origin;
-            toRemotePlayer.y = 0f;
-            if (toRemotePlayer.sqrMagnitude <= radiusSqr)
-                ApplyEnemyDamage(entry.Key, damage);
-        }
-    }
-
-    public bool IsEntityDestroyed(string entityId)
-    {
-        return !string.IsNullOrWhiteSpace(entityId) && destroyedEntities.ContainsKey(entityId);
-    }
-
-    public void ClearDestroyedEntity(string entityId)
-    {
-        if (string.IsNullOrWhiteSpace(entityId))
-            return;
-
-        destroyedEntities.Remove(entityId);
-        pendingEntityUpdates.Remove(entityId);
-    }
-
-    public void NotifyResourceRespawned(ResourceNode resource, int health)
-    {
-        if (resource == null)
-            return;
-
-        LanNetworkEntity entity = ResolveNetworkEntity(resource);
-        if (entity == null || string.IsNullOrWhiteSpace(entity.EntityId))
-            return;
-
-        ClearDestroyedEntity(entity.EntityId);
-
-        if (!IsServerAuthority || !IsMultiplayerActive)
-            return;
-
-        BroadcastPacket(CreatePacket("entity_update", new LanEntityUpdate
-        {
-            entityId = entity.EntityId,
-            entityKind = nameof(ResourceNode),
-            health = Mathf.Max(1, health),
-            destroyed = false
-        }));
-    }
-
     public void NotifyEnemyDestroyed(Component enemy)
     {
         if (enemy == null || !IsServerAuthority)
@@ -3191,7 +2000,6 @@ public class LanMultiplayerManager : MonoBehaviour
             entityKind = entityKind,
             position = enemy.transform.position,
             rotation = enemy.transform.rotation,
-            level = GetEnemyLevel(enemy),
             health = 0,
             destroyed = true
         }));
@@ -3225,8 +2033,6 @@ public class LanMultiplayerManager : MonoBehaviour
         knownStates.Clear();
         destroyedEntities.Clear();
         pendingEntityUpdates.Clear();
-        bearerPowerOwners.Clear();
-        claimedBearerPowerIds.Clear();
         State = SessionState.Idle;
         Mode = SessionMode.None;
         SessionId = null;
@@ -3235,7 +2041,6 @@ public class LanMultiplayerManager : MonoBehaviour
         cachedAnimSpeed = 0f;
         isShuttingDown = false;
         LanSessionDiscovery.Instance?.StopAnnouncing();
-        BearerPowerAvailabilityChanged?.Invoke();
     }
 
     void ClearRemoteReplicas()
@@ -3320,15 +2125,6 @@ public class LanMultiplayerManager : MonoBehaviour
         if (target.GetComponentInParent<Cow>() is Cow cow)
             return LanNetworkEntity.Ensure(cow);
 
-        if (target.GetComponentInParent<WildChicken>() is WildChicken chicken)
-            return LanNetworkEntity.Ensure(chicken);
-
-        if (target.GetComponentInParent<WildBoar>() is WildBoar boar)
-            return LanNetworkEntity.Ensure(boar);
-
-        if (target.GetComponentInParent<EarthGolem>() is EarthGolem golem)
-            return LanNetworkEntity.Ensure(golem);
-
         if (target.GetComponentInParent<MiniKrug>() is MiniKrug miniKrug)
             return LanNetworkEntity.Ensure(miniKrug);
 
@@ -3348,15 +2144,6 @@ public class LanMultiplayerManager : MonoBehaviour
 
         if (target.GetComponentInParent<Cow>() != null)
             return nameof(Cow);
-
-        if (target.GetComponentInParent<WildChicken>() != null)
-            return nameof(WildChicken);
-
-        if (target.GetComponentInParent<WildBoar>() != null)
-            return nameof(WildBoar);
-
-        if (target.GetComponentInParent<EarthGolem>() != null)
-            return nameof(EarthGolem);
 
         if (target.GetComponentInParent<MiniKrug>() != null)
             return nameof(MiniKrug);
@@ -3414,103 +2201,13 @@ public class LanMultiplayerManager : MonoBehaviour
         return null;
     }
 
-    int GetLocalPlayerLevel()
-    {
-        if (localPlayer == null)
-            ResolveLocalPlayer();
-
-        PlayerProgression progression = localPlayer != null ? localPlayer.GetComponent<PlayerProgression>() : null;
-        return Mathf.Max(1, progression != null ? progression.currentLevel : 1);
-    }
-
-    int GetPlayerLevel(string playerId)
-    {
-        if (string.IsNullOrWhiteSpace(playerId))
-            return 1;
-
-        if (playerId == localPlayerId)
-            return GetLocalPlayerLevel();
-
-        if (knownStates.TryGetValue(playerId, out LanPlayerState state) && state != null)
-            return Mathf.Max(1, state.level);
-
-        return 1;
-    }
-
-    int GetEnemyLevel(Component enemy)
-    {
-        if (enemy is MiniKrug miniKrug)
-            return miniKrug.EnemyLevel;
-
-        if (enemy is BossEnemy bossEnemy)
-            return bossEnemy.BossLevel;
-
-        if (enemy is EarthGolem earthGolem)
-            return earthGolem.GolemLevel;
-
-        return 1;
-    }
-
     Item ResolveItem(string itemName, string prefabName)
     {
-        Item resolvedInventoryItem = InventoryItemResolver.Resolve(itemName, prefabName);
-        if (resolvedInventoryItem != null)
-            return resolvedInventoryItem;
-
         if (string.Equals(itemName, "Gold", StringComparison.OrdinalIgnoreCase))
             return GoldItemRegistry.GetOrCreate();
 
         if (string.Equals(itemName, "Magia Ancestral", StringComparison.OrdinalIgnoreCase))
             return MagicSpellItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, RustyMetalItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return RustyMetalItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, IronItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(itemName, "Ferro", StringComparison.OrdinalIgnoreCase))
-            return IronItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, RefinedIronItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return RefinedIronItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, RustySwordItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return RustySwordItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, FurnaceItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return FurnaceItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, SimpleBowItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return SimpleBowItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, FeatherItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return FeatherItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, RawChickenMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return RawChickenMeatItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, CookedMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return CookedMeatItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, CookedChickenMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return CookedChickenMeatItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, CookedBoarMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return CookedBoarMeatItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, CowMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return CowMeatItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, CookedCowMeatItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return CookedCowMeatItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, ArrowItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
-            return ArrowItemRegistry.GetOrCreate();
-
-        if (string.Equals(itemName, "Machado", StringComparison.OrdinalIgnoreCase))
-            return LoadResourceItem("VendorItems/Axe");
-
-        if (string.Equals(itemName, "Picareta", StringComparison.OrdinalIgnoreCase))
-            return LoadResourceItem("VendorItems/Axepick");
 
         GameObject[] prefabs = Resources.FindObjectsOfTypeAll<GameObject>();
 
@@ -3540,12 +2237,6 @@ public class LanMultiplayerManager : MonoBehaviour
         }
 
         return null;
-    }
-
-    Item LoadResourceItem(string path)
-    {
-        GameObject prefab = Resources.Load<GameObject>(path);
-        return prefab != null ? prefab.GetComponent<Item>() : null;
     }
 
     string CreatePlayerId()

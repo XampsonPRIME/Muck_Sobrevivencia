@@ -51,4 +51,3 @@ MonoBehaviour:
   chunkSize: 50
   viewDistance: 2
   maxChunkCreationsPerFrame: 1
-  loadingChunkCreationsPerFrame: 4

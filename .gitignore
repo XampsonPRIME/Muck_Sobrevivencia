@@ -4,22 +4,16 @@
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
-[Ll]ogs/
 [Bb]uild/
 [Bb]uilds/
+[Ll]ogs/
 UserSettings/
 MemoryCaptures/
+
+# Cache do Shader Graph / GI
 ShaderCache/
 GI/
 Cache/
-il2cppOutput/
-UnityCache/
-TestResults/
-Coverage/
-ServerData/
-StreamingAssets/aa/
-StreamingAssets/aa.meta
-Assets/_Recovery/
 
 # =========================
 # UNITY AUTO GENERATED FILES
@@ -27,7 +21,6 @@ Assets/_Recovery/
 *.csproj
 *.unityproj
 *.sln
-*.slnx
 *.suo
 *.tmp
 *.user
@@ -39,15 +32,22 @@ Assets/_Recovery/
 *.mdb
 *.opendb
 *.VC.db
-*.backup
-*.orig
+*.slnx
 
 # =========================
 # UNITY META (IMPORTANTE)
 # =========================
-# Mantém .meta versionado para Assets e Packages.
+# Mantém .meta versionado (ESSENCIAL)
 !/[Aa]ssets/**/*.meta
 !/[Pp]ackages/**/*.meta
+!/[Pp]rojectSettings/**/*.meta
+
+# =========================
+# UNITY ADDRESSABLES / CACHE
+# =========================
+ServerData/
+StreamingAssets/aa/
+StreamingAssets/aa.meta
 
 # =========================
 # IDE / EDITORS
@@ -55,7 +55,13 @@ Assets/_Recovery/
 .vs/
 .idea/
 .vscode/
+
+# Rider / JetBrains
+.idea/
 *.sln.iml
+
+# Visual Studio Code settings (opcional)
+.vscode/*
 
 # =========================
 # OS FILES
@@ -65,7 +71,7 @@ Thumbs.db
 desktop.ini
 
 # =========================
-# BUILD / EXPORT FILES
+# BUILD FILES
 # =========================
 *.apk
 *.aab
@@ -80,8 +86,10 @@ desktop.ini
 # LOGS / TEMP
 # =========================
 *.log
+*.tmp
 *.bak
 *.old
+Assets/_Recovery/
 
 # =========================
 # CRASH / DEBUG
@@ -90,7 +98,7 @@ sysinfo.txt
 crashlytics-build.properties
 
 # =========================
-# PRIVATE / KEYS
+# PRIVATE / KEYS (SEGURANÇA)
 # =========================
 *.pem
 *.key
@@ -100,10 +108,27 @@ crashlytics-build.properties
 *.mobileprovision
 id_rsa*
 id_ed25519*
-dg_ed25519*
 
 # =========================
-# DOTS / ECS
+# DOTS / ECS (se usar no futuro)
 # =========================
 *.entities
 *.entitycache
+
+# =========================
+# IL2CPP / BUILD CACHE
+# =========================
+il2cppOutput/
+UnityCache/
+
+# =========================
+# TESTES / COVERAGE
+# =========================
+TestResults/
+Coverage/
+
+# =========================
+# IGNORAR BACKUPS DO UNITY
+# =========================
+*.backup
+*.orig

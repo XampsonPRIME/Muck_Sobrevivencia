@@ -37,20 +37,8 @@ public static class MultiplayerSceneSetCatalog
             displayName = "BossFight",
             activeSceneName = "Main",
             sceneNames = new[] { "Main", "PlayerTest", "Boss1" }
-        },
-        new SceneSetDefinition
-        {
-            id = "EnchantedForest",
-            displayName = "Floresta Encantada",
-            activeSceneName = "EnchantedForest",
-            sceneNames = new[] { "EnchantedForest", "PlayerTest" }
         }
     };
-
-    public static MultiplayerSceneSetState GetDefaultStartupState()
-    {
-        return CreateFromDefinition(FindById("Overworld"));
-    }
 
     public static MultiplayerSceneSetState CaptureLoadedScenes()
     {
@@ -92,8 +80,6 @@ public static class MultiplayerSceneSetCatalog
 
     public static MultiplayerSceneSetState ResolveStartupState(string sceneSetId, string sceneName)
     {
-        MultiplayerSceneSetState defaultState = GetDefaultStartupState();
-
         if (!string.IsNullOrWhiteSpace(sceneSetId))
         {
             SceneSetDefinition definition = FindById(sceneSetId);
@@ -114,7 +100,7 @@ public static class MultiplayerSceneSetCatalog
             });
         }
 
-        return defaultState ?? CaptureLoadedScenes();
+        return CaptureLoadedScenes();
     }
 
     public static MultiplayerSceneSetState Normalize(MultiplayerSceneSetState state)
@@ -185,17 +171,10 @@ public static class MultiplayerSceneSetCatalog
             return false;
 
         string primarySceneName = ResolveActiveSceneName(normalized.activeSceneName, normalized.sceneNames);
-        List<string> loadedSceneNamesBefore = GetLoadedSceneNames();
         bool primaryLoaded = IsSceneLoaded(primarySceneName);
 
         if (!primaryLoaded)
-        {
-            LoadSceneMode loadMode = loadedSceneNamesBefore.Count == 0
-                ? LoadSceneMode.Single
-                : LoadSceneMode.Additive;
-
-            SceneManager.LoadScene(primarySceneName, loadMode);
-        }
+            SceneManager.LoadScene(primarySceneName, LoadSceneMode.Single);
 
         for (int i = 0; i < normalized.sceneNames.Length; i++)
         {

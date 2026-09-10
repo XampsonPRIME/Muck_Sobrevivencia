@@ -3,34 +3,23 @@ using UnityEngine;
 
 public class LevelHUD : MonoBehaviour
 {
-    static readonly bool ShowGameplayLevelPanel = false;
-
     public Vector2 anchoredPosition = new Vector2(28f, -250f);
     public Vector2 size = new Vector2(320f, 70f);
 
     PlayerProgression progression;
-    PlayerMovement trackedPlayer;
     TextMeshProUGUI levelText;
 
     void Start()
     {
         ResolveProgression();
-        HideLevelPanel();
-        if (!ShowGameplayLevelPanel)
-            return;
-
         EnsureUI();
         Refresh();
     }
 
     void Update()
     {
-        ResolveProgression();
-        if (!ShowGameplayLevelPanel)
-        {
-            HideLevelPanel();
-            return;
-        }
+        if (progression == null)
+            ResolveProgression();
 
         EnsureUI();
         Refresh();
@@ -39,29 +28,13 @@ public class LevelHUD : MonoBehaviour
     void ResolveProgression()
     {
         PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
-        if (player == null)
-        {
-            trackedPlayer = null;
-            progression = null;
-            return;
-        }
-
-        if (trackedPlayer != player || progression == null)
-        {
-            trackedPlayer = player;
+        if (player != null)
             progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
-        }
     }
 
     void EnsureUI()
     {
-        if (!ShowGameplayLevelPanel)
-        {
-            HideLevelPanel();
-            return;
-        }
-
-        Canvas canvas = SceneObjectCache.Find<Canvas>(gameObject.scene, true);
+        Canvas canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null)
             return;
 
@@ -126,19 +99,10 @@ public class LevelHUD : MonoBehaviour
         return text;
     }
 
-    public void Refresh()
+    void Refresh()
     {
-        if (!ShowGameplayLevelPanel)
+        if (levelText == null || progression == null)
             return;
-
-        if (levelText == null)
-            return;
-
-        if (progression == null)
-        {
-            levelText.text = "Nivel 1\n0/0 XP";
-            return;
-        }
 
         int requiredXp = progression.GetXpRequiredForNextLevel();
         string xpLabel = requiredXp > 0
@@ -146,16 +110,5 @@ public class LevelHUD : MonoBehaviour
             : "MAX";
 
         levelText.text = $"Nivel {progression.currentLevel}\n{xpLabel}";
-    }
-
-    void HideLevelPanel()
-    {
-        if (levelText != null)
-            levelText.gameObject.SetActive(false);
-
-        Canvas canvas = SceneObjectCache.Find<Canvas>(gameObject.scene, true);
-        Transform existingRoot = canvas != null ? canvas.transform.Find("LevelPanel") : null;
-        if (existingRoot != null && existingRoot.gameObject.activeSelf)
-            existingRoot.gameObject.SetActive(false);
     }
 }
