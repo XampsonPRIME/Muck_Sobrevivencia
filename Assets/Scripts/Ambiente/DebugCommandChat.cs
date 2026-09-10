@@ -1279,10 +1279,10 @@ public class DebugCommandChat : MonoBehaviour
                 return LoadResourceItem("VendorItems/Axepick") ?? LoadResourceItem("Weapons/Axepick") ?? GetRuntimeItem("Picareta", ItemType.Tool, ToolType.Pickaxe, 2);
             case "graveto":
             case "gravetos":
-                return GetRuntimeItem("Graveto", ItemType.Resource, ToolType.None, 0);
+                return StickResourceItemRegistry.GetOrCreate();
             case "pedra":
             case "pedras":
-                return GetRuntimeItem("Pedras", ItemType.Resource, ToolType.None, 0);
+                return StoneResourceItemRegistry.GetOrCreate();
             case "madeira de carvalho":
             case "carvalho":
             case "oak wood":

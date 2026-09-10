@@ -121,7 +121,12 @@ public class BearerPowerService : MonoBehaviour
     void ApplyVisuals()
     {
         if (visualRoot != null)
+        {
+            MeshyHeroRuntimeVisual runtimeVisual = visualRoot.GetComponent<MeshyHeroRuntimeVisual>();
+            runtimeVisual?.DeactivateTitan();
             Destroy(visualRoot);
+            visualRoot = null;
+        }
 
         BearerPowerDefinition definition = CurrentDefinition;
         if (definition == null)

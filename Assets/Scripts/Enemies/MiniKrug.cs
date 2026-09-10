@@ -469,11 +469,7 @@ public class MiniKrug : MonoBehaviour
             return;
 
         int amount = Random.Range(minGoldDrop, maxGoldDrop + 1);
-        PlayerInteraction killerInteraction = lastAttacker.GetComponent<PlayerInteraction>();
-        Inventory killerInventory = killerInteraction != null ? killerInteraction.inventory : null;
-
-        if (killerInventory != null)
-            killerInventory.AddItem("Gold", amount, GoldItemRegistry.GetOrCreate());
+        WorldItemDropFactory.Spawn(transform.position + Vector3.up * 0.8f, GoldItemRegistry.GetOrCreate(), amount, ~0, 1.35f);
 
         MessageSystem.Instance?.ShowMessage($"+{amount} gold");
     }
@@ -486,17 +482,12 @@ public class MiniKrug : MonoBehaviour
         if (Random.value > DungeonKeyDropChance)
             return;
 
-        Inventory inventory = lastAttacker.GetComponent<Inventory>();
-        Hotbar hotbar = lastAttacker.GetComponent<Hotbar>() ?? FindFirstObjectByType<Hotbar>();
         Item keyItem = MushroomTyrantDungeonKeyRegistry.GetOrCreate();
 
-        if (inventory == null || keyItem == null)
+        if (keyItem == null)
             return;
 
-        inventory.AddItem(MushroomTyrantDungeonKeyRegistry.ItemName, 1, keyItem);
-
-        if (hotbar != null && keyItem.icon != null)
-            hotbar.TryAddInventoryItem(new InventoryItem(MushroomTyrantDungeonKeyRegistry.ItemName, 1, keyItem));
+        WorldItemDropFactory.Spawn(transform.position + Vector3.up, keyItem, 1, ~0, 1.35f);
 
         MessageSystem.Instance?.ShowMessage("A chave da Camara do Cogumelo Tirano caiu.");
     }

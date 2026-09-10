@@ -726,11 +726,7 @@ public class BossEnemy : MonoBehaviour
             return;
 
         int amount = Random.Range(minGoldDrop, maxGoldDrop + 1);
-        PlayerInteraction killerInteraction = lastAttacker.GetComponent<PlayerInteraction>();
-        Inventory killerInventory = killerInteraction != null ? killerInteraction.inventory : null;
-
-        if (killerInventory != null)
-            killerInventory.AddItem("Gold", amount, GoldItemRegistry.GetOrCreate());
+        WorldItemDropFactory.Spawn(transform.position + Vector3.up * 0.8f, GoldItemRegistry.GetOrCreate(), amount, ~0, 1.35f);
 
         MessageSystem.Instance?.ShowMessage($"+{amount} gold");
     }

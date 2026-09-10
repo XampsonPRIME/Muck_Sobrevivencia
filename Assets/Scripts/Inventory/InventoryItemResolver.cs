@@ -11,6 +11,12 @@ public static class InventoryItemResolver
         if (string.Equals(itemName, "Gold", StringComparison.OrdinalIgnoreCase))
             return GoldItemRegistry.GetOrCreate();
 
+        if (StoneResourceVisualFactory.IsStoneResource(itemName))
+            return StoneResourceItemRegistry.GetOrCreate();
+
+        if (StickResourceVisualFactory.IsStickResource(itemName))
+            return StickResourceItemRegistry.GetOrCreate();
+
         if (string.Equals(itemName, "Magia Ancestral", StringComparison.OrdinalIgnoreCase))
             return MagicSpellItemRegistry.GetOrCreate();
 
@@ -32,6 +38,9 @@ public static class InventoryItemResolver
 
         if (string.Equals(itemName, FurnaceItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
             return FurnaceItemRegistry.GetOrCreate();
+
+        if (string.Equals(itemName, CraftingBenchItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
+            return CraftingBenchItemRegistry.GetOrCreate();
 
         if (string.Equals(itemName, SimpleBowItemRegistry.ItemName, StringComparison.OrdinalIgnoreCase))
             return SimpleBowItemRegistry.GetOrCreate();

@@ -195,6 +195,19 @@ public class MeshyHeroRuntimeVisual : MonoBehaviour
 
     void OnDestroy()
     {
+        if (restored)
+            return;
+
+        bool ownerIsBeingDestroyed = ownerMovement == null ||
+                                     !ownerMovement.gameObject.scene.IsValid() ||
+                                     !ownerMovement.gameObject.scene.isLoaded ||
+                                     !ownerMovement.gameObject.activeInHierarchy;
+        if (ownerIsBeingDestroyed)
+        {
+            restored = true;
+            return;
+        }
+
         RestorePreviousVisual(false);
     }
 

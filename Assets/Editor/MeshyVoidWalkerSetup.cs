@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 
-[InitializeOnLoad]
 public static class MeshyVoidWalkerSetup
 {
     const string RootFolder = "Assets/Resources/Characters/VoidWalker";
@@ -33,16 +32,6 @@ public static class MeshyVoidWalkerSetup
             this.exitTime = exitTime;
             this.position = position;
         }
-    }
-
-    static MeshyVoidWalkerSetup()
-    {
-        ScheduleAutoSetup();
-        EditorApplication.playModeStateChanged += state =>
-        {
-            if (state == PlayModeStateChange.EnteredEditMode)
-                ScheduleAutoSetup();
-        };
     }
 
     [MenuItem("Elarion/Meshy/Configurar Andarilho do Vazio")]
@@ -605,6 +594,8 @@ public static class MeshyVoidWalkerSetup
 public class MeshyVoidWalkerAssetPostprocessor : AssetPostprocessor
 {
     const string RootPath = "Assets/Resources/Characters/VoidWalker";
+    const string GeneratedControllerPath = "Assets/Resources/Characters/VoidWalker/VoidWalker.controller";
+    const string GeneratedMaterialPath = "Assets/Resources/Characters/VoidWalker/VoidWalker_Material.mat";
 
     static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
     {
@@ -620,7 +611,12 @@ public class MeshyVoidWalkerAssetPostprocessor : AssetPostprocessor
         for (int i = 0; i < paths.Length; i++)
         {
             string path = paths[i];
-            if (!string.IsNullOrEmpty(path) && path.StartsWith(RootPath, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(path) ||
+                string.Equals(path, GeneratedControllerPath, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(path, GeneratedMaterialPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (path.StartsWith(RootPath, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

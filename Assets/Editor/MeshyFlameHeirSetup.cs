@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 
-[InitializeOnLoad]
 public static class MeshyFlameHeirSetup
 {
     const string RootFolder = "Assets/Resources/Characters/FlameHeir";
@@ -33,16 +32,6 @@ public static class MeshyFlameHeirSetup
             this.exitTime = exitTime;
             this.position = position;
         }
-    }
-
-    static MeshyFlameHeirSetup()
-    {
-        ScheduleAutoSetup();
-        EditorApplication.playModeStateChanged += state =>
-        {
-            if (state == PlayModeStateChange.EnteredEditMode)
-                ScheduleAutoSetup();
-        };
     }
 
     [MenuItem("Elarion/Meshy/Configurar Herdeiro das Chamas")]
@@ -604,6 +593,9 @@ public static class MeshyFlameHeirSetup
 
 public class MeshyFlameHeirAssetPostprocessor : AssetPostprocessor
 {
+    const string GeneratedControllerPath = "Assets/Resources/Characters/FlameHeir/FlameHeir.controller";
+    const string GeneratedMaterialPath = "Assets/Resources/Characters/FlameHeir/FlameHeir_Material.mat";
+
     static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
     {
         if (ContainsFlameHeirAsset(importedAssets) || ContainsFlameHeirAsset(movedAssets))
@@ -618,7 +610,12 @@ public class MeshyFlameHeirAssetPostprocessor : AssetPostprocessor
         for (int i = 0; i < paths.Length; i++)
         {
             string path = paths[i];
-            if (!string.IsNullOrEmpty(path) && path.StartsWith(RootPath, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(path) ||
+                string.Equals(path, GeneratedControllerPath, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(path, GeneratedMaterialPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (path.StartsWith(RootPath, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

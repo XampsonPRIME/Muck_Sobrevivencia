@@ -784,16 +784,19 @@ public class PlayerInteraction : MonoBehaviour
         if (inventory == null || string.IsNullOrWhiteSpace(pickedItemName))
             return false;
 
-        if (!inventory.AddItem(pickedItemName, 1, item))
+        WorldPickupStack pickupStack = item.GetComponent<WorldPickupStack>() ?? item.GetComponentInParent<WorldPickupStack>();
+        int pickedAmount = pickupStack != null ? Mathf.Max(1, pickupStack.amount) : 1;
+
+        if (!inventory.AddItem(pickedItemName, pickedAmount, item))
         {
             MessageSystem.Instance?.ShowMessage("Inventario cheio");
             return false;
         }
 
-        if (item.itemType == ItemType.Tool || item.itemType == ItemType.Consumable)
-            hotbar.AddItem(pickedItemName, item.icon, item);
+        if (hotbar != null && (item.itemType == ItemType.Tool || item.itemType == ItemType.Consumable))
+            hotbar.TryAddInventoryItem(new InventoryItem(pickedItemName, pickedAmount, item));
 
-        PickupMessageSystem.Show(pickedItemName, 1, pickupMessagePosition + Vector3.up * 0.55f, pickupIcon);
+        PickupMessageSystem.Show(pickedItemName, pickedAmount, pickupMessagePosition + Vector3.up * 0.55f, pickupIcon);
 
         PlayPickupSound();
         PlayerAnimationBridge.Trigger(this, PlayerAnimationBridge.PickupTrigger);
@@ -1381,7 +1384,7 @@ public class PlayerInteraction : MonoBehaviour
             return true;
         }
 
-        CreatePlacedFurnace(placePoint, placeable);
+        CreatePlacedObject(placePoint, placeable);
 
         inventory?.RemoveItem(selectedSlot.ItemName, 1);
         selectedSlot.RemoveOne();
@@ -1395,7 +1398,8 @@ public class PlayerInteraction : MonoBehaviour
         else
             ReequipSelectedSlot();
 
-        MessageSystem.Instance?.ShowMessage("Fornalha colocada.");
+        string placedName = placeable.kind == PlaceableKind.CraftingBench ? "Mesa de Craft" : "Fornalha";
+        MessageSystem.Instance?.ShowMessage($"{placedName} colocada.");
         nextHitTime = Time.time + hitRate;
         return true;
     }
@@ -1434,6 +1438,49 @@ public class PlayerInteraction : MonoBehaviour
         }
 
         return false;
+    }
+
+    void CreatePlacedObject(Vector3 placePoint, PlaceableItem placeable)
+    {
+        if (placeable.kind == PlaceableKind.CraftingBench)
+        {
+            CreatePlacedCraftingBench(placePoint, placeable);
+            return;
+        }
+
+        CreatePlacedFurnace(placePoint, placeable);
+    }
+
+    void CreatePlacedCraftingBench(Vector3 placePoint, PlaceableItem placeable)
+    {
+        GameObject bench = new GameObject(string.IsNullOrWhiteSpace(placeable.placedObjectName) ? "Mesa de Craft" : placeable.placedObjectName);
+        bench.transform.position = placePoint;
+
+        Vector3 forward = cameraHolder != null ? cameraHolder.forward : transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+            forward = transform.forward;
+
+        bench.transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
+        bench.transform.localScale = placeable.placedScale;
+
+        Material woodMaterial = CreateRuntimeMaterial(new Color(0.54f, 0.29f, 0.08f, 1f));
+        Material darkWoodMaterial = CreateRuntimeMaterial(new Color(0.23f, 0.11f, 0.035f, 1f));
+        Material clothMaterial = CreateRuntimeMaterial(new Color(0.13f, 0.42f, 0.58f, 1f));
+        Material metalMaterial = CreateRuntimeMaterial(new Color(0.8f, 0.66f, 0.35f, 1f));
+
+        CreateFurnaceBlock(bench.transform, "Top", new Vector3(0f, 0.95f, 0f), new Vector3(2.2f, 0.28f, 1.15f), woodMaterial);
+        CreateFurnaceBlock(bench.transform, "LegA", new Vector3(-0.85f, 0.48f, -0.35f), new Vector3(0.2f, 0.95f, 0.2f), darkWoodMaterial);
+        CreateFurnaceBlock(bench.transform, "LegB", new Vector3(0.85f, 0.48f, -0.35f), new Vector3(0.2f, 0.95f, 0.2f), darkWoodMaterial);
+        CreateFurnaceBlock(bench.transform, "LegC", new Vector3(-0.85f, 0.48f, 0.35f), new Vector3(0.2f, 0.95f, 0.2f), darkWoodMaterial);
+        CreateFurnaceBlock(bench.transform, "LegD", new Vector3(0.85f, 0.48f, 0.35f), new Vector3(0.2f, 0.95f, 0.2f), darkWoodMaterial);
+        CreateFurnaceBlock(bench.transform, "WorkbenchCloth", new Vector3(0f, 1.105f, 0f), new Vector3(1.9f, 0.035f, 0.82f), clothMaterial);
+        CreateFurnaceBlock(bench.transform, "MetalStrip", new Vector3(0f, 1.14f, -0.48f), new Vector3(2.05f, 0.05f, 0.08f), metalMaterial);
+
+        BoxCollider collider = bench.AddComponent<BoxCollider>();
+        collider.size = new Vector3(2.25f, 1.2f, 1.2f);
+        collider.center = new Vector3(0f, 0.58f, 0f);
+        bench.AddComponent<CraftingBench>();
     }
 
     void CreatePlacedFurnace(Vector3 placePoint, PlaceableItem placeable)

@@ -72,13 +72,14 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
         }
 
         int amountToCreate = Mathf.Max(1, outputAmount) * clampedCraftCount;
-        string outputName = outputItem != null ? outputItem.itemName : fallbackOutputItemName;
-        if (!CanReceiveCraftResult(inventory, outputName, amountToCreate, outputItem, out message))
+        Item resolvedOutputItem = outputItem != null ? outputItem : StickResourceItemRegistry.GetOrCreate();
+        string outputName = resolvedOutputItem.itemName;
+        if (!CanReceiveCraftResult(inventory, outputName, amountToCreate, resolvedOutputItem, out message))
             return false;
 
         inventory.RemoveItem(woodItem.itemName, amountToConsume);
         hotbar?.RemoveInventoryItem(woodItem, amountToConsume);
-        inventory.AddItem(outputName, amountToCreate, outputItem);
+        inventory.AddItem(outputName, amountToCreate, resolvedOutputItem);
 
         InventoryUI inventoryUi = SceneObjectCache.Find<InventoryUI>(gameObject.scene, true);
         if (inventoryUi != null)
@@ -595,7 +596,7 @@ public class CraftingBench : MonoBehaviour, IPlayerInteractable
             case Recipe.Arrows:
                 return ArrowItemRegistry.GetOrCreate();
             default:
-                return outputItem;
+                return outputItem != null ? outputItem : StickResourceItemRegistry.GetOrCreate();
         }
     }
 
