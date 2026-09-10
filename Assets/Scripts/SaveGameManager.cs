@@ -143,7 +143,16 @@ public class SaveGameManager : MonoBehaviour
     string pendingClientSessionSaveKey;
     string lastAppliedClientSessionSaveKey;
 
-    static string SavePath => Path.Combine(Application.persistentDataPath, "savegame.json");
+    SoloWorldStore worldStore;
+    string activeWorldId;
+    SoloWorldStore Worlds => worldStore ??= new SoloWorldStore(Application.persistentDataPath);
+    public List<SoloWorldSave> GetSoloWorlds() => Worlds.ListWorlds();
+    public void RenameSoloWorld(string id, string name) => Worlds.Rename(id, name);
+    public void DeleteSoloWorld(string id)
+    {
+        Worlds.Delete(id);
+        if (activeWorldId == id) activeWorldId = null;
+    }
     static string MultiplayerSessionSavePath => Path.Combine(Application.persistentDataPath, "multiplayer_session.json");
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -283,7 +292,7 @@ public class SaveGameManager : MonoBehaviour
 
     public bool HasSave()
     {
-        return File.Exists(SavePath);
+        return !string.IsNullOrEmpty(activeWorldId) && Worlds.Load(activeWorldId).progress != null;
     }
 
     public bool HasMultiplayerSessionSave()
@@ -296,10 +305,17 @@ public class SaveGameManager : MonoBehaviour
         return File.Exists(GetClientSessionSavePath(address, port));
     }
 
-    public void StartNewGame()
+    public void StartNewGame(string worldName)
     {
+        var world = Worlds.Create(worldName, UnityEngine.Random.Range(1, int.MaxValue));
+        activeWorldId = world.id;
+        BeginFreshWorld(world.seed);
+    }
+
+    void BeginFreshWorld(int seed)
+    {
+        LanMultiplayerManager.Instance?.StartSolo(seed);
         ResolveReferences();
-        DeleteSave();
         GameState.IsPlayerDead = false;
         GameState.IsInventoryOpen = false;
         GameState.IsVendorOpen = false;
@@ -356,8 +372,16 @@ public class SaveGameManager : MonoBehaviour
         autoSaveTimer = 0f;
     }
 
-    public bool ContinueFromSave()
+    public bool ContinueFromSave(string worldId)
     {
+        var world = Worlds.Load(worldId);
+        string previousWorldId = activeWorldId;
+        activeWorldId = world.id;
+        if (world.progress == null)
+        {
+            BeginFreshWorld(world.seed);
+            return true;
+        }
         bool loaded = LoadGame();
 
         if (loaded)
@@ -367,6 +391,7 @@ public class SaveGameManager : MonoBehaviour
         }
         else
         {
+            activeWorldId = previousWorldId;
             MessageSystem.Instance?.ShowMessage("Nenhum save valido encontrado");
         }
 
@@ -407,6 +432,8 @@ public class SaveGameManager : MonoBehaviour
 
     public bool SaveGame(bool showMessage = false)
     {
+        if (string.IsNullOrEmpty(activeWorldId) || GameState.IsWorldLoading)
+            return false;
         ResolveReferences();
 
         if (LanMultiplayerManager.Instance != null && LanMultiplayerManager.Instance.IsMultiplayerActive)
@@ -487,8 +514,13 @@ public class SaveGameManager : MonoBehaviour
             }
         }
 
-        string json = JsonUtility.ToJson(data, true);
-        File.WriteAllText(SavePath, json);
+        try { Worlds.SaveProgress(activeWorldId, data); }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Falha ao salvar o mundo: {exception.Message}");
+            MessageSystem.Instance?.ShowMessage("Não foi possível salvar o mundo. Verifique o espaço em disco.");
+            return false;
+        }
 
         if (showMessage)
             MessageSystem.Instance?.ShowMessage("Jogo salvo");
@@ -702,7 +734,7 @@ public class SaveGameManager : MonoBehaviour
         if (!HasSave() || playerMovement == null || inventory == null || hotbar == null)
             return false;
 
-        SaveGameData data = JsonUtility.FromJson<SaveGameData>(File.ReadAllText(SavePath));
+        SaveGameData data = Worlds.Load(activeWorldId).progress;
         if (data == null)
             return false;
 
@@ -766,8 +798,8 @@ public class SaveGameManager : MonoBehaviour
 
     public void DeleteSave()
     {
-        if (HasSave())
-            File.Delete(SavePath);
+        if (!string.IsNullOrEmpty(activeWorldId))
+            DeleteSoloWorld(activeWorldId);
     }
 
     public void DeleteMultiplayerSessionSave()

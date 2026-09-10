@@ -33,6 +33,9 @@ public class FpsHUD : MonoBehaviour
 
     void Update()
     {
+        ApplyVisibility();
+        if (GameState.IsInLobby)
+            return;
         HandleToggle();
 
         if (fpsText == null)
@@ -74,7 +77,7 @@ public class FpsHUD : MonoBehaviour
     void ApplyVisibility()
     {
         if (fpsText != null)
-            fpsText.enabled = isVisible;
+            fpsText.enabled = isVisible && !GameState.IsInLobby;
     }
 
     Color GetFpsColor(float fps)

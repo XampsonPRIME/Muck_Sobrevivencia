@@ -30,6 +30,7 @@ public class LobbyUI : MonoBehaviour
     GameObject multiplayerPopupBackdrop;
     GameObject multiplayerPopupPanel;
     LobbyUIViewRefs viewRefs;
+    WorldLibraryUI worldLibrary;
     bool waitingForSession;
     string autoSelectedSessionId;
     string lobbyErrorMessage;
@@ -57,10 +58,16 @@ public class LobbyUI : MonoBehaviour
         if (!TryBindHierarchyUi())
             BuildUI();
 
+        gameObject.AddComponent<LobbyPresentation>().Initialize(canvas, mainMenuRoot,
+            multiplayerPopupBackdrop, multiplayerPopupPanel, statusText,
+            primarySoloButton, newSoloButton, openMultiplayerButton);
+        worldLibrary = gameObject.AddComponent<WorldLibraryUI>();
+        worldLibrary.Initialize(canvas, saveGameManager, () => Destroy(gameObject), () => primarySoloButton.Select());
         RefreshPrimarySoloButton();
         RefreshContinueSessionButton();
         RefreshJoinButton();
         EnterLobby();
+        primarySoloButton.Select();
     }
 
     void BuildUI()
@@ -369,36 +376,26 @@ public class LobbyUI : MonoBehaviour
 
     void StartGame()
     {
-        LanMultiplayerManager.Instance?.StartSolo();
-        saveGameManager?.StartNewGame();
-        Destroy(gameObject);
-    }
-
-    void ContinueGame()
-    {
-        LanMultiplayerManager.Instance?.StartSolo();
-        if (saveGameManager != null && saveGameManager.ContinueFromSave())
-            Destroy(gameObject);
+        worldLibrary.ShowNew();
     }
 
     void OnPrimarySoloClicked()
     {
-        if (saveGameManager != null && saveGameManager.HasSave())
-            ContinueGame();
-        else
-            StartGame();
+        worldLibrary.ShowLibrary();
     }
 
     void OpenMultiplayerPopup()
     {
         if (multiplayerPopupBackdrop != null)
             multiplayerPopupBackdrop.SetActive(true);
+        closeMultiplayerButton?.Select();
     }
 
     void CloseMultiplayerPopup()
     {
         if (multiplayerPopupBackdrop != null)
             multiplayerPopupBackdrop.SetActive(false);
+        openMultiplayerButton?.Select();
     }
 
     void HostGame()
@@ -562,14 +559,12 @@ public class LobbyUI : MonoBehaviour
 
     void RefreshPrimarySoloButton()
     {
-        bool hasSave = saveGameManager != null && saveGameManager.HasSave();
-
         TextMeshProUGUI primaryText = primarySoloButton != null ? primarySoloButton.GetComponentInChildren<TextMeshProUGUI>() : null;
         if (primaryText != null)
-            primaryText.text = hasSave ? "Continuar solo" : "Jogar solo";
+            primaryText.text = "Continuar jornada";
 
         if (newSoloButton != null)
-            newSoloButton.gameObject.SetActive(hasSave);
+            newSoloButton.gameObject.SetActive(true);
     }
 
     void SetButtonEnabled(Button button, bool enabled)
@@ -589,7 +584,7 @@ public class LobbyUI : MonoBehaviour
 
         TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
         if (text != null)
-            text.color = enabled ? new Color(0.12f, 0.08f, 0.02f, 1f) : new Color(0.22f, 0.22f, 0.22f, 0.88f);
+            text.color = enabled ? LobbyPresentation.Ivory : new Color(0.55f, 0.58f, 0.58f, 0.7f);
     }
 
     bool TryBindHierarchyUi()
