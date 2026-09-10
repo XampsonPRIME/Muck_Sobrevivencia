@@ -193,20 +193,12 @@ public class ResourceNode : MonoBehaviour
         if (powers != null && powers.TryRollBonusResource())
             amount += 1;
 
-        if (ShouldSpawnOakWoodPickup())
-        {
-            SpawnOakWoodPickups(amount);
+        Item droppedItem = itemData != null ? itemData : InventoryItemResolver.Resolve(itemName);
+        if (droppedItem == null)
             return;
-        }
 
-        if (inventory == null || !inventory.AddItem(itemName, amount, itemData))
-        {
-            MessageSystem.Instance?.ShowMessage("Inventario cheio");
-            return;
-        }
-
-        Sprite pickupIcon = itemData != null ? itemData.icon : null;
-        PickupMessageSystem.Show(itemName, amount, transform.position + Vector3.up * 1.05f, pickupIcon);
+        Vector2 circle = Random.insideUnitCircle * 0.65f;
+        WorldItemDropFactory.Spawn(transform.position + new Vector3(circle.x, 1.2f, circle.y), droppedItem, amount, ~0, 1.25f);
     }
 
     bool ShouldSpawnOakWoodPickup()

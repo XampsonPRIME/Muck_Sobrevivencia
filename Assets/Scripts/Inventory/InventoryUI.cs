@@ -71,6 +71,7 @@ public class InventoryUI : MonoBehaviour
     Button equipButton;
     Button splitButton;
     Button discardButton;
+    Button craftBenchButton;
     GameObject runtimePanel;
     readonly Dictionary<InventoryCategory, Button> categoryButtons = new Dictionary<InventoryCategory, Button>();
     readonly Dictionary<EquipmentSlotType, TextMeshProUGUI> equipmentSlotTexts = new Dictionary<EquipmentSlotType, TextMeshProUGUI>();
@@ -135,6 +136,7 @@ public class InventoryUI : MonoBehaviour
 
         if (isOpen)
         {
+            UIEventSystemUtility.EnsureSingleEventSystem();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
 
@@ -172,11 +174,18 @@ public class InventoryUI : MonoBehaviour
         RefreshGrid();
         RefreshDetails();
         RefreshHotbarPreview();
+        RefreshBasicCrafting();
     }
 
     public void SelectItem(InventoryItem item)
     {
         selectedItem = item;
+        if (content != null)
+        {
+            InventorySlotUI[] slots = content.GetComponentsInChildren<InventorySlotUI>(true);
+            for (int i = 0; i < slots.Length; i++)
+                slots[i].SetSelected(slots[i].CurrentItem == selectedItem);
+        }
         RefreshDetails();
     }
 
@@ -467,6 +476,82 @@ public class InventoryUI : MonoBehaviour
         Refresh();
     }
 
+    void RefreshBasicCrafting()
+    {
+        if (craftBenchButton == null)
+            return;
+
+        int woodCount = CountWood();
+        craftBenchButton.interactable = woodCount >= 10 && inventory != null &&
+                                        inventory.CanFitItem(new InventoryItem(CraftingBenchItemRegistry.ItemName, 1, CraftingBenchItemRegistry.GetOrCreate()));
+
+        TextMeshProUGUI label = craftBenchButton.GetComponentInChildren<TextMeshProUGUI>();
+        if (label != null)
+            label.text = $"Criar Mesa de Craft  ({woodCount}/10 Madeira)";
+    }
+
+    void CraftBasicBench()
+    {
+        if (inventory == null || CountWood() < 10)
+        {
+            MessageSystem.Instance?.ShowMessage("Voce precisa de 10 madeiras para criar a mesa de craft.");
+            return;
+        }
+
+        Item benchItem = CraftingBenchItemRegistry.GetOrCreate();
+        InventoryItem result = new InventoryItem(benchItem.itemName, 1, benchItem);
+        if (!inventory.CanFitItem(result))
+        {
+            MessageSystem.Instance?.ShowMessage("Inventario cheio. Libere espaco antes de craftar.");
+            return;
+        }
+
+        ConsumeWood(10);
+        inventory.AddItem(benchItem.itemName, 1, benchItem);
+        hotbar?.TryAddInventoryItem(result);
+        MessageSystem.Instance?.ShowMessage("Mesa de Craft criada. Coloque-a pela hotbar.");
+        Refresh();
+    }
+
+    int CountWood()
+    {
+        if (inventory == null || inventory.items == null)
+            return 0;
+
+        int total = 0;
+        foreach (InventoryItem item in inventory.items)
+        {
+            if (item != null && !string.IsNullOrWhiteSpace(item.itemName) &&
+                item.itemName.Trim().StartsWith("Madeira", StringComparison.OrdinalIgnoreCase))
+                total += Mathf.Max(0, item.quantity);
+        }
+
+        return total;
+    }
+
+    void ConsumeWood(int amount)
+    {
+        if (inventory == null || inventory.items == null)
+            return;
+
+        int remaining = amount;
+        List<InventoryItem> woodStacks = inventory.items
+            .Where(item => item != null && !string.IsNullOrWhiteSpace(item.itemName) &&
+                           item.itemName.Trim().StartsWith("Madeira", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (InventoryItem wood in woodStacks)
+        {
+            if (remaining <= 0)
+                break;
+
+            int consumed = Mathf.Min(wood.quantity, remaining);
+            hotbar?.RemoveInventoryItem(wood, consumed);
+            inventory.RemoveItem(wood, consumed);
+            remaining -= consumed;
+        }
+    }
+
     void SortInventory()
     {
         if (inventory == null)
@@ -507,6 +592,11 @@ public class InventoryUI : MonoBehaviour
 
     void ResolveReferences()
     {
+        if (playerMovement != null && playerMovement.gameObject.activeInHierarchy &&
+            inventory != null && playerInteraction != null && playerProgression != null &&
+            playerEquipment != null && hotbar != null)
+            return;
+
         PlayerMovement resolvedPlayer = LanMultiplayerManager.FindGameplayPlayer();
         if (resolvedPlayer == null)
             return;
@@ -537,7 +627,8 @@ public class InventoryUI : MonoBehaviour
 
         Canvas canvas = canvasObject.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 135;
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 10001;
 
         CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
         DisplaySettingsManager.ConfigureCanvasScaler(scaler);
@@ -802,6 +893,7 @@ public class InventoryUI : MonoBehaviour
         detailsStatsText = CreateText("DetailsStats", column.transform, "", 17f, FontStyles.Normal, TextAlignmentOptions.Left);
         detailsStatsText.GetComponent<LayoutElement>().preferredHeight = 132f;
 
+        craftBenchButton = CreateButton("CraftBenchButton", column.transform, "Criar Mesa de Craft  (0/10 Madeira)", CraftBasicBench, 0f, 52f);
         useButton = CreateButton("UseButton", column.transform, "Usar", UseSelected, 0f, 44f);
         equipButton = CreateButton("EquipButton", column.transform, "Equipar", EquipSelected, 0f, 44f);
         splitButton = CreateButton("SplitButton", column.transform, "Dividir", SplitSelected, 0f, 44f);

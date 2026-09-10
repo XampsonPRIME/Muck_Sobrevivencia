@@ -523,8 +523,24 @@ public class WildChicken : MonoBehaviour
 
     void CreateDrop(Item itemData, string dropName, Color color, Vector3 scale)
     {
-        Vector2 circle = Random.insideUnitCircle * dropRadius;
+        Vector2 circle = Random.insideUnitCircle * Mathf.Min(dropRadius, 0.3f);
+        if (itemData != null && ChickenFeatherVisualFactory.IsFeather(itemData.itemName))
+            circle.x -= 0.72f;
+        else if (itemData != null && RawChickenMeatVisualFactory.IsRawChickenMeat(itemData.itemName))
+            circle.x += 0.72f;
+
         Vector3 spawnPos = transform.position + new Vector3(circle.x, 0.35f, circle.y);
+
+        if (itemData != null && ChickenFeatherVisualFactory.IsFeather(itemData.itemName))
+        {
+            ChickenFeatherVisualFactory.Spawn(
+                spawnPos,
+                itemData,
+                groundMask,
+                0.65f,
+                new Vector3(circle.x, 0f, circle.y));
+            return;
+        }
 
         if (itemData != null && RawChickenMeatVisualFactory.IsRawChickenMeat(itemData.itemName))
         {
@@ -532,7 +548,7 @@ public class WildChicken : MonoBehaviour
                 spawnPos,
                 itemData,
                 groundMask,
-                1.2f,
+                0.65f,
                 new Vector3(circle.x, 0f, circle.y));
             return;
         }

@@ -9,6 +9,8 @@ public class FloatingPickup : MonoBehaviour
     public float bobHeight = 0.12f;
     public float bobSpeed = 2.6f;
     public float rotationSpeed = 70f;
+    public bool autoCollect = true;
+    public float autoCollectDelay = 0.8f;
     public float settleCheckDelay = 0.08f;
     public float groundSearchHeight = 3f;
     public float groundSearchDistance = 8f;
@@ -251,6 +253,12 @@ public class FloatingPickup : MonoBehaviour
 
     void TryAutoCollect()
     {
+        if (!autoCollect)
+            return;
+
+        if (Time.time - spawnTime < Mathf.Max(0f, autoCollectDelay))
+            return;
+
         if (item == null)
             item = GetComponent<Item>();
 

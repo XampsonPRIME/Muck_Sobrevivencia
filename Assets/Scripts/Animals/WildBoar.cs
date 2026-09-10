@@ -748,6 +748,24 @@ public class WildBoar : MonoBehaviour
         Vector2 circle = Random.insideUnitCircle * dropRadius;
         Vector3 spawnPos = transform.position + new Vector3(circle.x, 0.45f, circle.y);
 
+        if (BoarLeatherVisualFactory.IsBoarLeather(itemData.itemName))
+        {
+            BoarLeatherVisualFactory.Spawn(spawnPos, itemData, groundMask, 0.75f, new Vector3(circle.x, 0f, circle.y));
+            return;
+        }
+
+        if (BoarTuskVisualFactory.IsBoarTusk(itemData.itemName))
+        {
+            BoarTuskVisualFactory.Spawn(spawnPos, itemData, groundMask, 0.7f, new Vector3(circle.x, 0f, circle.y));
+            return;
+        }
+
+        if (RawBoarMeatVisualFactory.IsRawBoarMeat(itemData.itemName))
+        {
+            RawBoarMeatVisualFactory.Spawn(spawnPos, itemData, groundMask, 0.75f, new Vector3(circle.x, 0f, circle.y));
+            return;
+        }
+
         GameObject drop = GameObject.CreatePrimitive(PrimitiveType.Cube);
         drop.name = dropName;
         drop.transform.position = spawnPos;

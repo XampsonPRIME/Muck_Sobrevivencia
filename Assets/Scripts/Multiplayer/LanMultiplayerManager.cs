@@ -1983,15 +1983,11 @@ public class LanMultiplayerManager : MonoBehaviour
         {
             Item item = ResolveItem(reward.itemName, reward.prefabName);
             if (item != null)
-            {
-                inventory.AddItem(reward.itemName, reward.itemAmount, item);
-                if (hotbar != null && (item.itemType == ItemType.Tool || item.itemType == ItemType.Consumable))
-                    hotbar.AddInventoryItem(new InventoryItem(reward.itemName, reward.itemAmount, item));
-            }
+                SpawnRewardPickup(item, reward.itemAmount);
         }
 
         if (reward.goldAmount > 0 && inventory != null)
-            inventory.AddItem("Gold", reward.goldAmount, GoldItemRegistry.GetOrCreate());
+            SpawnRewardPickup(GoldItemRegistry.GetOrCreate(), reward.goldAmount);
 
         if (reward.xpAmount > 0 && progression != null)
             progression.AddExperience(reward.xpAmount);
@@ -2011,6 +2007,21 @@ public class LanMultiplayerManager : MonoBehaviour
             MessageSystem.Instance?.ShowMessage(reward.message);
 
         RefreshClientHud();
+    }
+
+    void SpawnRewardPickup(Item item, int amount)
+    {
+        if (item == null || amount <= 0 || localPlayer == null)
+            return;
+
+        Vector3 forward = localPlayer.transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.01f)
+            forward = Vector3.forward;
+
+        Vector2 scatter = UnityEngine.Random.insideUnitCircle * 0.75f;
+        Vector3 position = localPlayer.transform.position + forward.normalized * 1.8f + new Vector3(scatter.x, 0.85f, scatter.y);
+        WorldItemDropFactory.Spawn(position, item, amount, ~0, 0.75f);
     }
 
     void ApplyDamageLocally(LanDamageEvent damageEvent)

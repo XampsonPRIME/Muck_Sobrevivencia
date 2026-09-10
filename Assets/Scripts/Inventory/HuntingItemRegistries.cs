@@ -7,6 +7,7 @@ public static class FeatherItemRegistry
 
     static Item featherItem;
     static Sprite featherSprite;
+    static bool featherSpriteIsModelThumbnail;
 
     public static Item GetOrCreate()
     {
@@ -35,6 +36,19 @@ public static class FeatherItemRegistry
 
     public static Sprite GetSprite()
     {
+        if (featherSprite != null && (featherSpriteIsModelThumbnail || !Application.isPlaying))
+            return featherSprite;
+
+        Sprite modelThumbnail = ChickenFeatherVisualFactory.CreateThumbnailSprite();
+        if (modelThumbnail != null)
+        {
+            featherSprite = modelThumbnail;
+            featherSpriteIsModelThumbnail = true;
+            if (featherItem != null)
+                featherItem.icon = featherSprite;
+            return featherSprite;
+        }
+
         if (featherSprite != null)
             return featherSprite;
 
@@ -42,6 +56,7 @@ public static class FeatherItemRegistry
         if (featherSprite == null)
             featherSprite = HuntingIconFactory.CreateFeatherFallback();
 
+        featherSpriteIsModelThumbnail = false;
         return featherSprite;
     }
 }
@@ -166,6 +181,7 @@ public static class CookedChickenMeatItemRegistry
 
     static Item cookedChickenMeatItem;
     static Sprite cookedChickenMeatSprite;
+    static bool cookedChickenMeatSpriteIsModelThumbnail;
 
     public static Item GetOrCreate()
     {
@@ -198,11 +214,26 @@ public static class CookedChickenMeatItemRegistry
         consumable.handLocalEulerAngles = new Vector3(0f, -20f, 65f);
         consumable.handLocalScale = new Vector3(1.25f, 1.25f, 1.25f);
 
+        CookedChickenMeatVisualFactory.AttachTo(itemObject.transform);
+
         return cookedChickenMeatItem;
     }
 
     public static Sprite GetSprite()
     {
+        if (cookedChickenMeatSprite != null && (cookedChickenMeatSpriteIsModelThumbnail || !Application.isPlaying))
+            return cookedChickenMeatSprite;
+
+        Sprite modelThumbnail = CookedChickenMeatVisualFactory.CreateThumbnailSprite();
+        if (modelThumbnail != null)
+        {
+            cookedChickenMeatSprite = modelThumbnail;
+            cookedChickenMeatSpriteIsModelThumbnail = true;
+            if (cookedChickenMeatItem != null)
+                cookedChickenMeatItem.icon = cookedChickenMeatSprite;
+            return cookedChickenMeatSprite;
+        }
+
         if (cookedChickenMeatSprite != null)
             return cookedChickenMeatSprite;
 
@@ -210,6 +241,7 @@ public static class CookedChickenMeatItemRegistry
         if (cookedChickenMeatSprite == null)
             cookedChickenMeatSprite = HuntingIconFactory.CreateCookedMeatFallback();
 
+        cookedChickenMeatSpriteIsModelThumbnail = false;
         return cookedChickenMeatSprite;
     }
 }

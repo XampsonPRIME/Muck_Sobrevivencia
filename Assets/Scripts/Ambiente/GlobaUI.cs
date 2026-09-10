@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class GlobalUI : MonoBehaviour
 {
@@ -98,7 +101,9 @@ public static class UIEventSystemUtility
     public static EventSystem EnsureSingleEventSystem()
     {
         EventSystem[] systems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        EventSystem primary = EventSystem.current != null && EventSystem.current.isActiveAndEnabled
+        EventSystem primary = EventSystem.current != null &&
+                              EventSystem.current.isActiveAndEnabled &&
+                              EventSystem.current.gameObject.activeInHierarchy
             ? EventSystem.current
             : null;
 
@@ -106,16 +111,13 @@ public static class UIEventSystemUtility
         {
             for (int i = 0; i < systems.Length; i++)
             {
-                if (systems[i] != null && systems[i].isActiveAndEnabled)
+                if (systems[i] != null && systems[i].isActiveAndEnabled && systems[i].gameObject.activeInHierarchy)
                 {
                     primary = systems[i];
                     break;
                 }
             }
         }
-
-        if (primary == null && systems.Length > 0)
-            primary = systems[0];
 
         if (primary == null)
         {
@@ -163,3 +165,35 @@ public static class UIEventSystemUtility
             legacyModule.enabled = false;
     }
 }
+
+#if UNITY_EDITOR
+[InitializeOnLoad]
+public static class EditorCursorRecovery
+{
+    static EditorCursorRecovery()
+    {
+        EditorApplication.playModeStateChanged -= HandlePlayModeStateChanged;
+        EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
+        EditorApplication.delayCall += RestoreEditorCursor;
+    }
+
+    static void HandlePlayModeStateChanged(PlayModeStateChange state)
+    {
+        if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.EnteredEditMode)
+        {
+            RestoreEditorCursor();
+            EditorApplication.delayCall += RestoreEditorCursor;
+        }
+    }
+
+    static void RestoreEditorCursor()
+    {
+        if (EditorApplication.isPlaying)
+            return;
+
+        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+    }
+}
+#endif

@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 
 public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
 {
@@ -27,6 +26,18 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
     public InventoryItem CurrentItem => currentItem;
 
+    public void SetSelected(bool selected)
+    {
+        Outline outline = GetComponent<Outline>();
+        if (outline == null)
+            return;
+
+        outline.effectColor = selected
+            ? new Color(0.95f, 0.76f, 0.24f, 1f)
+            : new Color(0.42f, 0.29f, 0.12f, 0.9f);
+        outline.effectDistance = selected ? new Vector2(3f, -3f) : new Vector2(1f, -1f);
+    }
+
     void OnDisable()
     {
         HideTooltip();
@@ -41,45 +52,6 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
     {
         rectTransform = GetComponent<RectTransform>();
         parentCanvas = GetComponentInParent<Canvas>();
-    }
-
-    void Update()
-    {
-        if (!GameState.IsInventoryOpen || currentItem == null || string.IsNullOrWhiteSpace(currentItem.itemName))
-        {
-            if (mouseInsideSlot)
-            {
-                mouseInsideSlot = false;
-                HideTooltip();
-            }
-
-            return;
-        }
-
-        if (Mouse.current == null || rectTransform == null)
-            return;
-
-        if (parentCanvas == null)
-            parentCanvas = GetComponentInParent<Canvas>();
-
-        Camera uiCamera = parentCanvas != null && parentCanvas.renderMode != RenderMode.ScreenSpaceOverlay
-            ? parentCanvas.worldCamera
-            : null;
-
-        bool containsMouse = RectTransformUtility.RectangleContainsScreenPoint(
-            rectTransform,
-            Mouse.current.position.ReadValue(),
-            uiCamera);
-
-        if (containsMouse == mouseInsideSlot)
-            return;
-
-        mouseInsideSlot = containsMouse;
-
-        if (mouseInsideSlot)
-            ShowTooltip();
-        else
-            HideTooltip();
     }
 
     public void Setup(InventoryItem item)
@@ -114,11 +86,13 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
     public void OnPointerEnter(PointerEventData eventData)
     {
+        mouseInsideSlot = true;
         ShowTooltip();
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
+        mouseInsideSlot = false;
         HideTooltip();
     }
 
@@ -138,7 +112,8 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
     {
         HideTooltip();
 
-        if (currentItem == null || currentItem.itemData == null) return;
+        Item resolvedItem = ResolveCurrentItemData();
+        if (currentItem == null || resolvedItem == null) return;
 
         DragDropController.BeginDrag(
             currentItem.GetDisplayIcon(),
@@ -146,7 +121,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
             {
                 sourceType = DragSourceType.Inventory,
                 inventorySlot = this,
-                itemData = currentItem.itemData,
+                itemData = resolvedItem,
                 amount = currentItem.quantity
             }
         );
@@ -183,7 +158,8 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
 
     void OnDoubleClick()
     {
-        if (currentItem == null || currentItem.itemData == null)
+        Item resolvedItem = ResolveCurrentItemData();
+        if (currentItem == null || resolvedItem == null)
             return;
 
         PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
@@ -202,6 +178,18 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnte
         InventoryUI ui = SceneObjectCache.Find<InventoryUI>(true);
         if (ui != null)
             ui.Refresh();
+    }
+
+    Item ResolveCurrentItemData()
+    {
+        if (currentItem == null)
+            return null;
+
+        if (currentItem.itemData == null)
+            currentItem.itemData = InventoryItemResolver.Resolve(currentItem.itemName, currentItem.prefabName);
+
+        itemData = currentItem.itemData;
+        return itemData;
     }
 
     void SwapWithInventorySlot(InventorySlotUI other)

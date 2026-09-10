@@ -7,6 +7,7 @@ public static class ThickLeatherItemRegistry
 
     static Item item;
     static Sprite sprite;
+    static bool spriteIsModelThumbnail;
 
     public static Item GetOrCreate()
     {
@@ -31,6 +32,19 @@ public static class ThickLeatherItemRegistry
 
     public static Sprite GetSprite()
     {
+        if (sprite != null && (spriteIsModelThumbnail || !Application.isPlaying))
+            return sprite;
+
+        Sprite modelThumbnail = BoarLeatherVisualFactory.CreateThumbnailSprite();
+        if (modelThumbnail != null)
+        {
+            sprite = modelThumbnail;
+            spriteIsModelThumbnail = true;
+            if (item != null)
+                item.icon = sprite;
+            return sprite;
+        }
+
         if (sprite != null)
             return sprite;
 
@@ -38,6 +52,7 @@ public static class ThickLeatherItemRegistry
         if (sprite == null)
             sprite = BoarDropIconFactory.CreateLeather();
 
+        spriteIsModelThumbnail = false;
         return sprite;
     }
 }
@@ -48,6 +63,7 @@ public static class SharpTuskItemRegistry
 
     static Item item;
     static Sprite sprite;
+    static bool spriteIsModelThumbnail;
 
     public static Item GetOrCreate()
     {
@@ -72,8 +88,24 @@ public static class SharpTuskItemRegistry
 
     public static Sprite GetSprite()
     {
-        if (sprite == null)
-            sprite = BoarDropIconFactory.CreateTusk();
+        if (sprite != null && (spriteIsModelThumbnail || !Application.isPlaying))
+            return sprite;
+
+        Sprite modelThumbnail = BoarTuskVisualFactory.CreateThumbnailSprite();
+        if (modelThumbnail != null)
+        {
+            sprite = modelThumbnail;
+            spriteIsModelThumbnail = true;
+            if (item != null)
+                item.icon = sprite;
+            return sprite;
+        }
+
+        if (sprite != null)
+            return sprite;
+
+        sprite = BoarDropIconFactory.CreateTusk();
+        spriteIsModelThumbnail = false;
 
         return sprite;
     }
@@ -86,6 +118,7 @@ public static class BoarMeatItemRegistry
 
     static Item item;
     static Sprite sprite;
+    static bool spriteIsModelThumbnail;
 
     public static Item GetOrCreate()
     {
@@ -100,7 +133,7 @@ public static class BoarMeatItemRegistry
         item.itemType = ItemType.Resource;
         item.category = InventoryCategory.Food;
         item.rarity = ItemRarity.Uncommon;
-        item.description = "Carne obtida da caca de javalis. Pode ser cozida futuramente.";
+        item.description = "Carne crua obtida de javalis. Pode ser preparada na fornalha.";
         item.weight = 0.55f;
         item.maxStack = 20;
         item.sellPrice = 5;
@@ -110,6 +143,19 @@ public static class BoarMeatItemRegistry
 
     public static Sprite GetSprite()
     {
+        if (sprite != null && (spriteIsModelThumbnail || !Application.isPlaying))
+            return sprite;
+
+        Sprite modelThumbnail = RawBoarMeatVisualFactory.CreateThumbnailSprite();
+        if (modelThumbnail != null)
+        {
+            sprite = modelThumbnail;
+            spriteIsModelThumbnail = true;
+            if (item != null)
+                item.icon = sprite;
+            return sprite;
+        }
+
         if (sprite != null)
             return sprite;
 
@@ -117,6 +163,7 @@ public static class BoarMeatItemRegistry
         if (sprite == null)
             sprite = BoarDropIconFactory.CreateMeat();
 
+        spriteIsModelThumbnail = false;
         return sprite;
     }
 }
@@ -129,6 +176,7 @@ public static class CookedBoarMeatItemRegistry
 
     static Item item;
     static Sprite sprite;
+    static bool spriteIsModelThumbnail;
 
     public static Item GetOrCreate()
     {
@@ -161,11 +209,26 @@ public static class CookedBoarMeatItemRegistry
         consumable.handLocalEulerAngles = new Vector3(0f, -20f, 65f);
         consumable.handLocalScale = new Vector3(1.25f, 1.25f, 1.25f);
 
+        CookedBoarMeatVisualFactory.AttachTo(itemObject.transform);
+
         return item;
     }
 
     public static Sprite GetSprite()
     {
+        if (sprite != null && (spriteIsModelThumbnail || !Application.isPlaying))
+            return sprite;
+
+        Sprite modelThumbnail = CookedBoarMeatVisualFactory.CreateThumbnailSprite();
+        if (modelThumbnail != null)
+        {
+            sprite = modelThumbnail;
+            spriteIsModelThumbnail = true;
+            if (item != null)
+                item.icon = sprite;
+            return sprite;
+        }
+
         if (sprite != null)
             return sprite;
 
@@ -173,6 +236,7 @@ public static class CookedBoarMeatItemRegistry
         if (sprite == null)
             sprite = HuntingIconFactory.CreateCookedMeatFallback();
 
+        spriteIsModelThumbnail = false;
         return sprite;
     }
 }

@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 
-[InitializeOnLoad]
 public static class MeshyHeroSetup
 {
     const string RootFolder = "Assets/Resources/Characters/MeshyHero";
@@ -33,11 +32,6 @@ public static class MeshyHeroSetup
             this.exitTime = exitTime;
             this.position = position;
         }
-    }
-
-    static MeshyHeroSetup()
-    {
-        ScheduleAutoSetup();
     }
 
     [MenuItem("Elarion/Meshy/Configurar Heroi Meshy")]
@@ -608,6 +602,9 @@ public static class MeshyHeroSetup
 
 public class MeshyHeroAssetPostprocessor : AssetPostprocessor
 {
+    const string GeneratedControllerPath = "Assets/Resources/Characters/MeshyHero/MeshyTitan.controller";
+    const string GeneratedMaterialPath = "Assets/Resources/Characters/MeshyHero/MeshyHero_Material.mat";
+
     static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
     {
         if (ContainsMeshyHeroAsset(importedAssets) || ContainsMeshyHeroAsset(movedAssets))
@@ -622,7 +619,12 @@ public class MeshyHeroAssetPostprocessor : AssetPostprocessor
         for (int i = 0; i < paths.Length; i++)
         {
             string path = paths[i];
-            if (!string.IsNullOrEmpty(path) && path.StartsWith("Assets/Resources/Characters/MeshyHero", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(path) ||
+                string.Equals(path, GeneratedControllerPath, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(path, GeneratedMaterialPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (path.StartsWith("Assets/Resources/Characters/MeshyHero", StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
@@ -630,7 +632,6 @@ public class MeshyHeroAssetPostprocessor : AssetPostprocessor
     }
 }
 
-[InitializeOnLoad]
 public static class MeshyInvokerSetup
 {
     const string RootFolder = "Assets/Resources/Characters/SavageElfInvoker";
@@ -658,16 +659,6 @@ public static class MeshyInvokerSetup
             this.exitTime = exitTime;
             this.position = position;
         }
-    }
-
-    static MeshyInvokerSetup()
-    {
-        ScheduleAutoSetup();
-        EditorApplication.playModeStateChanged += state =>
-        {
-            if (state == PlayModeStateChange.EnteredEditMode)
-                ScheduleAutoSetup();
-        };
     }
 
     [MenuItem("Elarion/Meshy/Configurar Invocador Selvagem")]
@@ -1229,6 +1220,9 @@ public static class MeshyInvokerSetup
 
 public class MeshyInvokerAssetPostprocessor : AssetPostprocessor
 {
+    const string GeneratedControllerPath = "Assets/Resources/Characters/SavageElfInvoker/SavageElfInvoker.controller";
+    const string GeneratedMaterialPath = "Assets/Resources/Characters/SavageElfInvoker/SavageElfInvoker_Material.mat";
+
     static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
     {
         if (ContainsInvokerAsset(importedAssets) || ContainsInvokerAsset(movedAssets))
@@ -1243,7 +1237,12 @@ public class MeshyInvokerAssetPostprocessor : AssetPostprocessor
         for (int i = 0; i < paths.Length; i++)
         {
             string path = paths[i];
-            if (!string.IsNullOrEmpty(path) && path.StartsWith("Assets/Resources/Characters/SavageElfInvoker", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(path) ||
+                string.Equals(path, GeneratedControllerPath, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(path, GeneratedMaterialPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (path.StartsWith("Assets/Resources/Characters/SavageElfInvoker", StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
