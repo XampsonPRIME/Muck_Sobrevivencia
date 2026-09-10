@@ -8,6 +8,8 @@ public class MessageSystem : MonoBehaviour
 
     public GameObject messagePrefab;
     public Transform panel;
+    RectTransform notificationRoot;
+    MessageItem currentMessage;
 
     void Awake()
     {
@@ -19,11 +21,45 @@ public class MessageSystem : MonoBehaviour
         if (messagePrefab == null || panel == null)
             return;
 
-        GameObject obj = Instantiate(messagePrefab, panel);
+        if (notificationRoot == null)
+        {
+            var root = new GameObject("NotificationCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
+            root.transform.SetParent(transform, false);
+            var canvas = root.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 5100;
+            DisplaySettingsManager.ConfigureCanvasScaler(root.GetComponent<CanvasScaler>());
+            notificationRoot = root.GetComponent<RectTransform>();
+        }
 
-        MessageItem item = obj.GetComponent<MessageItem>();
-        if (item != null)
-            item.Setup(message);
+        // Replace the previous toast so repeated interactions cannot stack offscreen.
+        if (currentMessage != null)
+        {
+            currentMessage.gameObject.SetActive(false);
+            Destroy(currentMessage.gameObject);
+        }
+        var obj = new GameObject("Notification", typeof(RectTransform), typeof(Image), typeof(CanvasGroup), typeof(MessageItem));
+        obj.transform.SetParent(notificationRoot, false);
+        var background = obj.GetComponent<Image>();
+        background.color = new Color(0.025f, 0.045f, 0.055f, 0.96f);
+        background.raycastTarget = false;
+        var label = new GameObject("Message", typeof(RectTransform), typeof(TextMeshProUGUI));
+        label.transform.SetParent(obj.transform, false);
+        currentMessage = obj.GetComponent<MessageItem>();
+        currentMessage.responsiveNotification = true;
+        currentMessage.text = label.GetComponent<TextMeshProUGUI>();
+        var template = messagePrefab.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (template != null) currentMessage.text.font = template.font;
+        currentMessage.text.fontSize = 24;
+        currentMessage.text.color = new Color(0.91f, 0.89f, 0.81f);
+        currentMessage.text.alignment = TextAlignmentOptions.Center;
+        currentMessage.text.textWrappingMode = TextWrappingModes.Normal;
+        currentMessage.text.raycastTarget = false;
+        currentMessage.canvasGroup = obj.GetComponent<CanvasGroup>();
+        currentMessage.canvasGroup.alpha = 0;
+        currentMessage.canvasGroup.blocksRaycasts = false;
+        currentMessage.duration = Mathf.Clamp(message.Length * 0.055f, 3f, 10f);
+        currentMessage.Setup(message);
     }
 }
 

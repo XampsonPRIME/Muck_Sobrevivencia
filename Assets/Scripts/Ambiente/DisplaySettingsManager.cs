@@ -29,9 +29,8 @@ public class DisplaySettingsManager : MonoBehaviour
     const int DefaultFrameRateCap = 120;
     const int MinFrameRateCap = 30;
     const int MaxFrameRateCap = 240;
-    const int DemoMaxRenderWidth = 1920;
-    const int DemoMaxRenderHeight = 1080;
-    const float DemoRenderScale = 0.75f;
+    const int DemoMaxRenderWidth = 3840;
+    const int DemoMaxRenderHeight = 2160;
 
     static DisplaySettingsManager instance;
     static readonly List<ResolutionOption> resolutionOptions = new List<ResolutionOption>();
@@ -107,24 +106,27 @@ public class DisplaySettingsManager : MonoBehaviour
 
     void ApplyDemoPerformanceProfile()
     {
-        QualitySettings.pixelLightCount = 1;
-        QualitySettings.shadows = UnityEngine.ShadowQuality.HardOnly;
-        QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Low;
+        QualitySettings.pixelLightCount = 8;
+        QualitySettings.shadows = UnityEngine.ShadowQuality.All;
+        QualitySettings.shadowResolution = UnityEngine.ShadowResolution.High;
         QualitySettings.shadowProjection = ShadowProjection.StableFit;
         QualitySettings.shadowCascades = 0;
-        QualitySettings.shadowDistance = 24f;
-        QualitySettings.skinWeights = SkinWeights.TwoBones;
-        QualitySettings.lodBias = 1f;
-        QualitySettings.realtimeReflectionProbes = false;
-        QualitySettings.softParticles = false;
-        QualitySettings.particleRaycastBudget = 64;
-        QualitySettings.globalTextureMipmapLimit = Mathf.Max(QualitySettings.globalTextureMipmapLimit, 1);
-        QualitySettings.anisotropicFiltering = AnisotropicFiltering.Disable;
+        QualitySettings.shadowDistance = 65f;
+        QualitySettings.skinWeights = SkinWeights.FourBones;
+        QualitySettings.lodBias = 1.5f;
+        QualitySettings.realtimeReflectionProbes = true;
+        QualitySettings.softParticles = true;
+        QualitySettings.particleRaycastBudget = 256;
+        QualitySettings.globalTextureMipmapLimit = 0;
+        QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;
 
         UniversalRenderPipelineAsset pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset ??
                                                 QualitySettings.renderPipeline as UniversalRenderPipelineAsset;
         if (pipeline != null)
-            pipeline.renderScale = Mathf.Min(pipeline.renderScale, DemoRenderScale);
+        {
+            pipeline.renderScale = 1f;
+            pipeline.supportsHDR = true;
+        }
     }
 
     public static void SetFrameRateCap(int targetFrameRate)
@@ -278,9 +280,9 @@ public class DisplaySettingsManager : MonoBehaviour
         int safeHeight = Mathf.Max(720, height);
         ClampToDemoResolution(ref safeWidth, ref safeHeight);
 
-        FullScreenMode mode = fullscreen
-            ? FullScreenMode.ExclusiveFullScreen // 🔥 melhor pra evitar zoom estranho
-            : FullScreenMode.Windowed;
+        // Borderless native desktop mode prevents Unity from stretching a fixed
+        // 16:9 buffer into an ultrawide/4:3 monitor and keeps the safe area stable.
+        FullScreenMode mode = fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
 
         if (!force &&
             Screen.width == safeWidth &&

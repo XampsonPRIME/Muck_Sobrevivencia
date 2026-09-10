@@ -330,7 +330,7 @@ public class StarterQuestTracker : MonoBehaviour
 
     void Update()
     {
-        if (GameState.IsInLobby || GameState.IsWorldLoading || GameState.IsPlayerDead)
+        if (GameState.IsInLobby || GameState.IsWorldLoading || GameState.IsPlayerDead || GameState.IsPowerSelectionOpen)
         {
             SetHudVisible(false);
             return;
