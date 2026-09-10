@@ -344,6 +344,9 @@ public class DisplaySettingsManager : MonoBehaviour
 
     void ApplyToCanvasScaler(CanvasScaler scaler)
     {
+        // The title screen owns a fixed safe area independent of gameplay HUD scale.
+        if (scaler.GetComponentInParent<LobbyUI>() != null)
+            return;
         float uiScale = CurrentUiScale;
 
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
