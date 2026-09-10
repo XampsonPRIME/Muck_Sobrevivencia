@@ -10,8 +10,6 @@ public class RemotePlayerReplica : MonoBehaviour
     public float animationSmoothing = 8f;
 
     Animator animator;
-    string appliedBearerPowerId;
-    GameObject bearerPowerVisual;
     Vector3 targetPosition;
     Quaternion targetRotation;
     float targetAnimationSpeed;
@@ -46,7 +44,6 @@ public class RemotePlayerReplica : MonoBehaviour
         targetPosition = state.position;
         targetRotation = state.rotation;
         targetAnimationSpeed = state.isDead ? 0f : state.animationSpeed;
-        ApplyBearerPowerVisual(state.bearerPowerId);
 
         if (!hasReceivedInitialState)
         {
@@ -55,30 +52,8 @@ public class RemotePlayerReplica : MonoBehaviour
         }
     }
 
-    void ApplyBearerPowerVisual(string powerId)
-    {
-        if (string.Equals(appliedBearerPowerId, powerId, System.StringComparison.OrdinalIgnoreCase))
-            return;
-
-        appliedBearerPowerId = powerId;
-        if (bearerPowerVisual != null)
-            Destroy(bearerPowerVisual);
-
-        BearerPowerDefinition definition = BearerPowerCatalog.Find(powerId);
-        if (definition != null)
-            bearerPowerVisual = BearerPowerVisualFactory.Create(transform, definition);
-    }
-
     void Update()
     {
-        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
-        if (manager == null || !manager.ShouldKeepRemoteReplica(PlayerId))
-        {
-            Debug.LogWarning($"RemotePlayerReplica removida por sessao invalida: {PlayerId}.");
-            Destroy(gameObject);
-            return;
-        }
-
         float positionBlend = 1f - Mathf.Exp(-positionSmoothing * Time.deltaTime);
         float rotationBlend = 1f - Mathf.Exp(-rotationSmoothing * Time.deltaTime);
         float animationBlend = 1f - Mathf.Exp(-animationSmoothing * Time.deltaTime);

@@ -37,9 +37,7 @@ public class CowSpawnPoint : MonoBehaviour
     public float respawnDelay = 25f;
     public float cowWanderRadius = 8f;
     public Item meatItemData;
-    public Item leatherItemData;
     public GameObject meatDropPrefab;
-    public GameObject leatherDropPrefab;
     public Material bodyMaterial;
     public Material spotMaterial;
     public Material hoofMaterial;
@@ -86,16 +84,13 @@ public class CowSpawnPoint : MonoBehaviour
             if (cow == null)
                 cow = cowObject.AddComponent<Cow>();
 
-            cow.meatItemData = meatItemData != null ? meatItemData : (cow.meatItemData != null ? cow.meatItemData : CowMeatItemRegistry.GetOrCreate());
-            cow.leatherItemData = leatherItemData != null ? leatherItemData : CowLeatherItemRegistry.GetOrCreate();
+            cow.meatItemData = meatItemData != null ? meatItemData : cow.meatItemData;
             cow.meatDropPrefab = meatDropPrefab != null ? meatDropPrefab : cow.meatDropPrefab;
-            cow.leatherDropPrefab = leatherDropPrefab != null ? leatherDropPrefab : cow.leatherDropPrefab;
             cow.bodyMaterial = bodyMaterial != null ? bodyMaterial : cow.bodyMaterial;
             cow.spotMaterial = spotMaterial != null ? spotMaterial : cow.spotMaterial;
             cow.hoofMaterial = hoofMaterial != null ? hoofMaterial : cow.hoofMaterial;
             cow.wanderRadius = cowWanderRadius;
             cow.SetSpawnData(this, transform.position);
-            LanNetworkEntity.Ensure(cow, BuildCowEntityId(spawnIndex));
 
             activeCows.Add(cow);
         }
@@ -112,11 +107,6 @@ public class CowSpawnPoint : MonoBehaviour
             hash = (hash * 31) + spawnIndex;
             return hash;
         }
-    }
-
-    string BuildCowEntityId(int spawnIndex)
-    {
-        return $"CowSpawn|{Mathf.RoundToInt(transform.position.x * 100f)}|{Mathf.RoundToInt(transform.position.z * 100f)}|{spawnIndex}";
     }
 
     void CleanupDeadEntries()

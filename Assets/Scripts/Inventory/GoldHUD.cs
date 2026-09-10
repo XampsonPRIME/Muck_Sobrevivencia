@@ -4,15 +4,12 @@ using UnityEngine.UI;
 
 public class GoldHUD : MonoBehaviour
 {
-    static readonly bool ShowGameplayInfoPanel = false;
-
     public Vector2 panelAnchorPosition = new Vector2(28f, -72f);
     public Vector2 panelSize = new Vector2(320f, 240f);
 
     Inventory inventory;
     DayNightCycle cycle;
     PlayerProgression progression;
-    PlayerMovement trackedPlayer;
 
     RectTransform rootRect;
     TextMeshProUGUI dayValueText;
@@ -37,42 +34,28 @@ public class GoldHUD : MonoBehaviour
 
     void Start()
     {
-        cycle = DayNightCycle.Instance ?? SceneObjectCache.Find<DayNightCycle>(gameObject.scene, true);
+        cycle = FindFirstObjectByType<DayNightCycle>();
         ResolvePlayerReferences();
-        HideOriginalClockTexts();
-        HideGameplayInfoPanel();
-        if (!ShowGameplayInfoPanel)
-            return;
-
         EnsureUI();
+        HideOriginalClockTexts();
         Refresh();
     }
 
     void Update()
     {
-        cycle = DayNightCycle.Instance ?? SceneObjectCache.Find<DayNightCycle>(gameObject.scene, true);
+        if (cycle == null)
+            cycle = FindFirstObjectByType<DayNightCycle>();
 
         ResolvePlayerReferences();
 
-        HideOriginalClockTexts();
-        if (!ShowGameplayInfoPanel)
-        {
-            HideGameplayInfoPanel();
-            return;
-        }
-
         EnsureUI();
+
+        HideOriginalClockTexts();
         Refresh();
     }
 
     void EnsureUI()
     {
-        if (!ShowGameplayInfoPanel)
-        {
-            HideGameplayInfoPanel();
-            return;
-        }
-
         Canvas canvas = ResolveCanvas();
         if (canvas == null)
             return;
@@ -142,7 +125,7 @@ public class GoldHUD : MonoBehaviour
         if (cycle != null && cycle.dayText != null)
             return cycle.dayText.canvas != null ? cycle.dayText.canvas.rootCanvas : null;
 
-        return SceneObjectCache.Find<Canvas>(gameObject.scene, true);
+        return FindFirstObjectByType<Canvas>();
     }
 
     TextMeshProUGUI EnsureText(Transform parent, string objectName, Vector2 anchoredPosition, Vector2 size)
@@ -220,22 +203,8 @@ public class GoldHUD : MonoBehaviour
             cycle.hourText.gameObject.SetActive(false);
     }
 
-    void HideGameplayInfoPanel()
+    void Refresh()
     {
-        if (rootRect != null)
-            rootRect.gameObject.SetActive(false);
-
-        Canvas canvas = ResolveCanvas();
-        Transform existingRoot = canvas != null ? canvas.transform.Find("HudInfoPanel") : null;
-        if (existingRoot != null && existingRoot.gameObject.activeSelf)
-            existingRoot.gameObject.SetActive(false);
-    }
-
-    public void Refresh()
-    {
-        if (!ShowGameplayInfoPanel)
-            return;
-
         if (dayValueText == null || hourValueText == null || goldValueText == null || levelValueText == null || xpValueText == null)
             return;
 
@@ -277,20 +246,7 @@ public class GoldHUD : MonoBehaviour
     {
         PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
         if (player == null)
-        {
-            trackedPlayer = null;
-            inventory = null;
-            progression = null;
             return;
-        }
-
-        if (trackedPlayer != player)
-        {
-            trackedPlayer = player;
-            inventory = player.GetComponent<Inventory>();
-            progression = player.GetComponent<PlayerProgression>() ?? player.gameObject.AddComponent<PlayerProgression>();
-            return;
-        }
 
         if (inventory == null)
             inventory = player.GetComponent<Inventory>();

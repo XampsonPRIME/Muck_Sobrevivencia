@@ -54,7 +54,6 @@ public class RiverSystem : MonoBehaviour
     Transform riverEndPrefabRoot;
     AudioSource ambientSource;
     Transform playerTransform;
-    bool ambientPausedForCombat;
     static Material sharedRiverMaterial;
     float refreshTimer;
     bool initialized;
@@ -463,21 +462,6 @@ public class RiverSystem : MonoBehaviour
             if (ambientSource != null && ambientSource.isPlaying)
                 ambientSource.Stop();
             return;
-        }
-
-        if (PlayerMovement.IsCombatMusicActive)
-        {
-            if (ambientSource.isPlaying)
-                ambientSource.Pause();
-
-            ambientPausedForCombat = true;
-            return;
-        }
-
-        if (ambientPausedForCombat)
-        {
-            ambientPausedForCombat = false;
-            ambientSource.UnPause();
         }
 
         if (!TryGetNearestWaterAnchor(playerTransform != null ? playerTransform.position : startOrigin, out Vector3 anchor))

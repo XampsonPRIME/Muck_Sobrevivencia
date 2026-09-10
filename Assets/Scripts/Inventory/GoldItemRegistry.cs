@@ -16,15 +16,8 @@ public static class GoldItemRegistry
         goldItem = itemObject.AddComponent<Item>();
         goldItem.itemName = "Gold";
         goldItem.itemType = ItemType.Resource;
-        goldItem.category = InventoryCategory.Special;
-        goldItem.rarity = ItemRarity.Common;
-        goldItem.description = "Moeda usada em comercio.";
-        goldItem.weight = 0f;
-        goldItem.maxStack = Item.ResourceStackLimit;
         goldItem.toolType = ToolType.None;
         goldItem.toolDamage = 0;
-        goldItem.buyPrice = 0;
-        goldItem.sellPrice = 0;
         goldItem.icon = GetGoldSprite();
 
         return goldItem;

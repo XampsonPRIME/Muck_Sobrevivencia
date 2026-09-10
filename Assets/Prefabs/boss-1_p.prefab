@@ -135,7 +135,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BossEnemy
   maxHealth: 10
-  contactDamage: 46
+  contactDamage: 28
   attackRange: 2.4
   attackCooldown: 1.3
   moveSpeed: 2.6

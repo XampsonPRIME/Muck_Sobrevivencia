@@ -37,7 +37,7 @@ public class DeathLoot : MonoBehaviour
 
         foreach (InventoryItem storedItem in storedItems)
         {
-            if (storedItem == null || string.IsNullOrWhiteSpace(storedItem.itemName) || storedItem.quantity <= 0)
+            if (storedItem == null || storedItem.itemData == null || storedItem.quantity <= 0)
                 continue;
 
             inventory.AddInventoryItem(storedItem);
@@ -69,7 +69,7 @@ public class DeathLoot : MonoBehaviour
 
         foreach (InventoryItem item in items)
         {
-            if (item == null || string.IsNullOrWhiteSpace(item.itemName) || item.quantity <= 0)
+            if (item == null || item.itemData == null || item.quantity <= 0)
                 continue;
 
             storedItems.Add(item.Clone());

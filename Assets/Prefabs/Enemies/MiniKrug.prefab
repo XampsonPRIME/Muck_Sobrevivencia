@@ -535,7 +535,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MiniKrug
   maxHealth: 6
-  contactDamage: 15
+  contactDamage: 8
   attackRange: 1.25
   attackCooldown: 1
   moveSpeed: 4
@@ -552,7 +552,6 @@ MonoBehaviour:
   healthUiVisibleDuration: 2
   damagePopupLifetime: 0.8
   damagePopupRiseSpeed: 1.4
-  zombieVisualScale: 1.45
 --- !u!1 &5444975603017879059
 GameObject:
   m_ObjectHideFlags: 0
