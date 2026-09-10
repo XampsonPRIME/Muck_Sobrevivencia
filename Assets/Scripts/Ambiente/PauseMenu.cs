@@ -3,13 +3,13 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 public class PauseMenu : MonoBehaviour
 {
     const string MasterVolumeKey = "settings.master_volume";
     const string MouseSensitivityKey = "settings.mouse_sensitivity";
+    const float ResetConfirmDuration = 4f;
 
     Canvas canvas;
     GraphicRaycaster graphicRaycaster;
@@ -18,8 +18,14 @@ public class PauseMenu : MonoBehaviour
     GameObject settingsPanel;
     TextMeshProUGUI mainSessionInfoText;
     TextMeshProUGUI settingsSessionInfoText;
+    TextMeshProUGUI resolutionValueText;
+    TextMeshProUGUI fullscreenValueText;
     InputAction pauseAction;
     PlayerMovement playerMovement;
+    Button resetPlayerButton;
+    TextMeshProUGUI resetPlayerButtonText;
+    float resetConfirmUntil;
+    int selectedResolutionIndex;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -57,7 +63,7 @@ public class PauseMenu : MonoBehaviour
             return;
         }
 
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
         ResolvePlayer();
         LoadSettings();
         BuildUI();
@@ -69,7 +75,7 @@ public class PauseMenu : MonoBehaviour
         ResolvePlayer();
         UpdateSessionInfo();
 
-        if (GameState.IsInLobby || GameState.IsPlayerDead)
+        if (GameState.IsInLobby || GameState.IsWorldLoading || GameState.IsPlayerDead)
         {
             if (GameState.IsPaused)
                 ResumeGame();
@@ -77,18 +83,22 @@ public class PauseMenu : MonoBehaviour
             return;
         }
 
+        if (GameState.IsVendorOpen || GameState.IsCraftingOpen || GameState.IsBestiaryOpen || GameState.IsQuestJournalOpen || GameState.IsDemoGuideOpen || GameState.LastUiCloseFrame == Time.frameCount)
+            return;
+
         if (pauseAction.WasPressedThisFrame())
             HandlePausePressed();
 
         if (!GameState.IsPaused)
             return;
 
+        UpdateResetConfirmationState();
         HandleMouseFallbackClick();
     }
 
     void HandlePausePressed()
     {
-        if (GameState.IsInventoryOpen)
+        if (GameState.IsInventoryOpen || GameState.IsBestiaryOpen || GameState.IsQuestJournalOpen)
             return;
 
         if (!GameState.IsPaused)
@@ -114,6 +124,7 @@ public class PauseMenu : MonoBehaviour
         Cursor.visible = true;
         SetMenuVisible(true);
         ShowMainPanel();
+        ClearResetConfirmation();
     }
 
     void ResumeGame()
@@ -121,8 +132,9 @@ public class PauseMenu : MonoBehaviour
         GameState.IsPaused = false;
         Time.timeScale = 1f;
         SetMenuVisible(false);
+        ClearResetConfirmation();
 
-        if (!GameState.IsInLobby && !GameState.IsInventoryOpen)
+        if (!GameState.IsInLobby && !GameState.IsWorldLoading && !GameState.IsInventoryOpen && !GameState.IsBestiaryOpen && !GameState.IsQuestJournalOpen)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -136,6 +148,8 @@ public class PauseMenu : MonoBehaviour
 
         if (settingsPanel != null)
             settingsPanel.SetActive(true);
+
+        RefreshDisplaySettingsUi();
     }
 
     void ShowMainPanel()
@@ -145,6 +159,8 @@ public class PauseMenu : MonoBehaviour
 
         if (mainPanel != null)
             mainPanel.SetActive(true);
+
+        ClearResetConfirmation();
     }
 
     void QuitGame()
@@ -174,6 +190,8 @@ public class PauseMenu : MonoBehaviour
 
         if (playerMovement != null)
             playerMovement.mouseSensitivity = Mathf.Clamp(mouseSensitivity, 0.3f, 10f);
+
+        selectedResolutionIndex = DisplaySettingsManager.GetCurrentResolutionIndex();
     }
 
     void SetMasterVolume(float value)
@@ -194,14 +212,26 @@ public class PauseMenu : MonoBehaviour
         PlayerPrefs.Save();
     }
 
-    void EnsureEventSystem()
+    void SetInterfaceScale(float value)
     {
-        if (EventSystem.current != null || FindFirstObjectByType<EventSystem>() != null)
+        DisplaySettingsManager.SetUiScale(value);
+    }
+
+    void ChangeResolution(int direction)
+    {
+        IReadOnlyList<DisplaySettingsManager.ResolutionOption> options = DisplaySettingsManager.GetResolutionOptions();
+        if (options == null || options.Count == 0)
             return;
 
-        GameObject eventSystemObject = new GameObject("EventSystem");
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<InputSystemUIInputModule>();
+        selectedResolutionIndex = Mathf.Clamp(selectedResolutionIndex + direction, 0, options.Count - 1);
+        DisplaySettingsManager.SetResolutionByIndex(selectedResolutionIndex);
+        RefreshDisplaySettingsUi();
+    }
+
+    void ToggleFullscreen()
+    {
+        DisplaySettingsManager.SetFullscreen(!DisplaySettingsManager.IsFullscreen);
+        RefreshDisplaySettingsUi();
     }
 
     void HandleMouseFallbackClick()
@@ -241,8 +271,7 @@ public class PauseMenu : MonoBehaviour
         canvas.sortingOrder = 460;
 
         CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        DisplaySettingsManager.ConfigureCanvasScaler(scaler);
         graphicRaycaster = canvasObject.AddComponent<GraphicRaycaster>();
 
         overlayObject = CreateUiObject("PauseOverlay", canvas.transform);
@@ -255,14 +284,16 @@ public class PauseMenu : MonoBehaviour
         Image overlayImage = overlayObject.AddComponent<Image>();
         overlayImage.color = new Color(0.03f, 0.04f, 0.06f, 0.82f);
 
-        mainPanel = CreatePanel("MainPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(560f, 520f));
+        mainPanel = CreatePanel("MainPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(560f, 620f));
         CreateTitle(mainPanel.transform, "Pausado");
-        CreateButton(mainPanel.transform, "ResumeButton", "Continuar", new Vector2(0f, 95f), new Color(0.72f, 0.56f, 0.18f, 1f), ResumeGame);
-        CreateButton(mainPanel.transform, "SettingsButton", "Configuracoes", new Vector2(0f, -15f), new Color(0.34f, 0.54f, 0.78f, 1f), OpenSettings);
-        CreateButton(mainPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -125f), new Color(0.68f, 0.29f, 0.24f, 1f), QuitGame);
-        mainSessionInfoText = CreateInfoBlock(mainPanel.transform, new Vector2(0f, -225f));
+        CreateButton(mainPanel.transform, "ResumeButton", "Continuar", new Vector2(0f, 145f), new Color(0.72f, 0.56f, 0.18f, 1f), ResumeGame);
+        CreateButton(mainPanel.transform, "SettingsButton", "Configuracoes", new Vector2(0f, 35f), new Color(0.34f, 0.54f, 0.78f, 1f), OpenSettings);
+        resetPlayerButton = CreateButton(mainPanel.transform, "ResetPlayerButton", "Reiniciar personagem", new Vector2(0f, -75f), new Color(0.78f, 0.4f, 0.18f, 1f), HandleResetPlayerPressed);
+        resetPlayerButtonText = resetPlayerButton != null ? resetPlayerButton.GetComponentInChildren<TextMeshProUGUI>() : null;
+        CreateButton(mainPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -185f), new Color(0.68f, 0.29f, 0.24f, 1f), QuitGame);
+        mainSessionInfoText = CreateInfoBlock(mainPanel.transform, new Vector2(0f, -305f));
 
-        settingsPanel = CreatePanel("SettingsPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(640f, 560f));
+        settingsPanel = CreatePanel("SettingsPanel", overlayObject.transform, new Vector2(0f, 0f), new Vector2(640f, 680f));
         CreateTitle(settingsPanel.transform, "Configuracoes");
         CreateSliderRow(settingsPanel.transform, "Volume", new Vector2(0f, 70f), 0f, 1f, AudioListener.volume, SetMasterVolume);
         CreateSliderRow(
@@ -274,9 +305,14 @@ public class PauseMenu : MonoBehaviour
             playerMovement != null ? playerMovement.mouseSensitivity : PlayerPrefs.GetFloat(MouseSensitivityKey, 2f),
             SetMouseSensitivity
         );
-        settingsSessionInfoText = CreateInfoBlock(settingsPanel.transform, new Vector2(0f, -165f));
+        resolutionValueText = CreateOptionRow(settingsPanel.transform, "Resolucao", new Vector2(0f, -150f), () => ChangeResolution(-1), () => ChangeResolution(1));
+        fullscreenValueText = CreateToggleRow(settingsPanel.transform, "Modo de tela", new Vector2(0f, -250f), ToggleFullscreen);
+        CreateSliderRow(settingsPanel.transform, "Interface", new Vector2(0f, -150f), 0.8f, 1.45f, DisplaySettingsManager.CurrentUiScale, SetInterfaceScale);
+        MoveRow("InterfaceRow", new Vector2(0f, -350f));
+        settingsSessionInfoText = CreateInfoBlock(settingsPanel.transform, new Vector2(0f, -470f));
         UpdateSessionInfo();
-        CreateButton(settingsPanel.transform, "BackButton", "Voltar", new Vector2(0f, -220f), new Color(0.72f, 0.56f, 0.18f, 1f), ShowMainPanel);
+        CreateButton(settingsPanel.transform, "BackButton", "Voltar", new Vector2(0f, -520f), new Color(0.72f, 0.56f, 0.18f, 1f), ShowMainPanel);
+        RefreshDisplaySettingsUi();
     }
 
     GameObject CreatePanel(string name, Transform parent, Vector2 anchoredPosition, Vector2 size)
@@ -399,6 +435,108 @@ public class PauseMenu : MonoBehaviour
         slider.onValueChanged.AddListener(onChanged);
     }
 
+    TextMeshProUGUI CreateOptionRow(Transform parent, string label, Vector2 anchoredPosition, UnityEngine.Events.UnityAction onLeft, UnityEngine.Events.UnityAction onRight)
+    {
+        GameObject rowObject = CreateUiObject($"{label}Row", parent);
+        RectTransform rowRect = rowObject.AddComponent<RectTransform>();
+        rowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        rowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        rowRect.pivot = new Vector2(0.5f, 0.5f);
+        rowRect.anchoredPosition = anchoredPosition;
+        rowRect.sizeDelta = new Vector2(520f, 90f);
+
+        GameObject labelObject = CreateUiObject($"{label}Label", rowObject.transform);
+        RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+        labelRect.anchorMin = new Vector2(0f, 0.5f);
+        labelRect.anchorMax = new Vector2(0f, 0.5f);
+        labelRect.pivot = new Vector2(0f, 0.5f);
+        labelRect.anchoredPosition = new Vector2(0f, 22f);
+        labelRect.sizeDelta = new Vector2(260f, 36f);
+
+        TextMeshProUGUI labelText = labelObject.AddComponent<TextMeshProUGUI>();
+        labelText.text = label;
+        labelText.alignment = TextAlignmentOptions.Left;
+        labelText.fontSize = 28f;
+        labelText.color = Color.white;
+
+        Button leftButton = CreateButton(rowObject.transform, $"{label}LeftButton", "<", new Vector2(-190f, -14f), new Color(0.35f, 0.45f, 0.64f, 1f), onLeft);
+        ResizeButton(leftButton, new Vector2(72f, 56f));
+
+        Button rightButton = CreateButton(rowObject.transform, $"{label}RightButton", ">", new Vector2(190f, -14f), new Color(0.35f, 0.45f, 0.64f, 1f), onRight);
+        ResizeButton(rightButton, new Vector2(72f, 56f));
+
+        GameObject valueObject = CreateUiObject($"{label}Value", rowObject.transform);
+        RectTransform valueRect = valueObject.AddComponent<RectTransform>();
+        valueRect.anchorMin = new Vector2(0.5f, 0.5f);
+        valueRect.anchorMax = new Vector2(0.5f, 0.5f);
+        valueRect.pivot = new Vector2(0.5f, 0.5f);
+        valueRect.anchoredPosition = new Vector2(0f, -14f);
+        valueRect.sizeDelta = new Vector2(220f, 40f);
+
+        TextMeshProUGUI valueText = valueObject.AddComponent<TextMeshProUGUI>();
+        valueText.alignment = TextAlignmentOptions.Center;
+        valueText.fontSize = 28f;
+        valueText.fontStyle = FontStyles.Bold;
+        valueText.color = new Color(0.94f, 0.97f, 1f, 1f);
+        valueText.text = "-";
+        return valueText;
+    }
+
+    TextMeshProUGUI CreateToggleRow(Transform parent, string label, Vector2 anchoredPosition, UnityEngine.Events.UnityAction onClick)
+    {
+        GameObject rowObject = CreateUiObject($"{label}Row", parent);
+        RectTransform rowRect = rowObject.AddComponent<RectTransform>();
+        rowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        rowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        rowRect.pivot = new Vector2(0.5f, 0.5f);
+        rowRect.anchoredPosition = anchoredPosition;
+        rowRect.sizeDelta = new Vector2(520f, 90f);
+
+        GameObject labelObject = CreateUiObject($"{label}Label", rowObject.transform);
+        RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+        labelRect.anchorMin = new Vector2(0f, 0.5f);
+        labelRect.anchorMax = new Vector2(0f, 0.5f);
+        labelRect.pivot = new Vector2(0f, 0.5f);
+        labelRect.anchoredPosition = new Vector2(0f, 22f);
+        labelRect.sizeDelta = new Vector2(260f, 36f);
+
+        TextMeshProUGUI labelText = labelObject.AddComponent<TextMeshProUGUI>();
+        labelText.text = label;
+        labelText.alignment = TextAlignmentOptions.Left;
+        labelText.fontSize = 28f;
+        labelText.color = Color.white;
+
+        Button toggleButton = CreateButton(rowObject.transform, $"{label}ToggleButton", "Trocar", new Vector2(0f, -14f), new Color(0.35f, 0.45f, 0.64f, 1f), onClick);
+        ResizeButton(toggleButton, new Vector2(220f, 56f));
+
+        TextMeshProUGUI buttonText = toggleButton.GetComponentInChildren<TextMeshProUGUI>();
+        return buttonText;
+    }
+
+    void ResizeButton(Button button, Vector2 size)
+    {
+        if (button == null)
+            return;
+
+        RectTransform rect = button.GetComponent<RectTransform>();
+        if (rect != null)
+            rect.sizeDelta = size;
+    }
+
+    void MoveRow(string rowName, Vector2 anchoredPosition)
+    {
+        if (settingsPanel == null)
+            return;
+
+        Transform row = settingsPanel.transform.Find(rowName);
+        if (row == null)
+            return;
+
+        RectTransform rowRect = row.GetComponent<RectTransform>();
+        if (rowRect != null)
+            rowRect.anchoredPosition = anchoredPosition;
+    }
+
     TextMeshProUGUI CreateInfoBlock(Transform parent, Vector2 anchoredPosition)
     {
         GameObject infoObject = CreateUiObject("SessionInfo", parent);
@@ -442,6 +580,20 @@ public class PauseMenu : MonoBehaviour
 
         if (settingsSessionInfoText != null)
             settingsSessionInfoText.text = text;
+    }
+
+    void RefreshDisplaySettingsUi()
+    {
+        IReadOnlyList<DisplaySettingsManager.ResolutionOption> options = DisplaySettingsManager.GetResolutionOptions();
+        if (options != null && options.Count > 0)
+        {
+            selectedResolutionIndex = Mathf.Clamp(DisplaySettingsManager.GetCurrentResolutionIndex(), 0, options.Count - 1);
+            if (resolutionValueText != null)
+                resolutionValueText.text = options[selectedResolutionIndex].Label;
+        }
+
+        if (fullscreenValueText != null)
+            fullscreenValueText.text = DisplaySettingsManager.IsFullscreen ? "Tela cheia" : "Janela";
     }
 
     Button CreateButton(Transform parent, string objectName, string label, Vector2 anchoredPosition, Color buttonColor, UnityEngine.Events.UnityAction onClick)
@@ -496,6 +648,44 @@ public class PauseMenu : MonoBehaviour
     {
         if (overlayObject != null)
             overlayObject.SetActive(visible);
+    }
+
+    void HandleResetPlayerPressed()
+    {
+        if (SaveGameManager.Instance == null)
+            return;
+
+        if (Time.unscaledTime > resetConfirmUntil)
+        {
+            resetConfirmUntil = Time.unscaledTime + ResetConfirmDuration;
+            SetResetButtonLabel("Confirmar reinicio");
+            return;
+        }
+
+        if (SaveGameManager.Instance.ResetCurrentPlayerProgress(true))
+            ResumeGame();
+        else
+            MessageSystem.Instance?.ShowMessage("Nao foi possivel reiniciar o personagem.");
+    }
+
+    void UpdateResetConfirmationState()
+    {
+        if (resetConfirmUntil <= 0f || Time.unscaledTime <= resetConfirmUntil)
+            return;
+
+        ClearResetConfirmation();
+    }
+
+    void ClearResetConfirmation()
+    {
+        resetConfirmUntil = 0f;
+        SetResetButtonLabel("Reiniciar personagem");
+    }
+
+    void SetResetButtonLabel(string label)
+    {
+        if (resetPlayerButtonText != null)
+            resetPlayerButtonText.text = label;
     }
 
     void OnDestroy()

@@ -74,7 +74,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
-  m_Name: 
+  m_Name: ''
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
@@ -1817,6 +1817,7 @@ GameObject:
   - component: {fileID: 2120172959652317869}
   - component: {fileID: 4120695229937473775}
   - component: {fileID: 5760838610541790464}
+  - component: {fileID: 1086424059847682311}
   m_Layer: 5
   m_Name: Stamina
   m_TagString: Untagged
@@ -1908,6 +1909,19 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &1086424059847682311
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8105538958085079961}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 263bc7e4e17f0fa418773ab4076b3a33, type: 3}
+  m_Name: ''
+  m_EditorClassIdentifier: Assembly-CSharp::StaminaUI
+  staminaFill: {fileID: 1879024277725667876}
 --- !u!1 &8754577444899957657
 GameObject:
   m_ObjectHideFlags: 0

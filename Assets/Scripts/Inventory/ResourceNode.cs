@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ResourceNode : MonoBehaviour
 {
+    static readonly List<ResourceNode> activeNodes = new List<ResourceNode>();
+
     public string itemName = "Toras";
     public Sprite icon;
 
@@ -15,21 +18,54 @@ public class ResourceNode : MonoBehaviour
     public Item itemData;
 
     public ToolType requiredTool = ToolType.None;
+    public bool allowEmptyHand = true;
     public int emptyHandDamage = 1;
     public int emptyHandMinDrop = 1;
     public int emptyHandMaxDrop = 1;
+    [Header("Respawn")]
+    public bool respawnAfterDepleted = true;
+    public Vector2 respawnDelayRange = new Vector2(180f, 300f);
+
     public int CurrentHealth => currentHealth;
+    public bool IsDepleted => depleted;
+    public static IReadOnlyList<ResourceNode> ActiveNodes => activeNodes;
+
+    bool depleted;
+    Coroutine respawnRoutine;
+    Renderer[] cachedRenderers;
+    Collider[] cachedColliders;
+
+    void OnEnable()
+    {
+        if (!activeNodes.Contains(this))
+            activeNodes.Add(this);
+    }
+
+    void OnDisable()
+    {
+        activeNodes.Remove(this);
+    }
 
     void Start()
     {
         LanNetworkEntity.Ensure(this);
         currentHealth = maxHealth;
+        CacheVisibilityComponents();
     }
 
     public void Hit(Inventory inventory, Hotbar hotbar, ToolType currentTool, int toolDamage)
     {
-        bool usingEmptyHand = currentTool == ToolType.None;
+        if (depleted)
+            return;
+
+        bool usingEmptyHand = allowEmptyHand && currentTool == ToolType.None;
         bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
+
+        if (!usingCorrectTool && !usingEmptyHand)
+        {
+            MessageSystem.Instance?.ShowMessage(GetToolMessage());
+            return;
+        }
 
         // Ferramenta errada continua bloqueada. Mao vazia agora funciona com rendimento baixo.
         if (!usingCorrectTool && !usingEmptyHand)
@@ -58,7 +94,7 @@ public class ResourceNode : MonoBehaviour
         if (currentHealth <= 0)
         {
             DropResource(inventory, hotbar, usingCorrectTool);
-            Destroy(gameObject);
+            Deplete();
         }
     }
 
@@ -69,7 +105,13 @@ public class ResourceNode : MonoBehaviour
         rewardAmount = 0;
         destroyed = false;
 
-        bool usingEmptyHand = currentTool == ToolType.None;
+        if (depleted)
+        {
+            remainingHealth = 0;
+            return false;
+        }
+
+        bool usingEmptyHand = allowEmptyHand && currentTool == ToolType.None;
         bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
         if (!usingCorrectTool && !usingEmptyHand)
         {
@@ -91,14 +133,17 @@ public class ResourceNode : MonoBehaviour
         remainingHealth = Mathf.Max(0, currentHealth);
 
         if (destroyed)
-            Destroy(gameObject);
+            Deplete();
 
         return true;
     }
 
     public bool CanBeHitBy(ToolType currentTool)
     {
-        bool usingEmptyHand = currentTool == ToolType.None;
+        if (depleted)
+            return false;
+
+        bool usingEmptyHand = allowEmptyHand && currentTool == ToolType.None;
         bool usingCorrectTool = requiredTool == ToolType.None || currentTool == requiredTool;
         return usingCorrectTool || usingEmptyHand;
     }
@@ -108,7 +153,19 @@ public class ResourceNode : MonoBehaviour
         currentHealth = Mathf.Max(0, networkHealth);
 
         if (destroyed)
-            Destroy(gameObject);
+        {
+            HideNode();
+            return;
+        }
+
+        depleted = false;
+        ShowNode();
+    }
+
+    public void PlayHitFeedback()
+    {
+        if (hitEffect != null)
+            Instantiate(hitEffect, transform.position + Vector3.up, Quaternion.identity);
     }
 
     string GetToolMessage()
@@ -119,7 +176,7 @@ public class ResourceNode : MonoBehaviour
                 return "Use um machado para madeira.";
 
             case ToolType.Pickaxe:
-                return "Use uma picareta para pedra.";
+                return "Use uma picareta para minerar.";
 
             default:
                 return "Ferramenta inadequada.";
@@ -132,11 +189,112 @@ public class ResourceNode : MonoBehaviour
         int maxAmount = usingCorrectTool ? maxDrop : emptyHandMaxDrop;
         int amount = Random.Range(minAmount, maxAmount + 1);
 
-        inventory.AddItem(itemName, amount, itemData);
+        AncestralPowerService powers = inventory != null ? inventory.GetComponent<AncestralPowerService>() : null;
+        if (powers != null && powers.TryRollBonusResource())
+            amount += 1;
 
-        if (MessageSystem.Instance != null)
+        Item droppedItem = itemData != null ? itemData : InventoryItemResolver.Resolve(itemName);
+        if (droppedItem == null)
+            return;
+
+        Vector2 circle = Random.insideUnitCircle * 0.65f;
+        WorldItemDropFactory.Spawn(transform.position + new Vector3(circle.x, 1.2f, circle.y), droppedItem, amount, ~0, 1.25f);
+    }
+
+    bool ShouldSpawnOakWoodPickup()
+    {
+        return requiredTool == ToolType.Axe && OakWoodDropVisualFactory.IsOakWood(itemName);
+    }
+
+    void SpawnOakWoodPickups(int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        Item oakWoodItem = itemData != null ? itemData : OakWoodItemRegistry.GetOrCreate();
+        for (int i = 0; i < amount; i++)
         {
-            MessageSystem.Instance.ShowMessage($"+{amount} {itemName}");
+            Vector2 circle = Random.insideUnitCircle * 0.9f;
+            Vector3 spawnPosition = transform.position + new Vector3(circle.x, 1.35f + i * 0.04f, circle.y);
+            OakWoodDropVisualFactory.Spawn(spawnPosition, oakWoodItem, ~0, 1.25f);
         }
+    }
+
+    void Deplete()
+    {
+        currentHealth = 0;
+        HideNode();
+
+        if (!respawnAfterDepleted)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        if (ShouldControlRespawn())
+        {
+            if (respawnRoutine != null)
+                StopCoroutine(respawnRoutine);
+
+            respawnRoutine = StartCoroutine(RespawnAfterDelay());
+        }
+    }
+
+    bool ShouldControlRespawn()
+    {
+        LanMultiplayerManager lan = LanMultiplayerManager.Instance;
+        return lan == null || !lan.IsMultiplayerActive || lan.IsServerAuthority;
+    }
+
+    System.Collections.IEnumerator RespawnAfterDelay()
+    {
+        float minDelay = Mathf.Max(1f, respawnDelayRange.x);
+        float maxDelay = Mathf.Max(minDelay, respawnDelayRange.y);
+        yield return new WaitForSeconds(Random.Range(minDelay, maxDelay));
+
+        currentHealth = maxHealth;
+        depleted = false;
+        ShowNode();
+
+        LanMultiplayerManager lan = LanMultiplayerManager.Instance;
+        if (lan != null)
+            lan.NotifyResourceRespawned(this, currentHealth);
+    }
+
+    void HideNode()
+    {
+        depleted = true;
+        SetNodeVisible(false);
+    }
+
+    void ShowNode()
+    {
+        SetNodeVisible(true);
+    }
+
+    void SetNodeVisible(bool visible)
+    {
+        CacheVisibilityComponents();
+
+        for (int i = 0; i < cachedRenderers.Length; i++)
+        {
+            if (cachedRenderers[i] != null)
+                cachedRenderers[i].enabled = visible;
+        }
+
+        for (int i = 0; i < cachedColliders.Length; i++)
+        {
+            if (cachedColliders[i] != null)
+                cachedColliders[i].enabled = visible;
+        }
+    }
+
+    void CacheVisibilityComponents()
+    {
+        if (cachedRenderers == null || cachedRenderers.Length == 0)
+            cachedRenderers = GetComponentsInChildren<Renderer>(true);
+
+        if (cachedColliders == null || cachedColliders.Length == 0)
+            cachedColliders = GetComponentsInChildren<Collider>(true);
     }
 }

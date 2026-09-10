@@ -1,11 +1,13 @@
 using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 public class WorldGenerator : MonoBehaviour
 {
     Transform player;
     RiverSystem riverSystem;
     DistantMountains distantMountains;
+    Transform generatedWorldRoot;
 
     public GameObject chunkPrefab;
     public RiverSystem riverSystemPrefab;
@@ -15,6 +17,7 @@ public class WorldGenerator : MonoBehaviour
     public int chunkSize = 50;
     public int viewDistance = 2;
     public int maxChunkCreationsPerFrame = 1;
+    public int loadingChunkCreationsPerFrame = 4;
 
     private readonly Dictionary<Vector2Int, GameObject> chunks = new Dictionary<Vector2Int, GameObject>();
     readonly Queue<Vector2Int> pendingChunkQueue = new Queue<Vector2Int>();
@@ -22,6 +25,15 @@ public class WorldGenerator : MonoBehaviour
     Vector2Int lastPlayerChunk;
     bool hasLastPlayerChunk;
     bool initialized;
+    bool loggedMissingPlayerError;
+
+    public bool IsInitialized => initialized;
+    public int PendingChunkCount => pendingChunkQueue.Count;
+    public int ActiveChunkCount => chunks.Count;
+    public int InitialChunkTargetCount => Mathf.Max(1, (viewDistance * 2 + 1) * (viewDistance * 2 + 1));
+    public int InitialChunkReadyCount => CountInitialChunkCoverage();
+    public float LoadingProgress => !initialized ? 0f : Mathf.Clamp01(InitialChunkReadyCount / (float)InitialChunkTargetCount);
+    public bool IsInitialWorldReady => initialized && pendingChunkQueue.Count == 0 && HasInitialChunkCoverage();
 
     void Start()
     {
@@ -43,11 +55,19 @@ public class WorldGenerator : MonoBehaviour
             InitializeWorld();
         }
 
+        RefreshPlayerFocus();
+
         if (player == null)
             return;
 
         Vector2Int currentChunk = GetPlayerChunkCoord();
-        if (!hasLastPlayerChunk || currentChunk != lastPlayerChunk)
+        bool needsInitialLoadingRefresh =
+            GameState.IsWorldLoading &&
+            initialized &&
+            InitialChunkReadyCount < InitialChunkTargetCount &&
+            pendingChunkQueue.Count == 0;
+
+        if (!hasLastPlayerChunk || currentChunk != lastPlayerChunk || needsInitialLoadingRefresh)
         {
             UpdateChunkTargets(force: true);
             lastPlayerChunk = currentChunk;
@@ -57,10 +77,25 @@ public class WorldGenerator : MonoBehaviour
         ProcessPendingChunkCreates();
     }
 
+    void RefreshPlayerFocus()
+    {
+        Transform currentFocus = LanMultiplayerManager.FindWorldFocusTransform();
+        if (currentFocus == null || currentFocus == player)
+            return;
+
+        player = currentFocus;
+        hasLastPlayerChunk = false;
+        loggedMissingPlayerError = false;
+
+        if (initialized && riverSystem != null)
+            riverSystem.Initialize(player.position);
+    }
+
     void InitializeWorld()
     {
         player = LanMultiplayerManager.FindWorldFocusTransform();
-        riverSystem = FindFirstObjectByType<RiverSystem>();
+        EnsureGeneratedWorldRoot();
+        riverSystem = FindSceneComponent<RiverSystem>();
 
         if (riverSystem == null)
         {
@@ -68,11 +103,15 @@ public class WorldGenerator : MonoBehaviour
             {
                 riverSystem = Instantiate(riverSystemPrefab, Vector3.zero, Quaternion.identity);
                 riverSystem.name = "RiverSystem";
+                SceneManager.MoveGameObjectToScene(riverSystem.gameObject, gameObject.scene);
+                riverSystem.transform.SetParent(generatedWorldRoot, true);
             }
             else
             {
                 GameObject riverObject = new GameObject("RiverSystem");
                 riverSystem = riverObject.AddComponent<RiverSystem>();
+                SceneManager.MoveGameObjectToScene(riverObject, gameObject.scene);
+                riverObject.transform.SetParent(generatedWorldRoot, true);
             }
         }
 
@@ -96,13 +135,22 @@ public class WorldGenerator : MonoBehaviour
     {
         if (player == null)
         {
-            Debug.LogError("PLAYER NÃO ATRIBUÍDO!");
+            if (!loggedMissingPlayerError)
+            {
+                Debug.LogWarning("WorldGenerator aguardando player para iniciar geração do mundo.", this);
+                loggedMissingPlayerError = true;
+            }
             return;
         }
+
+        loggedMissingPlayerError = false;
 
         Vector2Int playerChunk = GetPlayerChunkCoord();
 
         HashSet<Vector2Int> neededChunks = new HashSet<Vector2Int>();
+
+        if (!chunks.ContainsKey(playerChunk) && !queuedChunkCoords.Contains(playerChunk))
+            QueueChunk(playerChunk);
 
         for (int x = -viewDistance; x <= viewDistance; x++)
         {
@@ -142,7 +190,10 @@ public class WorldGenerator : MonoBehaviour
 
     void ProcessPendingChunkCreates()
     {
-        int chunkBudget = Mathf.Max(1, maxChunkCreationsPerFrame);
+        int requestedBudget = GameState.IsWorldLoading
+            ? Mathf.Max(maxChunkCreationsPerFrame, loadingChunkCreationsPerFrame)
+            : maxChunkCreationsPerFrame;
+        int chunkBudget = Mathf.Max(1, requestedBudget);
         int created = 0;
 
         while (created < chunkBudget && pendingChunkQueue.Count > 0)
@@ -168,11 +219,39 @@ public class WorldGenerator : MonoBehaviour
                Mathf.Abs(coord.y - playerChunk.y) <= viewDistance;
     }
 
+    int CountInitialChunkCoverage()
+    {
+        if (player == null)
+            return 0;
+
+        int readyCount = 0;
+        Vector2Int playerChunk = GetPlayerChunkCoord();
+        for (int x = -viewDistance; x <= viewDistance; x++)
+        {
+            for (int z = -viewDistance; z <= viewDistance; z++)
+            {
+                Vector2Int coord = new Vector2Int(playerChunk.x + x, playerChunk.y + z);
+                if (chunks.ContainsKey(coord))
+                    readyCount++;
+            }
+        }
+
+        return readyCount;
+    }
+
+    bool HasInitialChunkCoverage()
+    {
+        return CountInitialChunkCoverage() >= InitialChunkTargetCount;
+    }
+
     void CreateChunk(Vector2Int coord)
     {
         Vector3 position = new Vector3(coord.x * chunkSize, 0, coord.y * chunkSize);
 
         GameObject chunk = Instantiate(chunkPrefab, position, Quaternion.identity);
+        SceneManager.MoveGameObjectToScene(chunk, gameObject.scene);
+        EnsureGeneratedWorldRoot();
+        chunk.transform.SetParent(generatedWorldRoot, true);
 
         TerrainChunk terrain = chunk.GetComponent<TerrainChunk>();
 
@@ -193,21 +272,63 @@ public class WorldGenerator : MonoBehaviour
         if (!enableDistantMountains || player == null)
             return;
 
-        distantMountains = FindFirstObjectByType<DistantMountains>();
+        EnsureGeneratedWorldRoot();
+        distantMountains = FindSceneComponent<DistantMountains>();
         if (distantMountains == null)
         {
             if (distantMountainsPrefab != null)
             {
                 distantMountains = Instantiate(distantMountainsPrefab, Vector3.zero, Quaternion.identity);
                 distantMountains.name = "DistantMountains";
+                SceneManager.MoveGameObjectToScene(distantMountains.gameObject, gameObject.scene);
+                distantMountains.transform.SetParent(generatedWorldRoot, true);
             }
             else
             {
                 GameObject mountainObject = new GameObject("DistantMountains");
                 distantMountains = mountainObject.AddComponent<DistantMountains>();
+                SceneManager.MoveGameObjectToScene(mountainObject, gameObject.scene);
+                mountainObject.transform.SetParent(generatedWorldRoot, true);
             }
         }
 
         distantMountains.Initialize(player);
+    }
+
+    void EnsureGeneratedWorldRoot()
+    {
+        if (generatedWorldRoot != null)
+            return;
+
+        string rootName = $"GeneratedWorld_{gameObject.scene.name}";
+        GameObject[] roots = gameObject.scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            if (roots[i] != null && roots[i].name == rootName)
+            {
+                generatedWorldRoot = roots[i].transform;
+                return;
+            }
+        }
+
+        GameObject rootObject = new GameObject(rootName);
+        SceneManager.MoveGameObjectToScene(rootObject, gameObject.scene);
+        generatedWorldRoot = rootObject.transform;
+    }
+
+    T FindSceneComponent<T>() where T : Component
+    {
+        GameObject[] roots = gameObject.scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            if (roots[i] == null)
+                continue;
+
+            T component = roots[i].GetComponentInChildren<T>(true);
+            if (component != null)
+                return component;
+        }
+
+        return null;
     }
 }

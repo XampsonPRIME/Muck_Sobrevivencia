@@ -144,7 +144,7 @@ chmod +x "$EXECUTABLE_PATH"
 
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<SERVICE
 [Unit]
-Description=Muck Linux Dedicated Server
+Description=Elarion: Relics of the Forgotten Dedicated Server
 After=network.target
 
 [Service]

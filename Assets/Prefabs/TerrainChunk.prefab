@@ -137,10 +137,10 @@ MonoBehaviour:
     yOffset: -0.2
     biome: 1
   - prefab: {fileID: 3656225094160004435, guid: 19bef5f74e9cf4bcfb7b611e792580a5, type: 3}
-    yOffset: 0
+    yOffset: -0.6
     biome: 0
   - prefab: {fileID: 3656225094160004435, guid: 9e3f8e8fa365c4ea5a7c743158fc58c1, type: 3}
-    yOffset: 0
+    yOffset: -0.45
     biome: 0
   - prefab: {fileID: 3656225094160004435, guid: e679013c6fb234f2c88ae4abffff4aa8, type: 3}
     yOffset: 1.4
@@ -152,11 +152,45 @@ MonoBehaviour:
     yOffset: 0
     biome: 1
   mushroomPrefab: {fileID: 3201780949669350080, guid: f01d2674ed8d4574f9939fc3da059698, type: 3}
-  treeDensity: 0.01
-  maxTreesPerChunk: 3
-  mushroomDensity: 0.03
+  enchantedForestMushroomSinglePrefab: {fileID: 0}
+  enchantedForestMushroomClusterPrefab: {fileID: 0}
+  enchantedForestClusterChance: 0.35
+  enchantedForestMushroomScaleRange: {x: 0.8, y: 1.25}
+  enchantedForestMushroomYOffset: 0.08
+  enchantedForestMushroomMinDistance: 3.6
+  gravetoPrefab: {fileID: 5972306984636934937, guid: 540c6c32b899547499773e634b96388a, type: 3}
+  gravetoDensity: 0.004
+  maxGravetosPerChunk: 4
+  minGravetoDistance: 5
+  gravetoYOffset: 0.08
+  pedraPrefab: {fileID: 4616667006717134316, guid: 27d9fb52f1ac842fd8f9bdbcb3c48648, type: 3}
+  pedraDensity: 0.0025
+  maxPedrasPerChunk: 3
+  minPedraDistance: 5
+  pedraYOffset: 0.08
+  treeDensity: 0.004
+  maxTreesPerChunk: 1
+  forestTreeHeightMultiplier: 1.15
+  forestTreeWidthMultiplier: 1.02
+  mushroomDensity: 0.012
   rockClusterCount: 3
-  generationYieldInterval: 120
+  generationYieldInterval: 60
+  forestGrassDensity: 0.25
+  maxForestGrassPerChunk: 420
+  forestGrassMinDistance: 0.35
+  forestGrassSampleStep: 5
+  forestGrassExtraCoverage: 0.15
+  forestGrassWidthRange: {x: 1.2, y: 1.8}
+  forestGrassHeightRange: {x: 0.42, y: 0.62}
+  forestGrassSpawnJitter: 0.42
+  forestGrassYOffset: 0.02
+  forestGrassRoadPadding: 1.6
+  forestGrassRenderDistance: 30
+  forestGrassWindStrength: 0.08
+  forestGrassWindSpeed: 1.65
+  forestGrassBendStrength: 0.1
+  forestGrassBaseColor: {r: 0.36, g: 0.46, b: 0.12, a: 1}
+  forestGrassTipColor: {r: 0.54, g: 0.62, b: 0.2, a: 1}
   enableRiver: 1
   riverWidth: 4
   riverBankBlend: 2.5
@@ -172,11 +206,18 @@ MonoBehaviour:
   riverChunkOverlap: 6
   riverSurfaceSmoothing: 0.7
   riverMaxSegmentGap: 4.5
-  minDistanceBetweenObjects: 7
-  minTreeDistance: 10
+  minDistanceBetweenObjects: 10
+  minTreeDistance: 28
+  groundPickupRespawnDelayRange: {x: 120, y: 240}
+  woodRespawnDelayRange: {x: 180, y: 300}
+  stoneResourceRespawnDelayRange: {x: 180, y: 300}
+  ironOreRespawnDelayRange: {x: 240, y: 420}
   rockSmallPrefab: {fileID: 4611803431950446891, guid: d1e087c0d2b404e379ca3a5b0b8c91c9, type: 3}
   rockMediumPrefab: {fileID: 687441992539456540, guid: 79412605d3b7c40f4a9b20e5da838760, type: 3}
   rockLargePrefab: {fileID: 3923582216426070236, guid: 47f48952e3e114c95a12366e66c84319, type: 3}
+  ironOreChance: 0.55
+  maxIronOrePerChunk: 1
+  minIronOreDistance: 20
   cowPrefab: {fileID: 4473973017088153482, guid: 17c490e9a89ec31409947054bcb0c4a9, type: 3}
   cowMeatItem: {fileID: 675325374166930406, guid: 99a57057cca3fea4e953c0c6ac0e7fcb, type: 3}
   cowMeatDropPrefab: {fileID: 6861233700314253629, guid: 99a57057cca3fea4e953c0c6ac0e7fcb, type: 3}
@@ -192,4 +233,4 @@ MonoBehaviour:
   terrainMaterial: {fileID: 2100000, guid: 844e863c162944f55903c7e958ca6bb7, type: 2}
   safeRadius: 12
   forwardSafeDistance: 8
-  rockDensity: 0.5
+  rockDensity: 0.25

@@ -8,6 +8,7 @@ using UnityEngine;
 public static class LinuxServerBuild
 {
     const string DefaultOutputDirectory = "Builds/LinuxServer";
+    const string DefaultExecutableName = "Elarion-Relics-of-the-Forgotten-Server";
 
     [MenuItem("Tools/Build/Build Linux Server")]
     public static void BuildFromMenu()
@@ -40,9 +41,7 @@ public static class LinuxServerBuild
 
         Directory.CreateDirectory(resolvedOutputDirectory);
 
-        string executableName = SanitizeFileName(string.IsNullOrWhiteSpace(PlayerSettings.productName)
-            ? "LinuxServer"
-            : PlayerSettings.productName);
+        string executableName = DefaultExecutableName;
 
         string locationPathName = Path.Combine(resolvedOutputDirectory, $"{executableName}.x86_64");
 

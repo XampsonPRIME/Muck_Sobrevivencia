@@ -69,11 +69,18 @@ public class ProceduralTerrain : MonoBehaviour
     public GameObject gravetoPrefab;
     public float gravetoDensity = 0.04f;
     public float gravetoRespawnTime = 20f;
+    public GameObject pedraPrefab;
+    public float pedraDensity = 0.025f;
 
-    public float treeDensity = 0.02f;
+    public float treeDensity = 0.003f;
     public float mushroomDensity = 0.03f;
 
-    public int treeStep = 6;
+    [Header("Respawn de Recursos")]
+    public Vector2 groundPickupRespawnDelayRange = new Vector2(120f, 240f);
+    public Vector2 woodRespawnDelayRange = new Vector2(180f, 300f);
+    public Vector2 stoneResourceRespawnDelayRange = new Vector2(180f, 300f);
+
+    public int treeStep = 20;
 
     [Header("🪨 Rochas")]
     public GameObject rockSmallPrefab;
@@ -238,11 +245,11 @@ public class ProceduralTerrain : MonoBehaviour
                 float dSnow = Vector2.Distance(p, snowCenter);
 
                 if (dSnow < snowRadius)
-                    colors[i] = new Color(1, 0, 0); // neve
+                    colors[i] = new Color(1, 0, 0, 0); // neve
                 else if (dDesert < dForest && dDesert < dDense)
-                    colors[i] = new Color(0, 0, 0); // deserto
+                    colors[i] = new Color(0, 0, 0, 0); // deserto
                 else
-                    colors[i] = new Color(0, 1, 0); // floresta
+                    colors[i] = new Color(0, 1, 0, 0); // floresta
 
                 i++;
             }
@@ -335,14 +342,16 @@ public class ProceduralTerrain : MonoBehaviour
 
                     float offset = selected.yOffset;
 
-                    GameObject t = Instantiate(
-                        selected.prefab,
+                    GameObject t = MeshyOakTreeRuntimeFactory.Spawn(
                         pos + Vector3.up * offset,
                         Quaternion.Euler(0, Random.Range(0, 360), 0),
-                        transform
+                        transform,
+                        selected.prefab
                     );
 
                     t.transform.localScale *= Random.Range(0.9f, 1.2f);
+                    t.transform.position += Vector3.down * MeshyOakTreeRuntimeFactory.GroundSinkDepth;
+                    ConfigureResourceRespawn(t, woodRespawnDelayRange);
                 }
 
                 // 🍄 cogumelos
@@ -354,6 +363,29 @@ public class ProceduralTerrain : MonoBehaviour
                         Quaternion.identity,
                         transform
                     );
+                }
+
+                if (gravetoPrefab != null && Random.value < gravetoDensity && isForest)
+                {
+                    GameObject graveto = Instantiate(
+                        gravetoPrefab,
+                        pos + Vector3.up * 0.08f,
+                        Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+                        transform
+                    );
+                    ConfigurePickupRespawn(graveto);
+                }
+
+                if (pedraPrefab != null && Random.value < pedraDensity)
+                {
+                    GameObject pedra = Instantiate(
+                        pedraPrefab,
+                        pos + Vector3.up * 0.08f,
+                        Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+                        transform
+                    );
+                    pedra.transform.localScale *= Random.Range(1.15f, 1.45f);
+                    ConfigurePickupRespawn(pedra);
                 }
             }
         }
@@ -380,8 +412,36 @@ public class ProceduralTerrain : MonoBehaviour
 
                 GameObject rock = Instantiate(GetRandomRock(), pos, Quaternion.identity, transform);
                 AlignRockBaseToGround(rock, pos);
+                ConfigureResourceRespawn(rock, stoneResourceRespawnDelayRange);
             }
         }
+    }
+
+    void ConfigureResourceRespawn(GameObject resourceObject, Vector2 delayRange)
+    {
+        if (resourceObject == null)
+            return;
+
+        ResourceNode resource = resourceObject.GetComponent<ResourceNode>() ??
+                                resourceObject.GetComponentInChildren<ResourceNode>();
+
+        if (resource == null)
+            return;
+
+        resource.respawnAfterDepleted = true;
+        resource.respawnDelayRange = delayRange;
+    }
+
+    void ConfigurePickupRespawn(GameObject pickup)
+    {
+        if (pickup == null)
+            return;
+
+        PickupRespawner respawner = pickup.GetComponent<PickupRespawner>();
+        if (respawner == null)
+            respawner = pickup.AddComponent<PickupRespawner>();
+
+        respawner.respawnDelayRange = groundPickupRespawnDelayRange;
     }
 
     Vector3 AlignRockSpawnToGround(Vector3 worldPos)

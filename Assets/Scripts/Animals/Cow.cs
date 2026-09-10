@@ -8,8 +8,12 @@ public class Cow : MonoBehaviour
     [Header("Drop")]
     public int minMeatDrop = 1;
     public int maxMeatDrop = 3;
+    public int minLeatherDrop = 1;
+    public int maxLeatherDrop = 2;
     public Item meatItemData;
+    public Item leatherItemData;
     public GameObject meatDropPrefab;
+    public GameObject leatherDropPrefab;
     public float dropRadius = 0.6f;
 
     [Header("Visual")]
@@ -29,6 +33,10 @@ public class Cow : MonoBehaviour
     public float maxGroundRayDistance = 40f;
     public LayerMask groundMask = ~0;
 
+    [Header("Feedback")]
+    public Vector3 uiWorldOffset = new Vector3(0f, 2.15f, 0f);
+    public float healthUiVisibleDuration = 3f;
+
     int currentHealth;
     Vector3 homePosition;
     Vector3 targetPosition;
@@ -37,11 +45,13 @@ public class Cow : MonoBehaviour
     public int CurrentHealth => currentHealth;
 
     CowSpawnPoint spawnPoint;
+    MobHealthBar healthBar;
 
     void Start()
     {
         currentHealth = maxHealth;
         homePosition = transform.position;
+        EnsureItemData();
 
         EnsureMaterials();
 
@@ -50,7 +60,10 @@ public class Cow : MonoBehaviour
             BuildProceduralModel();
 
         EnsureMainCollider();
+        EnsureStablePhysics();
         SnapToGround();
+        EnsureHealthBar();
+        UpdateHealthBar(false);
         LanNetworkEntity.Ensure(this);
         PickNewTarget(true);
     }
@@ -69,24 +82,43 @@ public class Cow : MonoBehaviour
 
     public void Hit(int damage)
     {
-        currentHealth -= Mathf.Max(1, damage);
+        int finalDamage = Mathf.Max(1, damage);
+        currentHealth -= finalDamage;
+        ShowHealthFeedback(finalDamage);
 
         if (currentHealth <= 0)
             Die();
     }
 
-    public void ApplyNetworkHit(int damage, out int rewardAmount, out string rewardItemName, out string rewardPrefabName, out int remainingHealth, out bool destroyed)
+    public void ApplyNetworkHit(
+        int damage,
+        out int meatAmount,
+        out string meatItemName,
+        out string meatPrefabName,
+        out int leatherAmount,
+        out string leatherItemName,
+        out string leatherPrefabName,
+        out int remainingHealth,
+        out bool destroyed)
     {
-        rewardItemName = meatItemData != null ? meatItemData.itemName : "Carne";
-        rewardPrefabName = meatItemData != null ? meatItemData.gameObject.name : string.Empty;
-        rewardAmount = 0;
+        EnsureItemData();
 
-        currentHealth -= Mathf.Max(1, damage);
+        meatItemName = meatItemData != null ? meatItemData.itemName : "Carne";
+        meatPrefabName = meatItemData != null ? meatItemData.gameObject.name : string.Empty;
+        leatherItemName = leatherItemData != null ? leatherItemData.itemName : CowLeatherItemRegistry.ItemName;
+        leatherPrefabName = leatherItemData != null ? leatherItemData.gameObject.name : string.Empty;
+        meatAmount = 0;
+        leatherAmount = 0;
+
+        int finalDamage = Mathf.Max(1, damage);
+        currentHealth -= finalDamage;
+        ShowHealthFeedback(finalDamage);
         destroyed = currentHealth <= 0;
 
         if (destroyed)
         {
-            rewardAmount = Random.Range(minMeatDrop, maxMeatDrop + 1);
+            meatAmount = Random.Range(minMeatDrop, maxMeatDrop + 1);
+            leatherAmount = Random.Range(minLeatherDrop, maxLeatherDrop + 1);
 
             if (spawnPoint != null)
                 spawnPoint.NotifyCowDeath(this);
@@ -100,6 +132,7 @@ public class Cow : MonoBehaviour
     public void ApplyNetworkState(int networkHealth, bool destroyed)
     {
         currentHealth = Mathf.Max(0, networkHealth);
+        UpdateHealthBar(healthBar != null);
 
         if (destroyed)
         {
@@ -311,10 +344,7 @@ public class Cow : MonoBehaviour
 
         foreach (RaycastHit hit in hits)
         {
-            if (hit.collider == null)
-                continue;
-
-            if (hit.collider.transform == transform || hit.collider.transform.IsChildOf(transform))
+            if (!IsValidGroundHit(hit))
                 continue;
 
             if (hit.distance < closestDistance)
@@ -336,7 +366,9 @@ public class Cow : MonoBehaviour
 
     void Die()
     {
-        DropMeat();
+        BestiaryService.Instance?.RecordDefeat(BestiaryDatabase.CowId);
+        DropLoot();
+        healthBar?.Hide();
 
         if (spawnPoint != null)
             spawnPoint.NotifyCowDeath(this);
@@ -344,11 +376,14 @@ public class Cow : MonoBehaviour
         Destroy(gameObject);
     }
 
-    void DropMeat()
+    void DropLoot()
     {
-        int amount = Random.Range(minMeatDrop, maxMeatDrop + 1);
+        EnsureItemData();
 
-        for (int i = 0; i < amount; i++)
+        int meatAmount = Random.Range(minMeatDrop, maxMeatDrop + 1);
+        int leatherAmount = Random.Range(minLeatherDrop, maxLeatherDrop + 1);
+
+        for (int i = 0; i < meatAmount; i++)
         {
             Vector2 circle = Random.insideUnitCircle * dropRadius;
             Vector3 spawnPos = transform.position + new Vector3(circle.x, 0.4f, circle.y);
@@ -366,8 +401,15 @@ public class Cow : MonoBehaviour
                 item.itemName = meatItemData.itemName;
                 item.icon = meatItemData.icon;
                 item.itemType = meatItemData.itemType;
+                item.category = meatItemData.category;
+                item.rarity = meatItemData.rarity;
+                item.description = meatItemData.description;
+                item.weight = meatItemData.weight;
+                item.maxStack = meatItemData.maxStack;
                 item.toolType = meatItemData.toolType;
                 item.toolDamage = meatItemData.toolDamage;
+                item.buyPrice = meatItemData.buyPrice;
+                item.sellPrice = meatItemData.sellPrice;
             }
             else
             {
@@ -388,6 +430,21 @@ public class Cow : MonoBehaviour
             consumable.handLocalPosition = new Vector3(0.06f, 0.03f, 0.12f);
             consumable.handLocalEulerAngles = new Vector3(0f, -20f, 65f);
             consumable.handLocalScale = new Vector3(1.4f, 1.4f, 1.4f);
+
+            EnsureFloatingPickup(drop, 0.2f, 1.2f);
+        }
+
+        for (int i = 0; i < leatherAmount; i++)
+        {
+            Vector2 circle = Random.insideUnitCircle * dropRadius;
+            Vector3 spawnPos = transform.position + new Vector3(circle.x, 0.45f, circle.y);
+
+            GameObject drop = leatherDropPrefab != null
+                ? Instantiate(leatherDropPrefab, spawnPos, Quaternion.identity)
+                : CreateLeatherDrop(spawnPos);
+
+            CopyItemData(drop, leatherItemData);
+            EnsureFloatingPickup(drop, 0.12f, 1.2f);
         }
     }
 
@@ -411,6 +468,94 @@ public class Cow : MonoBehaviour
         return drop;
     }
 
+    GameObject CreateLeatherDrop(Vector3 position)
+    {
+        GameObject drop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        drop.name = "Couro de Vaca Drop";
+        drop.transform.position = position;
+        drop.transform.rotation = Quaternion.Euler(Random.Range(-10f, 10f), Random.Range(0f, 360f), Random.Range(-10f, 10f));
+        drop.transform.localScale = new Vector3(0.28f, 0.05f, 0.34f);
+
+        Renderer renderer = drop.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.sharedMaterial = CreateRuntimeMaterial("CowLeatherRuntime", new Color(0.68f, 0.5f, 0.33f));
+
+        return drop;
+    }
+
+    void EnsureHealthBar()
+    {
+        if (healthBar == null)
+            healthBar = GetComponent<MobHealthBar>() ?? gameObject.AddComponent<MobHealthBar>();
+
+        healthBar.Configure(uiWorldOffset, healthUiVisibleDuration);
+    }
+
+    void UpdateHealthBar(bool visible)
+    {
+        EnsureHealthBar();
+        healthBar.SetHealth(currentHealth, maxHealth, visible);
+    }
+
+    void ShowHealthFeedback(int damage)
+    {
+        EnsureHealthBar();
+        healthBar.ShowDamage(currentHealth, maxHealth, damage);
+    }
+
+    void CopyItemData(GameObject drop, Item source)
+    {
+        if (drop == null)
+            return;
+
+        Item item = drop.GetComponent<Item>();
+        if (item == null)
+            item = drop.AddComponent<Item>();
+
+        if (source == null)
+            source = CowLeatherItemRegistry.GetOrCreate();
+
+        item.itemName = source.itemName;
+        item.icon = source.icon;
+        item.itemType = source.itemType;
+        item.category = source.category;
+        item.rarity = source.rarity;
+        item.description = source.description;
+        item.weight = source.weight;
+        item.maxStack = source.maxStack;
+        item.toolType = source.toolType;
+        item.toolDamage = source.toolDamage;
+        item.buyPrice = source.buyPrice;
+        item.sellPrice = source.sellPrice;
+    }
+
+    void EnsureFloatingPickup(GameObject drop, float mass, float collectRadius)
+    {
+        if (drop == null)
+            return;
+
+        Rigidbody rb = drop.GetComponent<Rigidbody>();
+        if (rb == null)
+            rb = drop.AddComponent<Rigidbody>();
+
+        rb.mass = mass;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        rb.AddForce(Vector3.up * 1.15f + Random.insideUnitSphere * 0.2f, ForceMode.Impulse);
+
+        FloatingPickup floatingPickup = drop.GetComponent<FloatingPickup>();
+        if (floatingPickup == null)
+            floatingPickup = drop.AddComponent<FloatingPickup>();
+
+        floatingPickup.groundMask = groundMask;
+        floatingPickup.collectRadius = collectRadius;
+    }
+
+    void EnsureItemData()
+    {
+        meatItemData ??= CowMeatItemRegistry.GetOrCreate();
+        leatherItemData ??= CowLeatherItemRegistry.GetOrCreate();
+    }
+
     void EnsureMainCollider()
     {
         Collider col = GetComponent<Collider>();
@@ -420,6 +565,51 @@ public class Cow : MonoBehaviour
             box.center = new Vector3(0f, 0.95f, 0f);
             box.size = new Vector3(1.8f, 1.9f, 1f);
         }
+    }
+
+    void EnsureStablePhysics()
+    {
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb == null)
+            rb = gameObject.AddComponent<Rigidbody>();
+
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+    }
+
+    bool IsValidGroundHit(RaycastHit hit)
+    {
+        Collider collider = hit.collider;
+        if (collider == null)
+            return false;
+
+        Transform hitTransform = collider.transform;
+        if (hitTransform == transform || hitTransform.IsChildOf(transform))
+            return false;
+
+        if (hit.normal.y < 0.35f)
+            return false;
+
+        if (collider.GetComponentInParent<Cow>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<WildBoar>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<MiniKrug>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<BossEnemy>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<PlayerMovement>() != null)
+            return false;
+
+        if (collider.GetComponentInParent<RemotePlayerReplica>() != null)
+            return false;
+
+        return true;
     }
 
     void EnsureMaterials()
@@ -436,17 +626,7 @@ public class Cow : MonoBehaviour
 
     Material CreateRuntimeMaterial(string materialName, Color color)
     {
-        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-        if (shader == null)
-            shader = Shader.Find("Standard");
-
-        if (shader == null)
-            shader = Shader.Find("Diffuse");
-
-        Material material = new Material(shader);
-        material.name = materialName;
-        material.color = color;
-        return material;
+        return RuntimeMaterialUtility.Create(materialName, color);
     }
 
     GameObject CreatePart(string partName, PrimitiveType primitiveType, Transform parent,

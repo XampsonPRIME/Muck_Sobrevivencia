@@ -5,7 +5,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 public class LobbyUI : MonoBehaviour
@@ -31,6 +30,7 @@ public class LobbyUI : MonoBehaviour
     GameObject multiplayerPopupBackdrop;
     GameObject multiplayerPopupPanel;
     LobbyUIViewRefs viewRefs;
+    WorldLibraryUI worldLibrary;
     bool waitingForSession;
     string autoSelectedSessionId;
     string lobbyErrorMessage;
@@ -39,8 +39,10 @@ public class LobbyUI : MonoBehaviour
 
     void Start()
     {
-        if (LanMultiplayerManager.IsDedicatedProcessRequested || LanMultiplayerManager.IsDedicatedRuntime)
+        LanMultiplayerManager manager = LanMultiplayerManager.Instance;
+        if (manager != null && manager.IsSessionReady && manager.IsMultiplayerActive)
         {
+            ExitLobby();
             Destroy(gameObject);
             return;
         }
@@ -52,24 +54,20 @@ public class LobbyUI : MonoBehaviour
             saveGameManager = managerObject.AddComponent<SaveGameManager>();
         }
 
-        EnsureEventSystem();
+        UIEventSystemUtility.EnsureSingleEventSystem();
         if (!TryBindHierarchyUi())
             BuildUI();
 
+        gameObject.AddComponent<LobbyPresentation>().Initialize(canvas, mainMenuRoot,
+            multiplayerPopupBackdrop, multiplayerPopupPanel, statusText,
+            primarySoloButton, newSoloButton, openMultiplayerButton);
+        worldLibrary = gameObject.AddComponent<WorldLibraryUI>();
+        worldLibrary.Initialize(canvas, saveGameManager, () => Destroy(gameObject), () => primarySoloButton.Select());
         RefreshPrimarySoloButton();
         RefreshContinueSessionButton();
         RefreshJoinButton();
         EnterLobby();
-    }
-
-    void EnsureEventSystem()
-    {
-        if (EventSystem.current != null || FindFirstObjectByType<EventSystem>() != null)
-            return;
-
-        GameObject eventSystemObject = new GameObject("EventSystem");
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<InputSystemUIInputModule>();
+        primarySoloButton.Select();
     }
 
     void BuildUI()
@@ -82,8 +80,7 @@ public class LobbyUI : MonoBehaviour
         canvas.sortingOrder = 500;
 
         CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        DisplaySettingsManager.ConfigureCanvasScaler(scaler);
         graphicRaycaster = canvasObject.AddComponent<GraphicRaycaster>();
 
         GameObject overlayObject = CreateUiObject("Overlay", canvas.transform);
@@ -100,13 +97,13 @@ public class LobbyUI : MonoBehaviour
         RectTransform titleRect = titleObject.AddComponent<RectTransform>();
         titleRect.anchorMin = new Vector2(0.5f, 0.5f);
         titleRect.anchorMax = new Vector2(0.5f, 0.5f);
-        titleRect.sizeDelta = new Vector2(900f, 120f);
+        titleRect.sizeDelta = new Vector2(1400f, 120f);
         titleRect.anchoredPosition = new Vector2(0f, 140f);
 
         TextMeshProUGUI titleText = titleObject.AddComponent<TextMeshProUGUI>();
-        titleText.text = "Marped Survivor";
+        titleText.text = "Elarion: Relics of the Forgotten";
         titleText.alignment = TextAlignmentOptions.Center;
-        titleText.fontSize = 72f;
+        titleText.fontSize = 64f;
         titleText.fontStyle = FontStyles.Bold;
         titleText.color = new Color(1f, 0.96f, 0.82f, 1f);
 
@@ -118,7 +115,7 @@ public class LobbyUI : MonoBehaviour
         subtitleRect.anchoredPosition = new Vector2(0f, 56f);
 
         TextMeshProUGUI subtitleText = subtitleObject.AddComponent<TextMeshProUGUI>();
-        subtitleText.text = "Sobreviva, evolua e enfrente criaturas cada vez mais fortes.";
+        subtitleText.text = "Demo 0.1.0 - sobreviva, evolua, escolha um legado e explore uma ilha procedural.";
         subtitleText.alignment = TextAlignmentOptions.Center;
         subtitleText.fontSize = 30f;
         subtitleText.color = new Color(0.84f, 0.9f, 0.98f, 1f);
@@ -157,7 +154,7 @@ public class LobbyUI : MonoBehaviour
             OpenMultiplayerPopup
         );
 
-        CreateSectionLabel(mainMenuRoot.transform, "Entre por descoberta automatica na LAN ou abra uma nova sessao host.", new Vector2(0f, -316f), 22f, new Color(0.78f, 0.86f, 0.95f, 1f));
+        CreateSectionLabel(mainMenuRoot.transform, "F1 abre o guia rapido dentro do jogo. A demo salva progresso solo automaticamente.", new Vector2(0f, -316f), 22f, new Color(0.78f, 0.86f, 0.95f, 1f));
 
         multiplayerPopupBackdrop = CreateUiObject("MultiplayerPopupBackdrop", overlayObject.transform);
         RectTransform popupBackdropRect = multiplayerPopupBackdrop.AddComponent<RectTransform>();
@@ -300,6 +297,7 @@ public class LobbyUI : MonoBehaviour
 
     void EnterLobby()
     {
+        WorldLoadingScreen.CancelLoading();
         GameState.IsInLobby = true;
         Time.timeScale = 0f;
         Cursor.lockState = CursorLockMode.None;
@@ -378,36 +376,26 @@ public class LobbyUI : MonoBehaviour
 
     void StartGame()
     {
-        LanMultiplayerManager.Instance?.StartSolo();
-        saveGameManager?.StartNewGame();
-        Destroy(gameObject);
-    }
-
-    void ContinueGame()
-    {
-        LanMultiplayerManager.Instance?.StartSolo();
-        if (saveGameManager != null && saveGameManager.ContinueFromSave())
-            Destroy(gameObject);
+        worldLibrary.ShowNew();
     }
 
     void OnPrimarySoloClicked()
     {
-        if (saveGameManager != null && saveGameManager.HasSave())
-            ContinueGame();
-        else
-            StartGame();
+        worldLibrary.ShowLibrary();
     }
 
     void OpenMultiplayerPopup()
     {
         if (multiplayerPopupBackdrop != null)
             multiplayerPopupBackdrop.SetActive(true);
+        closeMultiplayerButton?.Select();
     }
 
     void CloseMultiplayerPopup()
     {
         if (multiplayerPopupBackdrop != null)
             multiplayerPopupBackdrop.SetActive(false);
+        openMultiplayerButton?.Select();
     }
 
     void HostGame()
@@ -571,14 +559,12 @@ public class LobbyUI : MonoBehaviour
 
     void RefreshPrimarySoloButton()
     {
-        bool hasSave = saveGameManager != null && saveGameManager.HasSave();
-
         TextMeshProUGUI primaryText = primarySoloButton != null ? primarySoloButton.GetComponentInChildren<TextMeshProUGUI>() : null;
         if (primaryText != null)
-            primaryText.text = hasSave ? "Continuar solo" : "Jogar solo";
+            primaryText.text = "Continuar jornada";
 
         if (newSoloButton != null)
-            newSoloButton.gameObject.SetActive(hasSave);
+            newSoloButton.gameObject.SetActive(true);
     }
 
     void SetButtonEnabled(Button button, bool enabled)
@@ -598,7 +584,7 @@ public class LobbyUI : MonoBehaviour
 
         TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
         if (text != null)
-            text.color = enabled ? new Color(0.12f, 0.08f, 0.02f, 1f) : new Color(0.22f, 0.22f, 0.22f, 0.88f);
+            text.color = enabled ? LobbyPresentation.Ivory : new Color(0.55f, 0.58f, 0.58f, 0.7f);
     }
 
     bool TryBindHierarchyUi()
@@ -886,6 +872,7 @@ public class LobbyUI : MonoBehaviour
         Time.timeScale = 1f;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+        WorldLoadingScreen.BeginLoading();
     }
 
     GameObject CreateUiObject(string objectName, Transform parent)

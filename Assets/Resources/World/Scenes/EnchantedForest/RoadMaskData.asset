@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80f4f2102fd84b8c8c4de5687ad8f5fa, type: 3}
+  m_Name: RoadMaskData
+  m_EditorClassIdentifier: Assembly-CSharp::RoadMaskData
+  roadMask: {fileID: 2800000, guid: cc51885bcdcea4dd792b82fed5fc34d2, type: 3}
+  worldOrigin: {x: -400, y: -400}
+  worldSize: {x: 800, y: 800}
+  clampOutsideBounds: 1
+  roadThreshold: 0.58
+  smoothSampleRadius: 0.003
+  smoothSampleKernel: 1

@@ -44,5 +44,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 263bc7e4e17f0fa418773ab4076b3a33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StaminaUI
-  player: {fileID: 8293215957773833957, guid: 3ec239531ccc13247ae386124620ac2f, type: 3}
   staminaFill: {fileID: 0}

@@ -3,12 +3,16 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
 
-public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
 {
     public Image icon;
     public TextMeshProUGUI amountText;
 
     InventoryItem currentItem;
+    GameObject tooltipObject;
+    RectTransform rectTransform;
+    Canvas parentCanvas;
+    bool mouseInsideSlot;
 
     float lastClickTime;
    
@@ -22,9 +26,39 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
 
     public InventoryItem CurrentItem => currentItem;
 
+    public void SetSelected(bool selected)
+    {
+        Outline outline = GetComponent<Outline>();
+        if (outline == null)
+            return;
+
+        outline.effectColor = selected
+            ? new Color(0.95f, 0.76f, 0.24f, 1f)
+            : new Color(0.42f, 0.29f, 0.12f, 0.9f);
+        outline.effectDistance = selected ? new Vector2(3f, -3f) : new Vector2(1f, -1f);
+    }
+
+    void OnDisable()
+    {
+        HideTooltip();
+    }
+
+    void OnDestroy()
+    {
+        HideTooltip();
+    }
+
+    void Awake()
+    {
+        rectTransform = GetComponent<RectTransform>();
+        parentCanvas = GetComponentInParent<Canvas>();
+    }
+
     public void Setup(InventoryItem item)
     {
         currentItem = item;
+        itemName = item != null ? item.itemName : string.Empty;
+        itemData = item != null ? item.itemData : null;
 
         Sprite displayIcon = item != null ? item.GetDisplayIcon() : null;
 
@@ -32,6 +66,9 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
         {
             icon.sprite = displayIcon;
             icon.enabled = true;
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            ConfigureIconRect();
         }
         else if (icon != null)
         {
@@ -40,11 +77,31 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
         }
 
         if (amountText != null)
-            amountText.text = item.quantity > 1 ? item.quantity.ToString() : "";
+        {
+            amountText.text = item != null && item.quantity > 1 ? item.quantity.ToString() : "";
+            amountText.raycastTarget = false;
+            amountText.fontSize = 21f;
+        }
+    }
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        mouseInsideSlot = true;
+        ShowTooltip();
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        mouseInsideSlot = false;
+        HideTooltip();
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
+        InventoryUI ui = SceneObjectCache.Find<InventoryUI>(true);
+        if (ui != null)
+            ui.SelectItem(currentItem);
+
         if (eventData.clickCount == 2)
         {
             OnDoubleClick();
@@ -53,15 +110,18 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (currentItem == null || currentItem.itemData == null) return;
+        HideTooltip();
+
+        Item resolvedItem = ResolveCurrentItemData();
+        if (currentItem == null || resolvedItem == null) return;
 
         DragDropController.BeginDrag(
-            currentItem.itemData.icon,
+            currentItem.GetDisplayIcon(),
             new DragPayload
             {
                 sourceType = DragSourceType.Inventory,
                 inventorySlot = this,
-                itemData = currentItem.itemData,
+                itemData = resolvedItem,
                 amount = currentItem.quantity
             }
         );
@@ -98,18 +158,38 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
 
     void OnDoubleClick()
     {
-        if (currentItem == null || currentItem.itemData == null)
+        Item resolvedItem = ResolveCurrentItemData();
+        if (currentItem == null || resolvedItem == null)
             return;
 
-        Hotbar hotbar = FindFirstObjectByType<Hotbar>();
-        if (hotbar == null)
+        PlayerMovement player = LanMultiplayerManager.FindGameplayPlayer();
+        Inventory inventory = player != null ? player.GetComponent<Inventory>() : null;
+        Hotbar hotbar = player != null ? player.GetComponent<Hotbar>() ?? SceneObjectCache.Find<Hotbar>(player.gameObject.scene, true) : SceneObjectCache.Find<Hotbar>(true);
+        if (inventory == null || hotbar == null)
             return;
 
-        hotbar.AddItem(
-            currentItem.itemName,
-            currentItem.GetDisplayIcon(),
-            currentItem.itemData
-        );
+        InventoryItem itemToMove = currentItem.Clone();
+        if (!hotbar.TryAddInventoryItem(itemToMove))
+            return;
+
+        if (!inventory.RemoveItem(itemToMove.itemName, itemToMove.quantity))
+            return;
+
+        InventoryUI ui = SceneObjectCache.Find<InventoryUI>(true);
+        if (ui != null)
+            ui.Refresh();
+    }
+
+    Item ResolveCurrentItemData()
+    {
+        if (currentItem == null)
+            return null;
+
+        if (currentItem.itemData == null)
+            currentItem.itemData = InventoryItemResolver.Resolve(currentItem.itemName, currentItem.prefabName);
+
+        itemData = currentItem.itemData;
+        return itemData;
     }
 
     void SwapWithInventorySlot(InventorySlotUI other)
@@ -119,23 +199,11 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
         InventoryItem a = currentItem;
         InventoryItem b = other.currentItem;
 
-        string tmpName = a.itemName;
-        int tmpQty = a.quantity;
-        Item tmpData = a.itemData;
-        ItemType tmpItemType = a.itemType;
-        ToolType tmpToolType = a.toolType;
+        InventoryItem aClone = a.Clone();
+        InventoryItem bClone = b.Clone();
 
-        a.itemName = b.itemName;
-        a.quantity = b.quantity;
-        a.itemData = b.itemData;
-        a.itemType = b.itemType;
-        a.toolType = b.toolType;
-
-        b.itemName = tmpName;
-        b.quantity = tmpQty;
-        b.itemData = tmpData;
-        b.itemType = tmpItemType;
-        b.toolType = tmpToolType;
+        a.CopyFrom(bClone);
+        b.CopyFrom(aClone);
 
         Setup(a);
         other.Setup(b);
@@ -154,14 +222,89 @@ public class InventorySlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHa
         int invAmount = currentItem.quantity;
         Item invItem = currentItem.itemData;
 
-        currentItem.itemName = hotbarItem.itemName;
-        currentItem.quantity = hotbarAmount;
-        currentItem.itemData = hotbarItem;
-        currentItem.itemType = hotbarItem.itemType;
-        currentItem.toolType = hotbarItem.toolType;
+        currentItem.CopyFrom(new InventoryItem(hotbarItem.itemName, hotbarAmount, hotbarItem));
 
         hotbarSlot.SetItem(invName, invItem != null ? invItem.icon : null, invItem, invAmount);
 
         Setup(currentItem);
+    }
+
+    void ShowTooltip()
+    {
+        if (currentItem == null || string.IsNullOrWhiteSpace(currentItem.itemName))
+            return;
+
+        HideTooltip();
+
+        Canvas canvas = parentCanvas != null ? parentCanvas : GetComponentInParent<Canvas>();
+        Transform tooltipParent = canvas != null ? canvas.transform : transform;
+
+        tooltipObject = new GameObject("ItemNameTooltip", typeof(RectTransform), typeof(Image));
+        tooltipObject.transform.SetParent(tooltipParent, false);
+        tooltipObject.transform.SetAsLastSibling();
+
+        RectTransform tooltipRect = tooltipObject.GetComponent<RectTransform>();
+        tooltipRect.anchorMin = new Vector2(0.5f, 0.5f);
+        tooltipRect.anchorMax = new Vector2(0.5f, 0.5f);
+        tooltipRect.pivot = new Vector2(0.5f, 0f);
+        tooltipRect.sizeDelta = new Vector2(260f, 44f);
+
+        Vector3[] corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        Vector3 topCenter = (corners[1] + corners[2]) * 0.5f;
+        tooltipRect.position = topCenter + Vector3.up * 12f;
+
+        Canvas tooltipCanvas = tooltipObject.AddComponent<Canvas>();
+        tooltipCanvas.overrideSorting = true;
+        tooltipCanvas.sortingOrder = canvas != null ? canvas.sortingOrder + 50 : 20000;
+
+        Image background = tooltipObject.GetComponent<Image>();
+        background.color = new Color(0.05f, 0.045f, 0.035f, 0.96f);
+        background.raycastTarget = false;
+
+        Outline outline = tooltipObject.AddComponent<Outline>();
+        outline.effectColor = new Color(1f, 0.82f, 0.22f, 0.9f);
+        outline.effectDistance = new Vector2(1f, -1f);
+
+        GameObject labelObject = new GameObject("Label", typeof(RectTransform));
+        labelObject.transform.SetParent(tooltipObject.transform, false);
+        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = new Vector2(6f, 3f);
+        labelRect.offsetMax = new Vector2(-6f, -3f);
+
+        TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
+        label.text = currentItem.itemName;
+        label.fontSize = 22f;
+        label.fontStyle = FontStyles.Bold;
+        label.alignment = TextAlignmentOptions.Center;
+        label.color = new Color(1f, 0.96f, 0.84f, 1f);
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Ellipsis;
+        label.raycastTarget = false;
+    }
+
+    void HideTooltip()
+    {
+        if (tooltipObject == null)
+            return;
+
+        Destroy(tooltipObject);
+        tooltipObject = null;
+    }
+
+    void ConfigureIconRect()
+    {
+        RectTransform iconRect = icon != null ? icon.GetComponent<RectTransform>() : null;
+        if (iconRect == null)
+            return;
+
+        iconRect.anchorMin = new Vector2(0.05f, 0.12f);
+        iconRect.anchorMax = new Vector2(0.95f, 0.96f);
+        iconRect.offsetMin = Vector2.zero;
+        iconRect.offsetMax = Vector2.zero;
+        iconRect.anchoredPosition = Vector2.zero;
+        iconRect.localScale = Vector3.one;
     }
 }
